@@ -8,7 +8,7 @@ import { classifyLink } from "./links";
 import { renderMermaid, watchTheme } from "./mermaid";
 import { buildToc } from "./toc";
 import { splitFrontmatter } from "./splice";
-import { beforeWrite, bytesEqual, planSave, shouldConfirmLeave, shouldReloadOnFocus, type Mode } from "./viewer-state";
+import { beforeWrite, bytesEqual, createRunner, planSave, shouldConfirmLeave, shouldReloadOnFocus, type Mode } from "./viewer-state";
 import type { Editor } from "./editor";
 
 const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
@@ -108,7 +108,6 @@ const viewer: Viewer = {
     /** Editor serialization of the saved body; edits are diffed against it. */
     let baseline = "";
     let dirty = false;
-    let busy = false; // a mode switch or save is in flight
 
     const root = document.createElement("div");
     root.className = "md-root";
@@ -151,6 +150,9 @@ const viewer: Viewer = {
     editorHost.hidden = true;
     root.append(editorHost);
     el.replaceChildren(root);
+
+    /** One mode switch, save or reload at a time; user actions arriving meanwhile are queued. */
+    const tasks = createRunner((e) => platform.alert(String(e)));
 
     let disposeToc = () => {};
     /** `keepScroll`: a reload of changed content keeps the reader where they were (best effort). */
@@ -257,6 +259,9 @@ const viewer: Viewer = {
 
     const leaveEdit = async () => {
       if (!(await confirmLeave())) return;
+      // Discarded edits were based on what we read; show what is on disk now.
+      const onDisk = await readDisk();
+      if (onDisk && !bytesEqual(known, onDisk)) adopt(onDisk);
       editor?.destroy();
       editor = null;
       editorHost.replaceChildren();
@@ -278,14 +283,14 @@ const viewer: Viewer = {
         return;
       }
       if (plan.kind === "rewrite" && !(await platform.confirm(REWRITE_MESSAGE))) {
-        saveAgain = false; // a Ctrl+S queued behind the dialog would only ask the same again
+        tasks.dropQueuedSave(); // a Ctrl+S queued behind the dialog would only ask the same again
         return;
       }
       if (
         beforeWrite(known, await readDisk()) === "confirm-overwrite" &&
         !(await platform.confirmDanger(CONFLICT_MESSAGE, "덮어쓰기"))
       ) {
-        saveAgain = false;
+        tasks.dropQueuedSave();
         return; // stays dirty: the edits are kept in the editor
       }
       const bytes = encodeText(plan.text, meta);
@@ -296,29 +301,16 @@ const viewer: Viewer = {
       refreshDirty(); // typing may have continued while the dialog or write was pending
     };
 
-    let saveAgain = false; // Ctrl+S pressed while another task was running
-    const run = (task: () => Promise<void>) => {
-      if (busy) return;
-      busy = true;
-      task()
-        .catch((e) => platform.alert(String(e)))
-        .catch(() => {})
-        .finally(() => {
-          busy = false;
-          if (saveAgain) {
-            saveAgain = false;
-            requestSave();
-          }
-        });
-    };
     const requestSave = () => {
       if (mode !== "edit") return;
-      if (busy) saveAgain = true;
-      else run(save);
+      tasks.save(save);
     };
+    // Decided when it runs: a queued toggle acts on the mode and read-only state at that time.
     const toggleMode = () => {
-      if (toggle.disabled) return;
-      run(mode === "read" ? enterEdit : leaveEdit);
+      tasks.user(async () => {
+        if (toggle.disabled) return;
+        await (mode === "read" ? enterEdit() : leaveEdit());
+      });
     };
 
     // Read mode follows changes other programs made while the window was in the background.
@@ -329,7 +321,7 @@ const viewer: Viewer = {
       await render(true);
     };
     window.addEventListener("focus", () => {
-      if (mode === "read") run(reloadIfChanged);
+      if (mode === "read") tasks.background(reloadIfChanged);
     });
 
     toggle.addEventListener("click", toggleMode);

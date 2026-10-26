@@ -1,0 +1,88 @@
+// @vitest-environment happy-dom
+import { beforeEach, expect, test, vi } from "vitest";
+
+const disk = new Map<string, Uint8Array>();
+/** When set, the next readFile waits for it (simulates a slow focus re-read). */
+let gate: Promise<void> | null = null;
+const enc = (s: string) => new TextEncoder().encode(s);
+
+vi.mock("../src/platform", () => ({
+  platform: {
+    readFile: async (p: string) => {
+      const g = gate;
+      gate = null;
+      if (g) await g;
+      const b = disk.get(p);
+      if (!b) throw new Error("missing " + p);
+      return b;
+    },
+    writeFile: async (p: string, d: Uint8Array) => void disk.set(p, d),
+    assetUrl: (a: string) => "asset://" + a,
+    setWindowTitle: async () => {},
+    confirm: vi.fn(async () => true),
+    confirmDanger: async () => false,
+    notice: async () => {},
+    alert: async () => {},
+    onCloseRequested: async () => {},
+    pathExists: async () => true,
+    openExternal: async () => {},
+    openWithDefaultApp: async () => {},
+  },
+}));
+vi.mock("../src/md/mermaid", () => ({ renderMermaid: async () => {}, watchTheme: () => {} }));
+let editorText = "";
+vi.mock("../src/md/editor", () => ({
+  createEditor: async (_host: HTMLElement, md: string) => {
+    editorText = md;
+    return { getMarkdown: () => editorText, destroy: () => {} };
+  },
+}));
+
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+};
+
+async function mount(path: string, text: string) {
+  disk.set(path, enc(text));
+  const { default: viewer } = await import("../src/md/viewer");
+  const el = document.createElement("div");
+  document.body.append(el);
+  await viewer.mount(el, path);
+  const toggle = el.querySelector<HTMLButtonElement>("button.md-toggle")!;
+  const article = el.querySelector("article")!;
+  const editorHost = el.querySelector<HTMLElement>(".md-editor")!;
+  return { el, toggle, article, editorHost };
+}
+
+beforeEach(() => {
+  gate = null;
+});
+
+test("an edit toggle during a focus re-read is queued, not dropped", async () => {
+  const v = await mount("D:\\q\\a.md", "# one\n");
+  let release!: () => void;
+  gate = new Promise<void>((r) => (release = r));
+  window.dispatchEvent(new Event("focus")); // starts the (slow) re-read
+  await settle();
+  v.toggle.click(); // arrives while the re-read is in flight
+  await settle();
+  expect(v.editorHost.hidden).toBe(true);
+  release();
+  await settle();
+  expect(v.editorHost.hidden).toBe(false);
+  expect(v.toggle.textContent).toBe("읽기");
+});
+
+test("leaving edit mode re-reads the file from disk before rendering", async () => {
+  const path = "D:\\q\\b.md";
+  const v = await mount(path, "# old\n");
+  v.toggle.click();
+  await settle();
+  expect(v.toggle.textContent).toBe("읽기");
+  editorText = "# edited but discarded\n"; // dirty -> confirm (mocked: discard)
+  disk.set(path, enc("# changed by agent\n"));
+  v.toggle.click();
+  await settle();
+  expect(v.toggle.textContent).toBe("편집");
+  expect(v.article.textContent).toContain("changed by agent");
+});

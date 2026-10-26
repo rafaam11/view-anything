@@ -1,5 +1,5 @@
 import { test, expect } from "vitest";
-import { shouldConfirmLeave, planSave } from "../src/md/viewer-state";
+import { createRunner, shouldConfirmLeave, planSave } from "../src/md/viewer-state";
 import { splitFrontmatter, joinFrontmatter } from "../src/md/splice";
 
 test("shouldConfirmLeave only when dirty", () => {
@@ -62,4 +62,89 @@ test("planSave: structure mismatch falls back to a full-rewrite proposal", () =>
 test("planSave: structure mismatch with unchanged content still writes nothing", () => {
   const badBaseline = "# Title\n\nfirst  para\n";
   expect(planSave(original, badBaseline, badBaseline)).toEqual({ kind: "unchanged" });
+});
+
+// Task runner: one task at a time; user actions and saves are queued, background work is skipped.
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test("a user action during a background task runs after it instead of being dropped", async () => {
+  const r = createRunner(() => {});
+  const log: string[] = [];
+  const bg = deferred();
+  r.background(async () => {
+    log.push("reload");
+    await bg.promise;
+    log.push("reload done");
+  });
+  expect(r.busy).toBe(true);
+  r.user(async () => {
+    log.push("toggle");
+  });
+  await tick();
+  expect(log).toEqual(["reload"]);
+  bg.resolve();
+  await tick();
+  await tick();
+  expect(log).toEqual(["reload", "reload done", "toggle"]);
+  expect(r.busy).toBe(false);
+});
+
+test("at most one user action is pending; background work is skipped while busy", async () => {
+  const r = createRunner(() => {});
+  const log: string[] = [];
+  const first = deferred();
+  r.user(async () => {
+    await first.promise;
+    log.push("a");
+  });
+  r.user(async () => void log.push("b"));
+  r.user(async () => void log.push("c"));
+  r.background(async () => void log.push("bg"));
+  first.resolve();
+  for (let i = 0; i < 5; i++) await tick();
+  expect(log).toEqual(["a", "c"]);
+});
+
+test("a queued save runs before a queued user action and can be dropped", async () => {
+  const r = createRunner(() => {});
+  const log: string[] = [];
+  const first = deferred();
+  r.user(async () => {
+    await first.promise;
+    log.push("first");
+  });
+  r.user(async () => void log.push("toggle"));
+  r.save(async () => void log.push("save"));
+  first.resolve();
+  for (let i = 0; i < 5; i++) await tick();
+  expect(log).toEqual(["first", "save", "toggle"]);
+
+  const again = deferred();
+  r.save(async () => {
+    await again.promise;
+    r.dropQueuedSave(); // e.g. the user declined the overwrite dialog
+    log.push("save1");
+  });
+  r.save(async () => void log.push("save2"));
+  again.resolve();
+  for (let i = 0; i < 5; i++) await tick();
+  expect(log.slice(3)).toEqual(["save1"]);
+});
+
+test("errors are reported and do not block later tasks", async () => {
+  const errors: unknown[] = [];
+  const r = createRunner((e) => void errors.push(e));
+  r.user(async () => {
+    throw new Error("boom");
+  });
+  let ran = false;
+  r.user(async () => void (ran = true));
+  for (let i = 0; i < 5; i++) await tick();
+  expect(errors.map(String)).toEqual(["Error: boom"]);
+  expect(ran).toBe(true);
 });

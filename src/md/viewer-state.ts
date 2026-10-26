@@ -59,3 +59,50 @@ export function shouldReloadOnFocus(
 ): boolean {
   return state.mode === "read" && !state.busy && diskState(known, onDisk) === "changed";
 }
+
+type Task = () => Promise<void>;
+
+/**
+ * Runs one viewer task (mode switch, save, reload) at a time. A user action or save arriving
+ * while another task runs is queued (at most one of each; a queued save goes first) instead of
+ * being dropped; background work (the focus reload) is simply skipped while busy.
+ */
+export function createRunner(onError: (e: unknown) => unknown) {
+  let busy = false;
+  let queuedSave: Task | null = null;
+  let queuedAction: Task | null = null;
+  const start = (task: Task) => {
+    busy = true;
+    Promise.resolve()
+      .then(task)
+      .catch((e) => onError(e))
+      .catch(() => {})
+      .finally(() => {
+        busy = false;
+        const next = queuedSave ?? queuedAction;
+        if (next === queuedSave) queuedSave = null;
+        else queuedAction = null;
+        if (next) start(next);
+      });
+  };
+  return {
+    get busy() {
+      return busy;
+    },
+    background(task: Task) {
+      if (!busy) start(task);
+    },
+    user(task: Task) {
+      if (busy) queuedAction = task;
+      else start(task);
+    },
+    save(task: Task) {
+      if (busy) queuedSave = task;
+      else start(task);
+    },
+    /** A save that was just declined makes an identical queued one pointless. */
+    dropQueuedSave() {
+      queuedSave = null;
+    },
+  };
+}
