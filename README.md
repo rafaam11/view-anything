@@ -20,4 +20,4 @@ npm run tauri dev
 
 ## 릴리스 노트
 
-아직 릴리스가 없습니다.
+- [v0.1.0](docs/release/v0.1.0.md) — 최신
