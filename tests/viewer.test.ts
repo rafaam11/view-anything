@@ -73,6 +73,29 @@ test("an edit toggle during a focus re-read is queued, not dropped", async () =>
   expect(v.toggle.textContent).toBe("읽기");
 });
 
+test("leaving edit mode onto a file that became read-only keeps the read-only state", async () => {
+  const path = "D:\\q\\c.md";
+  const v = await mount(path, "# old\n");
+  v.toggle.click();
+  await settle();
+  disk.set(path, enc("a\r\nb\nc\n")); // mixed line endings -> read-only
+  v.toggle.click();
+  await settle();
+  expect(v.toggle.textContent).toBe("편집");
+  expect(v.toggle.disabled).toBe(true);
+  expect(v.toggle.title).toMatch(/^읽기 전용: /);
+});
+
+test("auto-repeated ctrl+e does not toggle", async () => {
+  const v = await mount("D:\\q\\d.md", "# d\n");
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", ctrlKey: true, repeat: true }));
+  await settle();
+  expect(v.editorHost.hidden).toBe(true);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", ctrlKey: true }));
+  await settle();
+  expect(v.editorHost.hidden).toBe(false);
+});
+
 test("leaving edit mode re-reads the file from disk before rendering", async () => {
   const path = "D:\\q\\b.md";
   const v = await mount(path, "# old\n");

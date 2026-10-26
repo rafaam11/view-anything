@@ -10,6 +10,7 @@ export function routeOpen(currentFile: string | null, paths: string[]): { here: 
   return { here: first, windows: rest };
 }
 
+/** Ctrl+O, first press only (a held key must not queue dialogs). */
 export function isOpenKey(e: KeyboardEvent): boolean {
-  return e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "o";
+  return !e.repeat && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "o";
 }

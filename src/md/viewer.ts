@@ -237,7 +237,9 @@ const viewer: Viewer = {
         editor = await createEditor(editorHost, splitFrontmatter(original).body, {
           imageUrl: (src) => {
             const abs = resolveAsset(baseDir, src);
-            return abs ? platform.assetUrl(abs) : src;
+            if (abs) return platform.assetUrl(abs);
+            // Same rule as read mode: a refused (foreign UNC) or odd path is not handed to the webview.
+            return /^(https?:\/\/|data:image\/)/i.test(src) ? src : "";
           },
           // Ignore updates that arrive before `baseline` belongs to this editor.
           onChange: (md) => {
@@ -270,7 +272,8 @@ const viewer: Viewer = {
       mode = "read";
       setDirty(false);
       toggle.textContent = "편집";
-      toggle.title = "편집 모드 (Ctrl+E)";
+      // adopt() above may have made the file read-only; keep its explanation.
+      if (!toggle.disabled) toggle.title = "편집 모드 (Ctrl+E)";
       await render();
     };
 
@@ -332,11 +335,12 @@ const viewer: Viewer = {
         if (isKey(e, "e")) {
           e.preventDefault();
           e.stopPropagation();
-          toggleMode();
+          // A held key would queue enter-then-leave; only the first press counts.
+          if (!e.repeat) toggleMode();
         } else if (isKey(e, "s")) {
           e.preventDefault();
           e.stopPropagation();
-          requestSave();
+          if (!e.repeat) requestSave();
         } else if (mode === "edit" && isReloadOrHistoryKey(e)) {
           // Back/forward/reload would unload the page and drop the editor state.
           e.preventDefault();
