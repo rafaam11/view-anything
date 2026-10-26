@@ -1,22 +1,63 @@
-import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { resolveViewer } from "./registry";
+import { platform } from "./platform";
+import { applyTheme, currentMode, cycleTheme } from "./theme";
 
-let greetInputEl: HTMLInputElement | null;
-let greetMsgEl: HTMLElement | null;
+const app = document.getElementById("app")!;
+const file = new URLSearchParams(location.search).get("file");
 
-async function greet() {
-  if (greetMsgEl && greetInputEl) {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsgEl.textContent = await invoke("greet", {
-      name: greetInputEl.value,
-    });
+function message(title: string, hint?: string) {
+  const box = document.createElement("div");
+  box.className = "empty";
+  const h = document.createElement("p");
+  h.textContent = title;
+  box.append(h);
+  if (hint) {
+    const s = document.createElement("p");
+    s.className = "hint";
+    s.textContent = hint;
+    box.append(s);
+  }
+  app.replaceChildren(box);
+}
+
+async function show() {
+  if (!file) {
+    message("파일을 끌어다 놓거나 Ctrl+O");
+    return;
+  }
+  const load = resolveViewer(file);
+  if (!load) {
+    message("지원하지 않는 형식", file);
+    return;
+  }
+  try {
+    const viewer = await load();
+    await viewer.mount(app, file);
+  } catch (e) {
+    message("파일을 열 수 없습니다", String(e));
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  greetInputEl = document.querySelector("#greet-input");
-  greetMsgEl = document.querySelector("#greet-msg");
-  document.querySelector("#greet-form")?.addEventListener("submit", (e) => {
+applyTheme(currentMode());
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
     e.preventDefault();
-    greet();
-  });
+    cycleTheme();
+  }
 });
+
+getCurrentWebview()
+  .onDragDropEvent((ev) => {
+    if (ev.payload.type !== "drop" || ev.payload.paths.length === 0) return;
+    const [first, ...rest] = ev.payload.paths;
+    if (file) {
+      for (const p of ev.payload.paths) void platform.openWindow(p);
+    } else {
+      location.search = "?file=" + encodeURIComponent(first);
+      for (const p of rest) void platform.openWindow(p);
+    }
+  })
+  .catch(() => {});
+
+void show();
