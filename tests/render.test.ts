@@ -55,3 +55,54 @@ test("resolveAsset unc, drive root and posix root", () => {
 test("frontmatter is not rendered", async () => {
   expect((await renderMarkdown("---\ntitle: t\n---\n\n# H", o)).html).not.toContain("title: t");
 });
+
+// Safe raw HTML (GitHub-like subset)
+test("br inside a table cell is kept", async () => {
+  const { html } = await renderMarkdown("|a|\n|-|\n|x<br>y|\n", o);
+  expect(html).toMatch(/<td>x<br>y<\/td>/);
+});
+test("details and summary are preserved", async () => {
+  const { html } = await renderMarkdown("<details><summary>S</summary>x</details>", o);
+  expect(html).toContain("<details>");
+  expect(html).toContain("<summary>S</summary>");
+});
+test("raw html img is rewritten via assetUrl and keeps width", async () => {
+  const { html } = await renderMarkdown('<img src="./그림%201.png" width="100">', { baseDir: "D:\\문서", assetUrl: (a) => "asset://" + a });
+  expect(html).toContain('src="asset://D:\\문서\\그림 1.png"');
+  expect(html).toContain('width="100"');
+});
+test("dangerous raw html is removed", async () => {
+  const src = '<script>x</script>\n\n<img src=x onerror=y>\n\n<a href="javascript:alert(1)">a</a>\n\n<iframe src=x></iframe>\n\nok';
+  const { html } = await renderMarkdown(src, o);
+  expect(html).not.toMatch(/<script|onerror|javascript:|<iframe/i);
+  expect(html).toContain("ok");
+});
+test("raw html keeps the github-like subset and drops styles, classes and unsafe urls", async () => {
+  const src = [
+    '<div align="center"><kbd>Ctrl</kbd> H<sub>2</sub>O x<sup>2</sup></div>',
+    '<p align="right" style="color:red" class="mermaid">p</p>',
+    '<a href="vbscript:x">v</a> <a href="JAVASCRIPT:x">j</a> <a href="https://a.b">ok</a>',
+    '<img src="data:text/html,x"> <img src="data:image/png;base64,AA==" alt="d">',
+    "<object data=x></object><embed src=x><style>p{}</style><form><input name=q></form>",
+    "<details open><summary>S</summary>x</details>",
+  ].join("\n\n");
+  const { html } = await renderMarkdown(src, o);
+  expect(html).toContain('<div align="center"><kbd>Ctrl</kbd> H<sub>2</sub>O x<sup>2</sup></div>');
+  expect(html).toContain('<p align="right">p</p>');
+  expect(html).toContain('href="https://a.b"');
+  expect(html).toContain('src="data:image/png;base64,AA=="');
+  expect(html).toContain("<details open>");
+  expect(html).not.toMatch(/vbscript|javascript|data:text|<object|<embed|<style|<form|<input|style=|class="mermaid"/i);
+});
+test("drive-letter image paths in raw html and markdown resolve via assetUrl", async () => {
+  const { html } = await renderMarkdown('<img src="C:/p/a.png">\n\n![b](C:/p/b.png)', o);
+  expect(html).toContain('src="asset://C:/p/a.png"');
+  expect(html).toContain('src="asset://C:/p/b.png"');
+});
+test("task lists, footnotes and math survive sanitizing", async () => {
+  const { html } = await renderMarkdown("- [x] done\n\nA[^1] $a$\n\n$$\nb\n$$\n\n[^1]: note", o);
+  expect(html).toMatch(/<input type="checkbox" checked disabled>|<input checked type="checkbox" disabled>|<input type="checkbox" disabled checked>/);
+  expect(html).toContain('href="#fn-1"');
+  expect(html).toContain('id="user-content-fn-1"');
+  expect(html).toContain("katex-display");
+});

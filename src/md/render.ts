@@ -3,6 +3,8 @@ import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSlug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import type { Element, Root, RootContent } from "hast";
 import { mdProcessor } from "./splice";
 
@@ -88,14 +90,77 @@ function rehypeMermaid() {
   };
 }
 
+/** Single-letter "schemes" are Windows drive letters (`C:\x.png`), i.e. local paths. */
+const DRIVE_LETTERS = [..."abcdefghijklmnopqrstuvwxyz"].flatMap((c) => [c, c.toUpperCase()]);
+
+/**
+ * GitHub-like allow-list (hast-util-sanitize's defaultSchema) for raw HTML in markdown, extended
+ * only where this app needs it. No `style`, no `on*`, no `class` on raw HTML; scripts, iframes,
+ * objects, embeds, styles and forms are dropped. Unknown URL schemes (javascript:, vbscript:,
+ * file:, ...) are removed from href/src.
+ */
+export const sanitizeSchema: SanitizeSchema = {
+  ...defaultSchema,
+  // Drop these with their content (a stripped <style> would otherwise leave its CSS as text).
+  strip: [...(defaultSchema.strip ?? []), "style", "textarea", "select", "noscript", "template"],
+  attributes: {
+    ...defaultSchema.attributes,
+    // remark-math marks math as `code.language-math.math-inline|math-display` for rehype-katex.
+    code: [["className", /^language-./, "math-inline", "math-display"]],
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    href: [...(defaultSchema.protocols?.href ?? []), ...DRIVE_LETTERS],
+    // `data:` is narrowed to data:image/* in rehypeImages.
+    src: [...(defaultSchema.protocols?.src ?? []), "data", ...DRIVE_LETTERS],
+  },
+};
+
+/**
+ * The sanitizer must allow `input` for GFM task-list checkboxes, but raw HTML must not add form
+ * controls. Before rehype-raw parses the raw HTML, the task-list inputs are the only `input`
+ * elements; mark them, drop every unmarked input after parsing. The marker attribute is not in
+ * the schema, so sanitize removes it.
+ */
+const TASK_MARK = "dataVaTaskItem";
+function rehypeMarkTaskInputs() {
+  return (tree: Root) => {
+    const walk = (node: Root | Element) => {
+      for (const child of node.children) {
+        if (child.type !== "element") continue;
+        if (child.tagName === "input") child.properties[TASK_MARK] = true;
+        walk(child);
+      }
+    };
+    walk(tree);
+  };
+}
+function rehypeDropRawInputs() {
+  return (tree: Root) => {
+    const walk = (node: Root | Element) => {
+      node.children = node.children.filter(
+        (c) => !(c.type === "element" && c.tagName === "input" && c.properties?.[TASK_MARK] === undefined),
+      ) as typeof node.children;
+      for (const child of node.children) if (child.type === "element") walk(child);
+    };
+    walk(tree);
+  };
+}
+
+/** Runs after sanitize: rewrites local image paths to asset URLs (last, so nothing strips them). */
 function rehypeImages(opts: RenderOptions) {
   return (tree: Root) => {
     const walk = (node: Root | Element) => {
       for (const child of node.children) {
         if (child.type !== "element") continue;
         if (child.tagName === "img" && typeof child.properties?.src === "string") {
-          const abs = resolveAsset(opts.baseDir, child.properties.src);
-          if (abs) child.properties.src = opts.assetUrl(abs);
+          const src = child.properties.src;
+          if (/^\s*data:/i.test(src) && !/^\s*data:image\//i.test(src)) {
+            delete child.properties.src;
+          } else {
+            const abs = resolveAsset(opts.baseDir, src);
+            if (abs) child.properties.src = opts.assetUrl(abs);
+          }
         }
         walk(child);
       }
@@ -122,9 +187,16 @@ function rehypeHeadings(out: Heading[]) {
 
 export async function renderMarkdown(src: string, opts: RenderOptions): Promise<{ html: string; headings: Heading[] }> {
   const headings: Heading[] = [];
-  // No rehype-raw and no allowDangerousHtml: raw HTML in markdown is dropped, never executed.
+  // Raw HTML is parsed (rehype-raw) and then reduced to a safe allow-list (rehype-sanitize)
+  // before anything this app generates (ids, KaTeX, highlight, mermaid, asset URLs) is added.
+  // Sanitize prefixes every id/name with "user-content-" (DOM clobbering), so remark-rehype adds
+  // none itself; `#fn-1` style anchors are resolved against the prefixed id by the viewer.
   const file = await mdProcessor()
-    .use(remarkRehype, { handlers: { yaml: () => undefined } })
+    .use(remarkRehype, { allowDangerousHtml: true, clobberPrefix: "", handlers: { yaml: () => undefined } })
+    .use(rehypeMarkTaskInputs)
+    .use(rehypeRaw)
+    .use(rehypeDropRawInputs)
+    .use(rehypeSanitize, sanitizeSchema)
     .use(rehypeMermaid)
     .use(rehypeSlug)
     .use(rehypeHeadings, headings)

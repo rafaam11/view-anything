@@ -28,7 +28,8 @@ function scrollToId(raw: string) {
   try {
     id = decodeURIComponent(id);
   } catch {}
-  if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
+  // Sanitized raw-HTML ids/names and footnotes carry the "user-content-" prefix (see render.ts).
+  if (id) (document.getElementById(id) ?? document.getElementById("user-content-" + id))?.scrollIntoView({ block: "start" });
 }
 
 function openInThisWindow(absPath: string, hash: string) {
