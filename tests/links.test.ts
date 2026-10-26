@@ -52,6 +52,22 @@ test("trailing dots, spaces and alternate data streams resolve to the real exten
   expect(classifyLink("s/a.txt:zone", base).kind).toBe("open");
 });
 
+test("links to foreign unc shares are ignored (no SMB on click)", () => {
+  for (const f of ["\\\\evil\\share\\doc.txt", "/\\evil\\share\\doc.txt", "\\/evil/share/doc.md", "%5C%5Cevil%5Cs%5Cd.txt"]) {
+    expect(classifyLink(f, base), f).toEqual({ kind: "ignore" });
+  }
+  const unc = "\\\\srv\\share\\d";
+  expect(classifyLink("x.txt", unc)).toEqual({ kind: "open", path: "\\\\srv\\share\\d\\x.txt" });
+  expect(classifyLink("\\\\evil\\share\\doc.txt", unc)).toEqual({ kind: "ignore" });
+});
+
+test("more script hosts and mountable images are blocked", () => {
+  for (const ext of ["wsc", "sct", "xbap", "diagcab", "searchConnector-ms", "website", "msh1", "msh2", "msh1xml", "msh2xml", "iso", "img", "vhd", "vhdx"]) {
+    expect(classifyLink("a." + ext, base).kind, ext).toBe("blocked");
+    expect(classifyLink("a." + ext.toUpperCase(), base).kind, ext).toBe("blocked");
+  }
+});
+
 test("unsupported schemes are ignored", () => {
   expect(classifyLink("file:///C:/x.txt", base)).toEqual({ kind: "ignore" });
   expect(classifyLink("javascript:alert(1)", base)).toEqual({ kind: "ignore" });

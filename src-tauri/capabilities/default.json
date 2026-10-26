@@ -85,6 +85,48 @@
           "path": "**/*.[gG][aA][dD][gG][eE][tT]"
         },
         {
+          "path": "**/*.[sS][eE][aA][rR][cC][hH][cC][oO][nN][nN][eE][cC][tT][oO][rR]-[mM][sS]"
+        },
+        {
+          "path": "**/*.[wW][eE][bB][sS][iI][tT][eE]"
+        },
+        {
+          "path": "**/*.[xX][bB][aA][pP]"
+        },
+        {
+          "path": "**/*.[dD][iI][aA][gG][cC][aA][bB]"
+        },
+        {
+          "path": "**/*.[iI][sS][oO]"
+        },
+        {
+          "path": "**/*.[iI][mM][gG]"
+        },
+        {
+          "path": "**/*.[vV][hH][dD]"
+        },
+        {
+          "path": "**/*.[vV][hH][dD][xX]"
+        },
+        {
+          "path": "**/*.[mM][sS][hH]1"
+        },
+        {
+          "path": "**/*.[mM][sS][hH]2"
+        },
+        {
+          "path": "**/*.[mM][sS][hH]1[xX][mM][lL]"
+        },
+        {
+          "path": "**/*.[mM][sS][hH]2[xX][mM][lL]"
+        },
+        {
+          "path": "**/*.[wW][sS][cC]"
+        },
+        {
+          "path": "**/*.[sS][cC][tT]"
+        },
+        {
           "path": "**/*.[aA][pP][pP][xX]"
         },
         {

@@ -21,10 +21,14 @@ const MD_FILE = /\.(md|markdown)$/i;
 export const EXECUTABLE_EXTENSIONS = [
   // Windows programs, installers and shell-executed types
   "exe", "com", "bat", "cmd", "msi", "msp", "msc", "scr", "pif", "cpl", "hta", "inf", "reg", "chm",
-  "lnk", "url", "scf", "library-ms", "settingcontent-ms", "appref-ms", "application", "gadget",
+  "lnk", "url", "scf", "library-ms", "settingcontent-ms", "searchconnector-ms", "website", "appref-ms",
+  "application", "gadget", "xbap", "diagcab",
+  // Disk images (mounting one exposes its autorun/executables)
+  "iso", "img", "vhd", "vhdx",
   "appx", "appxbundle", "msix", "msixbundle", "appinstaller",
   // Script hosts
-  "ps1", "psm1", "psd1", "ps1xml", "ps2", "psc1", "msh", "vb", "vbs", "vbe", "js", "jse", "ws", "wsf", "wsh",
+  "ps1", "psm1", "psd1", "ps1xml", "ps2", "psc1", "msh", "msh1", "msh2", "msh1xml", "msh2xml",
+  "vb", "vbs", "vbe", "js", "jse", "ws", "wsf", "wsh", "wsc", "sct",
   "py", "pyw", "jar",
   // Unix
   "sh", "bash", "zsh", "run", "bin", "appimage", "desktop", "command", "app",
