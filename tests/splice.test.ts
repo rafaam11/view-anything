@@ -47,6 +47,39 @@ test("splice preserves CRLF and BOM and missing trailing newline", () => {
   expect(written).toEqual(expected);
 });
 
+describe("review fix round 1", () => {
+  test("deletion across a tight gap does not merge neighbouring paragraphs", () => {
+    expect(spliceMarkdown("para\n* a\n\nq\n", "para\n\n- a\n\nq\n", "para\n\nq\n")).toBe("para\n\nq\n");
+  });
+
+  test("edited block after a tight gap does not become lazy continuation", () => {
+    expect(spliceMarkdown("para\n* a\n", "para\n\n- a\n", "para\n\nb\n")).toBe("para\n\nb\n");
+  });
+
+  test("edited block before a tight gap does not become setext heading", () => {
+    expect(spliceMarkdown("# h\n---\n", "# h\n\n---\n", "text\n\n---\n")).toBe("text\n\n---\n");
+  });
+
+  test("tight gap between unchanged matched blocks stays byte-exact", () => {
+    expect(spliceMarkdown("para\n* a\n\nq\n", "para\n\n- a\n\nq\n", "para\n\n- a\n\nQ\n")).toBe("para\n* a\n\nQ\n");
+  });
+
+  test("original and baseline with equal count but different structure throws", () => {
+    expect(() =>
+      spliceMarkdown("x\n\n* b\n- c\n\nd", "x\n\n- b\n- c\n\nd1\n\nd2\n", "x\n\n- b\n- c\n\nD1\n\nd2\n"),
+    ).toThrow(SpliceError);
+  });
+
+  test("structure check covers heading depth and list ordering", () => {
+    expect(() => spliceMarkdown("# a\n\nb", "## a\n\nb\n", "## a\n\nc\n")).toThrow(SpliceError);
+    expect(() => spliceMarkdown("1. a\n\nb", "- a\n\nb\n", "- a\n\nc\n")).toThrow(SpliceError);
+  });
+
+  test("splice result identical to original returns null", () => {
+    expect(spliceMarkdown("a\n\nb", "a\n\nb\n", "a\n\nb")).toBeNull();
+  });
+});
+
 describe("adversarial inputs", () => {
   test("edited block keeps unusual surrounding gaps", () => {
     const o = "a\n\n\n\nb\n\n\nc";

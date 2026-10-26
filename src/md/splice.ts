@@ -14,6 +14,14 @@ export class SpliceError extends Error {
 export interface Block {
   start: number;
   end: number;
+  /** Structural signature: node type plus heading depth / list ordering where relevant. */
+  kind: string;
+}
+
+function blockKind(node: { type: string; depth?: number; ordered?: boolean | null }): string {
+  if (node.type === "heading") return `heading:${node.depth}`;
+  if (node.type === "list") return `list:${node.ordered ? "ordered" : "bullet"}`;
+  return node.type;
 }
 
 /** Parser shared by save-splicing and rendering, so both agree on block boundaries. */
@@ -28,7 +36,7 @@ export function splitBlocks(md: string): Block[] {
     const start = node.position?.start.offset;
     const end = node.position?.end.offset;
     if (start === undefined || end === undefined) throw new SpliceError(`block without position: ${node.type}`);
-    return { start, end };
+    return { start, end, kind: blockKind(node) };
   });
 }
 
@@ -63,7 +71,12 @@ function lcsPairs(a: string[], b: string[]): [number, number][] {
 interface Item {
   text: string;
   orig?: number;
+  /** True when the text is the untouched original block. */
+  matched: boolean;
 }
+
+/** A gap that contains a blank line safely separates any two blocks. */
+const BLANK_LINE = /\n[ \t]*\n/;
 
 /**
  * Apply the edits between `baseline` and `edited` to `original`, touching only changed blocks.
@@ -78,7 +91,13 @@ export function spliceMarkdown(original: string, baseline: string, edited: strin
   if (O.length !== B.length) {
     throw new SpliceError(`block count mismatch: original ${O.length}, baseline ${B.length}`);
   }
+  O.forEach((o, i) => {
+    if (o.kind !== B[i].kind) {
+      throw new SpliceError(`block ${i} structure mismatch: original ${o.kind}, baseline ${B[i].kind}`);
+    }
+  });
   // Nothing to preserve in a file without blocks (empty or whitespace only).
+  // Any leading/trailing whitespace of such a file is intentionally dropped.
   if (O.length === 0) return edited;
 
   const E = splitBlocks(edited);
@@ -91,34 +110,37 @@ export function spliceMarkdown(original: string, baseline: string, edited: strin
   // surplus edited blocks are new, surplus baseline blocks are deleted.
   const flushRun = (bFrom: number, bTo: number, eFrom: number, eTo: number) => {
     const k = Math.min(bTo - bFrom, eTo - eFrom);
-    for (let t = 0; t < k; t++) items.push({ text: eText[eFrom + t], orig: bFrom + t });
-    for (let j = eFrom + k; j < eTo; j++) items.push({ text: eText[j] });
+    for (let t = 0; t < k; t++) items.push({ text: eText[eFrom + t], orig: bFrom + t, matched: false });
+    for (let j = eFrom + k; j < eTo; j++) items.push({ text: eText[j], matched: false });
   };
   let bi = 0;
   let ej = 0;
   for (const [i, j] of lcsPairs(bText, eText)) {
     flushRun(bi, i, ej, j);
-    items.push({ text: oText[i], orig: i });
+    items.push({ text: oText[i], orig: i, matched: true });
     bi = i + 1;
     ej = j + 1;
   }
   flushRun(bi, B.length, ej, E.length);
 
   let out = original.slice(0, O[0].start);
-  let prev: number | undefined;
-  items.forEach((item, k) => {
-    if (k > 0) {
-      const cur = item.orig;
-      if (prev !== undefined && cur !== undefined) {
-        // Consecutive originals keep their gap; across deleted blocks keep the gap after `prev`.
-        out += original.slice(O[prev].end, O[prev + 1].start);
-      } else {
-        out += "\n\n";
+  let prev: Item | undefined;
+  for (const item of items) {
+    if (prev) {
+      let gap = "\n\n";
+      if (prev.orig !== undefined && item.orig !== undefined) {
+        // Across deleted blocks, reuse the gap after `prev`.
+        const orig = original.slice(O[prev.orig].end, O[prev.orig + 1].start);
+        const untouched = prev.matched && item.matched && item.orig === prev.orig + 1;
+        // Untouched neighbours keep their gap byte-exact. Next to an edit or a deletion a tight
+        // gap ("\n") could merge blocks (lazy continuation, setext heading), so require a blank line.
+        if (untouched || BLANK_LINE.test(orig)) gap = orig;
       }
+      out += gap;
     }
     out += item.text;
-    prev = item.orig;
-  });
+    prev = item;
+  }
   out += original.slice(O[O.length - 1].end);
-  return out;
+  return out === original ? null : out;
 }
