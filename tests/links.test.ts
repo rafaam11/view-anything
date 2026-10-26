@@ -32,6 +32,26 @@ test("executables and shell scripts are never launched from a document", () => {
   expect(classifyLink("n.exe::$DATA", base).kind).toBe("ignore");
 });
 
+test("scripts, installers and shell-handled types are blocked too, in any case", () => {
+  const exts = [
+    "py", "pyw", "chm", "appx", "appxbundle", "msix", "msixbundle", "appinstaller", "settingcontent-ms",
+    "scf", "library-ms", "ws", "wsh", "vb", "ps1xml", "ps2", "psc1", "msh", "application", "gadget",
+    "cpl", "hta", "jar", "reg", "lnk", "url",
+  ];
+  for (const ext of exts) {
+    expect(classifyLink("a." + ext, base).kind, ext).toBe("blocked");
+    expect(classifyLink("a." + ext.toUpperCase(), base).kind, ext).toBe("blocked");
+  }
+});
+
+test("trailing dots, spaces and alternate data streams resolve to the real extension", () => {
+  for (const f of ["s/a.py.", "s/a.py%20", "s/a.exe::$DATA", "s/a.EXE::$data", "s/a.exe:zone", "s/a.exe:zone:$DATA", "s/a.reg. .", "s/a.msix::$DATA."]) {
+    expect(classifyLink(f, base).kind, f).toBe("blocked");
+  }
+  // a stream of a document stays a document
+  expect(classifyLink("s/a.txt:zone", base).kind).toBe("open");
+});
+
 test("unsupported schemes are ignored", () => {
   expect(classifyLink("file:///C:/x.txt", base)).toEqual({ kind: "ignore" });
   expect(classifyLink("javascript:alert(1)", base)).toEqual({ kind: "ignore" });

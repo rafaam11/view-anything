@@ -13,9 +13,34 @@ export type LinkAction =
 
 const EXTERNAL = /^(https?:|mailto:)/i;
 const MD_FILE = /\.(md|markdown)$/i;
-/** Extensions the OS would execute (or follow to an executable) instead of opening as a document. */
-const EXECUTABLE =
-  /\.(exe|com|bat|cmd|msi|msp|msc|ps1|psm1|psd1|vbs|vbe|js|jse|wsf|wsh|scr|pif|lnk|url|hta|cpl|reg|jar|appref-ms|application|gadget|inf|sh|bash|zsh|run|bin|appimage|desktop|command|app)$/i;
+/**
+ * Extensions the OS would execute, install, import or follow to an executable instead of opening
+ * as a document. Mirrored as a deny scope of `opener:allow-open-path` in
+ * src-tauri/capabilities/default.json (a test keeps both in sync).
+ */
+export const EXECUTABLE_EXTENSIONS = [
+  // Windows programs, installers and shell-executed types
+  "exe", "com", "bat", "cmd", "msi", "msp", "msc", "scr", "pif", "cpl", "hta", "inf", "reg", "chm",
+  "lnk", "url", "scf", "library-ms", "settingcontent-ms", "appref-ms", "application", "gadget",
+  "appx", "appxbundle", "msix", "msixbundle", "appinstaller",
+  // Script hosts
+  "ps1", "psm1", "psd1", "ps1xml", "ps2", "psc1", "msh", "vb", "vbs", "vbe", "js", "jse", "ws", "wsf", "wsh",
+  "py", "pyw", "jar",
+  // Unix
+  "sh", "bash", "zsh", "run", "bin", "appimage", "desktop", "command", "app",
+];
+const EXECUTABLE = new RegExp("\\.(" + EXECUTABLE_EXTENSIONS.join("|") + ")$", "i");
+
+/**
+ * The name Windows actually resolves: an alternate data stream suffix (`:zone`, `::$DATA`) is cut
+ * and trailing dots/spaces are ignored, so `a.exe::$DATA` and `a.exe. ` are `a.exe`.
+ */
+function effectiveName(path: string): string {
+  let name = path.split(/[\\/]/).pop() ?? path;
+  const colon = name.indexOf(":");
+  if (colon > 0) name = name.slice(0, colon);
+  return name.replace(/[.\s]+$/, "");
+}
 
 export function classifyLink(href: string, baseDir: string): LinkAction {
   if (!href) return { kind: "ignore" };
@@ -27,7 +52,6 @@ export function classifyLink(href: string, baseDir: string): LinkAction {
     const at = href.indexOf("#");
     return { kind: "markdown", path, hash: at >= 0 ? href.slice(at) : "" };
   }
-  // Windows ignores trailing dots/spaces and the default ::$DATA stream when resolving a name.
-  if (EXECUTABLE.test(path.replace(/(::\$DATA)?[.\s]*$/i, ""))) return { kind: "blocked", path };
+  if (EXECUTABLE.test(effectiveName(path))) return { kind: "blocked", path };
   return { kind: "open", path };
 }
