@@ -25,6 +25,9 @@ Markdown(읽기 + Typora식 WYSIWYG 편집)과 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB
 ## 버전·릴리스 (multi-cli-work 방식)
 - 버전 체계는 SemVer `vX.Y.Z`. 기능 추가는 minor, 수정만 있으면 patch를 올린다.
 - 버전은 `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` 세 곳에 있다. 항상 함께 올린다.
+- 버전 스크립트:
+  - `node scripts/bump-version.mjs X.Y.Z`: 세 파일과 `src-tauri/Cargo.lock`의 `view-anything` 항목을 함께 갱신한다.
+  - `node scripts/check-version.mjs [vX.Y.Z]`: 세 파일 버전이 같은지 검사한다(태그를 넘기면 `v<version>`과도 비교). 불일치 시 exit 1. CI와 release workflow가 사용한다.
 - 릴리스 커밋 `chore: prepare vX.Y.Z release`에 포함할 것:
   - 세 버전 파일
   - 새 릴리스 노트 `docs/release/vX.Y.Z.md`
