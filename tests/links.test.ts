@@ -57,6 +57,19 @@ test("links to foreign unc shares are ignored (no SMB on click)", () => {
     expect(classifyLink(f, base), f).toEqual({ kind: "ignore" });
   }
   const unc = "\\\\srv\\share\\d";
+  // device-namespace paths are refused wherever the document lives
+  for (const f of [
+    "\\/.\\C:\\..\\UNC\\evil\\share\\x.png",
+    "\\/?\\C:\\..\\UNC\\evil\\s\\x",
+    "\\\\.\\C:\\..\\GLOBALROOT\\Device\\Mup\\evil\\s\\x.txt",
+    "\\\\.\\C:\\..\\pipe\\x",
+    "%5C%5C.%5CC:%5C..%5CUNC%5Cevil%5Cshare%5Cx.txt",
+    "%5C/.%5CC:%5C..%5Cpipe%5Cx",
+    "\\\\.\\c:\\docs\\a.md",
+  ]) {
+    expect(classifyLink(f, base), f).toEqual({ kind: "ignore" });
+    expect(classifyLink(f, unc), f).toEqual({ kind: "ignore" });
+  }
   expect(classifyLink("x.txt", unc)).toEqual({ kind: "open", path: "\\\\srv\\share\\d\\x.txt" });
   expect(classifyLink("\\\\evil\\share\\doc.txt", unc)).toEqual({ kind: "ignore" });
 });

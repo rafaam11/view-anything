@@ -31,16 +31,15 @@ function safeDecode(s: string): string {
 }
 
 /**
- * `\\server\share` (lowercased) of a UNC path, "local" for a non-UNC or `\\?\C:\` path, or null
- * for a path that must never be touched (device namespace, `..` in a UNC path).
+ * `\\server\share` (lowercased) of a UNC path, "local" for a non-UNC path, or null for a path
+ * that must never be touched (any `\\?\` / `\\.\` device path, `.`/`..` in a UNC path).
  */
 function uncRoot(path: string): string | null | "local" {
-  let p = path.replace(/\//g, "\\");
+  const p = path.replace(/\//g, "\\");
   if (!p.startsWith("\\\\")) return "local";
-  if (/^\\\\[?.]\\[A-Za-z]:\\/.test(p)) return "local";
-  const unc = /^\\\\[?.]\\UNC\\/i.exec(p);
-  if (unc) p = "\\\\" + p.slice(unc[0].length);
-  else if (/^\\\\[?.]\\/.test(p)) return null; // \\.\pipe, \\?\GLOBALROOT, ...
+  // Device namespace (`\\?\`, `\\.\`) is refused outright: Windows resolves `..` across its
+  // drive component (`\\.\C:\..\UNC\host\share`, `\\.\C:\..\GLOBALROOT\Device\Mup\...`, pipes).
+  if (/^\\\\[?.](\\|$)/.test(p)) return null;
   const segs = p.slice(2).split("\\");
   if (segs.length < 2 || !segs[0] || !segs[1] || segs.some((s) => s === "." || s === "..")) return null;
   return ("\\\\" + segs[0] + "\\" + segs[1]).toLowerCase();

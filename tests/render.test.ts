@@ -116,6 +116,15 @@ const FOREIGN_UNC = [
   "\\\\?\\UNC\\evil\\share\\x.png",
   "\\\\.\\pipe\\evil",
   "\\\\?\\GLOBALROOT\\Device\\x.png",
+  // device paths whose `..` Windows resolves across the drive component
+  "\\/.\\C:\\..\\UNC\\evil\\share\\x.png",
+  "\\/?\\C:\\..\\UNC\\evil\\s\\x",
+  "\\\\.\\C:\\..\\GLOBALROOT\\Device\\Mup\\evil\\s\\x.png",
+  "\\\\.\\C:\\..\\pipe\\x",
+  "%5C%5C.%5CC:%5C..%5CUNC%5Cevil%5Cshare%5Cx.png",
+  "%5C/.%5CC:%5C..%5Cpipe%5Cx",
+  "\\\\.\\c:\\p\\x.png",
+  "//./C:/x.png",
 ];
 test("foreign unc image sources never reach assetUrl or the html", async () => {
   const seen: string[] = [];
@@ -123,10 +132,13 @@ test("foreign unc image sources never reach assetUrl or the html", async () => {
   const src = FOREIGN_UNC.map((s) => `<img src="${s}">`).join("\n\n") + "\n\n![a](/\\evil\\s\\x.png)";
   const { html } = await renderMarkdown(src, opts);
   expect(seen).toEqual([]);
-  expect(html).not.toMatch(/evil|pipe|GLOBALROOT/i);
+  expect(html).not.toMatch(/evil|pipe|GLOBALROOT|<img src/i);
 });
 test("resolveAsset only allows unc paths on the document's own share", () => {
-  for (const s of FOREIGN_UNC) expect(resolveAsset("D:\\d", s), s).toBeNull();
+  for (const s of FOREIGN_UNC) {
+    expect(resolveAsset("D:\\d", s), s).toBeNull();
+    expect(resolveAsset("\\\\srv\\share\\d", s), s).toBeNull();
+  }
   const unc = "\\\\srv\\share\\d";
   expect(resolveAsset(unc, "./x.png")).toBe("\\\\srv\\share\\d\\x.png");
   expect(resolveAsset(unc, "\\\\srv\\share\\y.png")).toBe("\\\\srv\\share\\y.png");
