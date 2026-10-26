@@ -4,16 +4,16 @@ import { platform } from "../platform";
 import type { Viewer } from "../registry";
 import { decodeText, encodeText } from "./text";
 import { renderMarkdown, resolveAsset } from "./render";
+import { classifyLink } from "./links";
 import { renderMermaid, watchTheme } from "./mermaid";
 import { buildToc } from "./toc";
 import { splitFrontmatter } from "./splice";
-import { planSave, shouldConfirmLeave, type Mode } from "./viewer-state";
+import { beforeWrite, bytesEqual, planSave, shouldConfirmLeave, shouldReloadOnFocus, type Mode } from "./viewer-state";
 import type { Editor } from "./editor";
 
-const EXTERNAL = /^(https?:|mailto:)/i;
-const MD_FILE = /\.(md|markdown)$/i;
 const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
 const REWRITE_MESSAGE = "원문 보존 불가 — 전체 재작성으로 저장할까요?";
+const CONFLICT_MESSAGE = "다른 프로그램이 파일을 변경했습니다. 덮어쓸까요?";
 
 function dirOf(path: string): string {
   return path.replace(/[\\/][^\\/]*$/, "");
@@ -40,25 +40,43 @@ function openInThisWindow(absPath: string, hash: string) {
   location.assign(location.pathname + "?file=" + encodeURIComponent(absPath) + hash);
 }
 
+/** A missing target only gets a notice: the window must never end up on a dead error page. */
+async function ensureExists(path: string): Promise<boolean> {
+  if (await platform.pathExists(path)) return true;
+  await platform.notice("링크 대상을 찾을 수 없습니다:\n" + path);
+  return false;
+}
+
+async function followLink(href: string, baseDir: string, confirmLeave: () => Promise<boolean>) {
+  const link = classifyLink(href, baseDir);
+  switch (link.kind) {
+    case "anchor":
+      scrollToId(link.hash);
+      break;
+    case "external":
+      await platform.openExternal(link.url);
+      break;
+    case "markdown":
+      if ((await ensureExists(link.path)) && (await confirmLeave())) openInThisWindow(link.path, link.hash);
+      break;
+    case "open":
+      if (await ensureExists(link.path)) await platform.openWithDefaultApp(link.path);
+      break;
+    case "blocked":
+      await platform.notice("보안을 위해 실행 파일 링크는 열지 않습니다:\n" + link.path);
+      break;
+    case "ignore":
+      break;
+  }
+}
+
 function handleLinkClick(e: MouseEvent, baseDir: string, confirmLeave: () => Promise<boolean>) {
   const a = (e.target as HTMLElement).closest("a");
   if (!a) return;
   const href = a.getAttribute("href");
   if (!href) return;
   e.preventDefault();
-  if (href.startsWith("#")) {
-    scrollToId(href);
-  } else if (EXTERNAL.test(href)) {
-    void platform.openExternal(href);
-  } else {
-    const abs = resolveAsset(baseDir, href);
-    const hashAt = href.indexOf("#");
-    if (abs && MD_FILE.test(abs)) {
-      void confirmLeave().then((ok) => {
-        if (ok) openInThisWindow(abs, hashAt >= 0 ? href.slice(hashAt) : "");
-      });
-    }
-  }
+  followLink(href, baseDir, confirmLeave).catch((err) => platform.alert(String(err)).catch(() => {}));
 }
 
 /** Webview accelerators that leave or reload the page. */
@@ -74,10 +92,13 @@ function isKey(e: KeyboardEvent, key: string): boolean {
 
 const viewer: Viewer = {
   async mount(el, path) {
-    const decoded = decodeText(await platform.readFile(path));
+    /** The file bytes as last read or written; external changes are detected against them. */
+    let known = await platform.readFile(path);
+    const decoded = decodeText(known);
     const meta = { bom: decoded.bom, eol: decoded.eol };
     const baseDir = dirOf(path);
     const name = nameOf(path);
+    void platform.setWindowTitle(name).catch(() => {});
 
     /** The file content as last read or saved (LF-normalized). */
     let original = decoded.text;
@@ -107,14 +128,16 @@ const viewer: Viewer = {
     bar.append(title, actions);
     root.append(bar);
 
-    if (decoded.readOnlyReason) {
-      toggle.disabled = true;
-      toggle.title = "읽기 전용: " + decoded.readOnlyReason;
-      const banner = document.createElement("div");
-      banner.className = "md-banner";
-      banner.textContent = decoded.readOnlyReason;
-      root.append(banner);
-    }
+    const banner = document.createElement("div");
+    banner.className = "md-banner";
+    root.append(banner);
+    const setReadOnly = (reason: string | undefined) => {
+      toggle.disabled = !!reason;
+      toggle.title = reason ? "읽기 전용: " + reason : "편집 모드 (Ctrl+E)";
+      banner.hidden = !reason;
+      banner.textContent = reason ?? "";
+    };
+    setReadOnly(decoded.readOnlyReason);
 
     const body = document.createElement("div");
     body.className = "md-body";
@@ -128,18 +151,31 @@ const viewer: Viewer = {
     root.append(editorHost);
     el.replaceChildren(root);
 
-    const render = async () => {
+    let disposeToc = () => {};
+    /** `keepScroll`: a reload of changed content keeps the reader where they were (best effort). */
+    const render = async (keepScroll = false) => {
+      const scrollY = window.scrollY;
+      const restore = () => {
+        if (keepScroll) window.scrollTo(0, scrollY);
+        else if (location.hash) scrollToId(location.hash);
+      };
       try {
         const { html, headings } = await renderMarkdown(original, {
           baseDir,
           assetUrl: (abs) => platform.assetUrl(abs),
         });
         article.innerHTML = html;
+        disposeToc();
+        disposeToc = () => {};
         body.querySelector("nav.toc")?.remove();
-        if (headings.length > 0) body.prepend(buildToc(headings, article));
-        if (location.hash) scrollToId(location.hash);
+        if (headings.length > 0) {
+          const toc = buildToc(headings, article);
+          disposeToc = toc.dispose;
+          body.prepend(toc.nav);
+        }
+        restore();
         await renderMermaid(article);
-        if (location.hash) scrollToId(location.hash); // diagrams change layout height
+        restore(); // diagrams change layout height
       } catch (e) {
         const err = document.createElement("div");
         err.className = "md-banner";
@@ -148,6 +184,19 @@ const viewer: Viewer = {
       }
     };
     await render();
+
+    /** Adopt bytes another program wrote: new content, encoding details and read-only state. */
+    const adopt = (bytes: Uint8Array) => {
+      const d = decodeText(bytes);
+      known = bytes;
+      original = d.text;
+      meta.bom = d.bom;
+      meta.eol = d.eol;
+      setReadOnly(d.readOnlyReason);
+      return d;
+    };
+    /** Current disk bytes, or null when the file cannot be read (deleted, locked). */
+    const readDisk = () => platform.readFile(path).catch(() => null);
 
     const setDirty = (value: boolean) => {
       if (value === dirty) return;
@@ -171,6 +220,13 @@ const viewer: Viewer = {
     };
 
     const enterEdit = async () => {
+      // Edit what is on disk now, not what was read at mount (an agent may have changed it).
+      const onDisk = await readDisk();
+      if (onDisk && !bytesEqual(known, onDisk)) {
+        const d = adopt(onDisk);
+        await render(true);
+        if (d.readOnlyReason) return;
+      }
       const { createEditor } = await import("./editor");
       editorHost.hidden = false;
       body.hidden = true;
@@ -224,7 +280,16 @@ const viewer: Viewer = {
         saveAgain = false; // a Ctrl+S queued behind the dialog would only ask the same again
         return;
       }
-      await platform.writeFile(path, encodeText(plan.text, meta));
+      if (
+        beforeWrite(known, await readDisk()) === "confirm-overwrite" &&
+        !(await platform.confirmDanger(CONFLICT_MESSAGE, "덮어쓰기"))
+      ) {
+        saveAgain = false;
+        return; // stays dirty: the edits are kept in the editor
+      }
+      const bytes = encodeText(plan.text, meta);
+      await platform.writeFile(path, bytes);
+      known = bytes;
       original = plan.text;
       baseline = edited;
       refreshDirty(); // typing may have continued while the dialog or write was pending
@@ -254,6 +319,17 @@ const viewer: Viewer = {
       if (toggle.disabled) return;
       run(mode === "read" ? enterEdit : leaveEdit);
     };
+
+    // Read mode follows changes other programs made while the window was in the background.
+    const reloadIfChanged = async () => {
+      const onDisk = await readDisk();
+      if (!onDisk || !shouldReloadOnFocus({ mode, busy: false }, known, onDisk)) return;
+      adopt(onDisk);
+      await render(true);
+    };
+    window.addEventListener("focus", () => {
+      if (mode === "read") run(reloadIfChanged);
+    });
 
     toggle.addEventListener("click", toggleMode);
     // Capture phase: ProseMirror/CodeMirror must not swallow the app shortcuts.

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use args::file_arg;
 
@@ -17,7 +17,24 @@ fn read_file(path: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    write_atomic(Path::new(&path), &data).map_err(|e| format!("{path}: {e}"))
+    let target = write_target(Path::new(&path));
+    write_atomic(&target, &data).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Lets the viewer check a link target before leaving the current document.
+#[tauri::command]
+fn path_exists(path: String) -> bool {
+    Path::new(&path).exists()
+}
+
+/// The file a save must replace. For a symlink that is the link's final target: renaming the
+/// temporary file over the link itself would turn it into a regular file and leave the real
+/// file stale.
+fn write_target(path: &Path) -> PathBuf {
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_symlink() => std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
 }
 
 /// Write to a temporary sibling, then rename it over `path` (a replacing rename on Windows and
@@ -70,6 +87,32 @@ fn create_window(app: &AppHandle, file: Option<PathBuf>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// The most recently created viewer window label (`w<N>` with the largest N).
+fn latest_label<'a>(labels: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    labels
+        .into_iter()
+        .filter_map(|l| l.strip_prefix('w')?.parse::<usize>().ok().map(|n| (n, l)))
+        .max_by_key(|(n, _)| *n)
+        .map(|(_, l)| l)
+}
+
+/// A second launch without a file (e.g. from the Start menu) brings the app forward.
+fn focus_latest_window(app: &AppHandle) {
+    let windows = app.webview_windows();
+    match latest_label(windows.keys().map(String::as_str)).and_then(|l| windows.get(l)) {
+        Some(w) => {
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+        None => {
+            if let Err(e) = create_window(app, None) {
+                eprintln!("failed to open window: {e}");
+            }
+        }
+    }
+}
+
 #[tauri::command]
 async fn open_window(app: AppHandle, path: Option<String>) -> Result<(), String> {
     create_window(&app, path.map(PathBuf::from))
@@ -84,11 +127,13 @@ pub fn run() {
                 if let Err(e) = create_window(app, Some(p)) {
                     eprintln!("failed to open window: {e}");
                 }
+            } else {
+                focus_latest_window(app);
             }
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_file, write_file, open_window])
+        .invoke_handler(tauri::generate_handler![read_file, write_file, path_exists, open_window])
         .setup(|app| {
             let argv: Vec<String> = std::env::args().collect();
             create_window(app.handle(), file_arg(&argv))?;
@@ -121,6 +166,61 @@ mod tests {
     fn write_atomic_fails_cleanly_for_missing_directory() {
         let target = std::env::temp_dir().join("va-no-such-dir-xyz").join("a.md");
         assert!(write_atomic(&target, b"x").is_err());
+    }
+
+    #[test]
+    fn latest_label_picks_the_highest_window_number() {
+        assert_eq!(latest_label(["w0", "w10", "w9"]), Some("w10"));
+        assert_eq!(latest_label(["main", "w2"]), Some("w2"));
+        assert_eq!(latest_label(Vec::<&str>::new()), None);
+        assert_eq!(latest_label(["main"]), None);
+    }
+
+    #[test]
+    fn write_target_keeps_regular_and_missing_paths() {
+        let missing = std::env::temp_dir().join("va-no-such-file-xyz.md");
+        assert_eq!(write_target(&missing), missing);
+        let dir = std::env::temp_dir().join(format!("va-target-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.md");
+        std::fs::write(&file, b"x").unwrap();
+        assert_eq!(write_target(&file), file);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_through_a_symlink_updates_the_target_and_keeps_the_link() {
+        let dir = std::env::temp_dir().join(format!("va-symlink-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let real = dir.join("real.md");
+        let link = dir.join("link.md");
+        std::fs::write(&real, b"old").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        write_atomic(&write_target(&link), b"new").unwrap();
+        assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Windows needs Developer Mode or admin rights to create symlinks; skip when refused.
+    #[cfg(windows)]
+    #[test]
+    fn saving_through_a_symlink_updates_the_target_and_keeps_the_link_windows() {
+        let dir = std::env::temp_dir().join(format!("va-symlink-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let real = dir.join("real.md");
+        let link = dir.join("link.md");
+        std::fs::write(&real, b"old").unwrap();
+        if let Err(e) = std::os::windows::fs::symlink_file(&real, &link) {
+            eprintln!("skipping: cannot create symlink ({e})");
+            std::fs::remove_dir_all(&dir).unwrap();
+            return;
+        }
+        write_atomic(&write_target(&link), b"new").unwrap();
+        assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

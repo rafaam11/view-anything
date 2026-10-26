@@ -10,8 +10,11 @@ function loadCollapsed(): boolean {
   }
 }
 
-/** Collapsible sidebar listing headings; highlights the heading at the current scroll position. */
-export function buildToc(headings: Heading[], article: HTMLElement): HTMLElement {
+/**
+ * Collapsible sidebar listing headings; highlights the heading at the current scroll position.
+ * Call `dispose` before replacing the toc so scroll listeners do not pile up across re-renders.
+ */
+export function buildToc(headings: Heading[], article: HTMLElement): { nav: HTMLElement; dispose: () => void } {
   const nav = document.createElement("nav");
   nav.className = "toc";
   nav.classList.toggle("collapsed", loadCollapsed());
@@ -61,7 +64,8 @@ export function buildToc(headings: Heading[], article: HTMLElement): HTMLElement
     next?.scrollIntoView({ block: "nearest" });
     active = next;
   };
-  article.ownerDocument.defaultView?.addEventListener("scroll", update, { passive: true });
+  const win = article.ownerDocument.defaultView;
+  win?.addEventListener("scroll", update, { passive: true });
   queueMicrotask(update);
-  return nav;
+  return { nav, dispose: () => win?.removeEventListener("scroll", update) };
 }

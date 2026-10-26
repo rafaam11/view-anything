@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 
 export const platform = {
   async readFile(path: string): Promise<Uint8Array> {
@@ -19,6 +19,13 @@ export const platform = {
   async openExternal(url: string): Promise<void> {
     await openUrl(url);
   },
+  /** Open a local file or folder with the OS default application. */
+  async openWithDefaultApp(path: string): Promise<void> {
+    await openPath(path);
+  },
+  async pathExists(path: string): Promise<boolean> {
+    return invoke<boolean>("path_exists", { path });
+  },
   async setWindowTitle(title: string): Promise<void> {
     document.title = title;
     await getCurrentWindow().setTitle(title);
@@ -26,6 +33,22 @@ export const platform = {
   /** Native yes/no dialog (window.confirm is not dependable across Tauri webviews). */
   async confirm(text: string): Promise<boolean> {
     return ask(text, { title: "view-anything", kind: "warning" });
+  },
+  /**
+   * Yes/no for a destructive action where the safe answer must be the default: the first
+   * (focused) button and Esc both decline; only clicking `dangerLabel` returns true.
+   */
+  async confirmDanger(text: string, dangerLabel: string): Promise<boolean> {
+    const r = await message(text, {
+      title: "view-anything",
+      kind: "warning",
+      buttons: { yes: "저장 안 함", no: dangerLabel, cancel: "취소" },
+    });
+    return r === dangerLabel;
+  },
+  /** Non-destructive information (nothing changed, nothing lost). */
+  async notice(text: string): Promise<void> {
+    await message(text, { title: "view-anything", kind: "info" });
   },
   async alert(text: string): Promise<void> {
     await message(text, { title: "view-anything", kind: "error" });

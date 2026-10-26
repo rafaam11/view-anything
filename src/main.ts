@@ -27,6 +27,8 @@ async function show() {
     message("파일을 끌어다 놓으세요");
     return;
   }
+  // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
+  void platform.setWindowTitle(file.split(/[\\/]/).pop() ?? file).catch(() => {});
   const load = resolveViewer(file);
   if (!load) {
     message("지원하지 않는 형식", file);
