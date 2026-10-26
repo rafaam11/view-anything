@@ -218,7 +218,7 @@ const viewer: Viewer = {
     const confirmLeave = async () => {
       refreshDirty();
       if (!shouldConfirmLeave({ mode, dirty })) return true;
-      discardApproved = await platform.confirm(LEAVE_MESSAGE);
+      discardApproved = await platform.confirmDiscard(LEAVE_MESSAGE);
       return discardApproved;
     };
 

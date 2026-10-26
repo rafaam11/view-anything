@@ -20,6 +20,7 @@ vi.mock("../src/platform", () => ({
     assetUrl: (a: string) => "asset://" + a,
     setWindowTitle: async () => {},
     confirm: vi.fn(async () => true),
+    confirmDiscard: vi.fn(async () => true),
     confirmDanger: async () => false,
     notice: async () => {},
     alert: async () => {},

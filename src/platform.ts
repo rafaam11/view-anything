@@ -47,6 +47,15 @@ export const platform = {
   async confirm(text: string): Promise<boolean> {
     return ask(text, { title: "view-anything", kind: "warning" });
   },
+  /** Discard confirmation where cancelling is the default: first (focused) button and Esc decline. */
+  async confirmDiscard(text: string): Promise<boolean> {
+    const r = await message(text, {
+      title: "view-anything",
+      kind: "warning",
+      buttons: { yes: "계속 편집", no: "버리기", cancel: "취소" },
+    });
+    return r === "버리기";
+  },
   /**
    * Yes/no for a destructive action where the safe answer must be the default: the first
    * (focused) button and Esc both decline; only clicking `dangerLabel` returns true.
