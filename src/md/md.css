@@ -39,6 +39,13 @@
   background: var(--bg); border-bottom: 1px solid var(--border);
   font-size: 0.85rem; color: var(--muted);
 }
+.md-root [hidden] { display: none !important; }
+.md-toggle {
+  font: inherit; font-size: 0.8rem; padding: 2px 12px; cursor: pointer;
+  color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+}
+.md-toggle:hover:not(:disabled) { background: var(--code-bg); }
+.md-toggle:disabled { color: var(--muted); cursor: default; }
 .md-banner {
   padding: 8px 16px; font-size: 0.85rem;
   background: #fff8c5; color: #4d2d00; border-bottom: 1px solid #d4a72c;

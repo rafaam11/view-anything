@@ -1,0 +1,31 @@
+/* Crepe theme variables mapped onto the app's light/dark tokens. */
+.md-editor .milkdown {
+  --crepe-color-background: var(--bg);
+  --crepe-color-on-background: var(--fg);
+  --crepe-color-surface: var(--code-bg);
+  --crepe-color-surface-low: var(--code-bg);
+  --crepe-color-on-surface: var(--fg);
+  --crepe-color-on-surface-variant: var(--muted);
+  --crepe-color-outline: var(--border);
+  --crepe-color-primary: var(--accent);
+  --crepe-color-secondary: var(--border);
+  --crepe-color-on-secondary: var(--fg);
+  --crepe-color-inverse: var(--fg);
+  --crepe-color-on-inverse: var(--bg);
+  --crepe-color-inline-code: var(--hl-keyword);
+  --crepe-color-error: #cf222e;
+  --crepe-color-hover: var(--code-bg);
+  --crepe-color-selected: var(--border);
+  --crepe-color-inline-area: var(--code-bg);
+
+  --crepe-base-font-size: 16px;
+  --crepe-font-title: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+  --crepe-font-default: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+  --crepe-font-code: ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  --crepe-shadow-1: 0 1px 3px 1px rgba(0, 0, 0, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --crepe-shadow-2: 0 2px 6px 2px rgba(0, 0, 0, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+.md-editor { max-width: 860px; margin: 0 auto; padding: 8px 0 96px; }
+.md-editor .va-preview { text-align: center; overflow-x: auto; }
+.md-editor .va-preview-error { color: var(--muted); text-align: left; white-space: pre-wrap; }

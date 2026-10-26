@@ -144,3 +144,19 @@ export function spliceMarkdown(original: string, baseline: string, edited: strin
   out += original.slice(O[O.length - 1].end);
   return out === original ? null : out;
 }
+
+/**
+ * Split a leading YAML frontmatter block (plus the gap after it) off `md`. The editor has no
+ * frontmatter node, so it only ever sees `body`; `head` is re-attached byte-exact on save.
+ */
+export function splitFrontmatter(md: string): { head: string; body: string } {
+  const blocks = splitBlocks(md);
+  if (blocks[0]?.kind !== "yaml") return { head: "", body: md };
+  const cut = blocks.length > 1 ? blocks[1].start : md.length;
+  return { head: md.slice(0, cut), body: md.slice(cut) };
+}
+
+/** Inverse of `splitFrontmatter`; inserts a line break only if `head` does not end with one. */
+export function joinFrontmatter(head: string, body: string): string {
+  return head && body && !head.endsWith("\n") ? head + "\n" + body : head + body;
+}

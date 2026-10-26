@@ -47,3 +47,17 @@ export function watchTheme(cb: () => void): void {
     if (document.documentElement.dataset.theme === "system") cb();
   });
 }
+
+let previewSeq = 0;
+
+/** Renders one mermaid source to SVG markup (editor previews). Throws on invalid diagrams. */
+export async function mermaidSvg(src: string): Promise<string> {
+  const { default: mermaid } = await import("mermaid");
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: isDark() ? "dark" : "default" });
+  const id = `va-mermaid-preview-${previewSeq++}`;
+  try {
+    return (await mermaid.render(id, src)).svg;
+  } finally {
+    document.getElementById("d" + id)?.remove();
+  }
+}
