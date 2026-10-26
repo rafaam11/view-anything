@@ -24,5 +24,6 @@ test("ctrl+o is the open shortcut, with no other modifier", () => {
   expect(isOpenKey(k("o", { altKey: true }))).toBe(false);
   expect(isOpenKey(k("o", { ctrlKey: false }))).toBe(false);
   expect(isOpenKey(k("p"))).toBe(false);
-  expect(isOpenKey(k("o", { repeat: true }))).toBe(false);
+  // repeats are still recognized so main.ts can swallow them (it only acts when !e.repeat)
+  expect(isOpenKey(k("o", { repeat: true }))).toBe(true);
 });

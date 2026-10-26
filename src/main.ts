@@ -73,7 +73,7 @@ window.addEventListener(
     } else if (isOpenKey(e)) {
       e.preventDefault();
       e.stopPropagation();
-      void pickAndOpen();
+      if (!e.repeat) void pickAndOpen(); // a held key must not queue dialogs
     }
   },
   true,
