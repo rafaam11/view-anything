@@ -220,7 +220,10 @@ const viewer: Viewer = {
         setDirty(false);
         return;
       }
-      if (plan.kind === "rewrite" && !(await platform.confirm(REWRITE_MESSAGE))) return;
+      if (plan.kind === "rewrite" && !(await platform.confirm(REWRITE_MESSAGE))) {
+        saveAgain = false; // a Ctrl+S queued behind the dialog would only ask the same again
+        return;
+      }
       await platform.writeFile(path, encodeText(plan.text, meta));
       original = plan.text;
       baseline = edited;

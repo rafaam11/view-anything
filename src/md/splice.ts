@@ -127,49 +127,76 @@ export function spliceMarkdown(original: string, baseline: string, edited: strin
   }
   flushRun(bi, B.length, ej, E.length);
 
-  // Definitions by slot: slot s lies between O[s-1] and O[s]. Slot 0 is part of the prefix and
-  // slot O.length part of the tail; the inner slots are emitted exactly once, in order.
-  const slots: Block[][] = Array.from({ length: O.length + 1 }, () => []);
+  // Definitions by slot: slot s lies between O[s-1] and O[s] (slot 0 before O[0], slot n after
+  // the last block). Every slot is emitted exactly once, in order, with its definition bytes exact.
+  const n = O.length;
+  const slots: Block[][] = Array.from({ length: n + 1 }, () => []);
   for (const d of defs) slots[O.filter((o) => o.end <= d.start).length].push(d);
-  let nextSlot = 1;
-  /** Inner slots up to and including `to` that were not emitted yet. */
-  const takeSlots = (to: number): number[] => {
+  let nextSlot = 0;
+  /** Non-empty slots up to and including `to` that were not emitted yet. */
+  const take = (to: number): number[] => {
     const taken: number[] = [];
-    for (; nextSlot <= Math.min(to, O.length - 1); nextSlot++) if (slots[nextSlot].length) taken.push(nextSlot);
+    for (; nextSlot <= Math.min(to, n); nextSlot++) if (slots[nextSlot].length) taken.push(nextSlot);
     return taken;
   };
-  // Each slot's definitions keep their bytes, including the separators between them.
-  const slotText = (taken: number[]) =>
-    taken.map((s) => original.slice(slots[s][0].start, slots[s][slots[s].length - 1].end)).join("\n\n");
+  const first = (s: number) => slots[s][0];
+  const last = (s: number) => slots[s][slots[s].length - 1];
+  /** Bytes between the block before slot s and its first definition. */
+  const lead = (s: number) => original.slice(s === 0 ? 0 : O[s - 1].end, first(s).start);
+  /** Bytes between the last definition of slot s and the block after it (or the end of file). */
+  const trail = (s: number) => original.slice(last(s).end, s === n ? original.length : O[s].start);
+  const runs = (taken: number[]) => taken.map((s) => original.slice(first(s).start, last(s).end)).join("\n\n");
+  // Next to an edit, insertion or deletion a tight gap ("\n") could merge blocks (lazy paragraph
+  // continuation, setext heading; a definition cannot interrupt a paragraph): require a blank line.
+  const safe = (gap: string) => (BLANK_LINE.test(gap) ? gap : "\n\n");
 
-  let out = original.slice(0, O[0].start);
+  let out = "";
   let prev: Item | undefined;
   for (const item of items) {
-    const pending = item.orig !== undefined ? takeSlots(item.orig) : [];
-    if (prev) {
-      let gap: string | undefined;
-      if (prev.orig !== undefined && item.orig !== undefined) {
-        // Across deleted blocks, reuse the gap after `prev`.
-        const orig = original.slice(O[prev.orig].end, O[prev.orig + 1].start);
-        const untouched = prev.matched && item.matched && item.orig === prev.orig + 1;
-        // Untouched neighbours keep their gap byte-exact. Next to an edit or a deletion a tight
-        // gap ("\n") could merge blocks (lazy continuation, setext heading), so require a blank line.
-        // The gap holds the definitions of slot prev+1 only.
-        const after = prev.orig + 1;
-        const covers = pending.every((s) => s === after);
-        if (covers && (untouched || BLANK_LINE.test(orig))) gap = orig;
+    // New blocks at the very start come after the leading definitions.
+    const pending = take(item.orig ?? (prev ? -1 : 0));
+    if (!prev) {
+      if (pending.length === 0) {
+        out += original.slice(0, O[0].start); // leading whitespace only (slot 0 is empty)
+      } else {
+        // Untouched first block: the prefix stays byte-exact.
+        const untouched = item.matched && item.orig === 0;
+        const end = pending[pending.length - 1];
+        out += (pending[0] === 0 ? lead(0) : "") + runs(pending) + (untouched ? trail(end) : safe(trail(end)));
       }
-      gap ??= pending.length ? "\n\n" + slotText(pending) + "\n\n" : "\n\n";
-      out += gap;
-    } else if (pending.length) {
-      out += slotText(pending) + "\n\n";
+    } else {
+      const untouched =
+        prev.matched && item.matched && prev.orig !== undefined && item.orig === prev.orig + 1;
+      if (untouched) {
+        // Untouched neighbours keep their gap (including any definitions in it) byte-exact.
+        out += original.slice(O[prev.orig!].end, O[item.orig!].start);
+      } else if (pending.length) {
+        out += safe(lead(pending[0])) + runs(pending) + safe(trail(pending[pending.length - 1]));
+      } else if (prev.orig !== undefined && item.orig !== undefined) {
+        // Across deleted blocks, reuse the gap after `prev` (it holds no definitions here).
+        out += safe(original.slice(O[prev.orig].end, O[prev.orig + 1].start));
+      } else {
+        out += "\n\n";
+      }
     }
     out += item.text;
     prev = item;
   }
-  const rest = takeSlots(O.length - 1);
-  if (rest.length) out += (prev ? "\n\n" : "") + slotText(rest);
-  out += original.slice(O[O.length - 1].end);
+
+  const rest = take(n);
+  if (rest.length === 0) {
+    out += original.slice(O[n - 1].end); // trailing whitespace only (slot n is empty)
+  } else {
+    const end = rest[rest.length - 1];
+    const untouched = prev?.matched === true && prev.orig === n - 1 && rest.length === 1 && end === n;
+    if (untouched) {
+      out += original.slice(O[n - 1].end);
+    } else {
+      const before = prev ? safe(lead(rest[0])) : rest[0] === 0 ? lead(0) : "";
+      const after = end === n ? trail(n) : (/\s*$/.exec(original)?.[0] ?? "");
+      out += before + runs(rest) + after;
+    }
+  }
   return out === original ? null : out;
 }
 

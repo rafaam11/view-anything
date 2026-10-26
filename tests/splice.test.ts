@@ -180,4 +180,41 @@ describe("link reference definitions", () => {
       withDefs.replace("para two", "para 2"),
     );
   });
+
+  // A definition cannot interrupt a paragraph: next to a changed neighbour it needs a blank line.
+  test("tail definition after a deleted tight neighbour stays a definition", () => {
+    const out = spliceMarkdown("P\n\n# H\n[s]: https://s\n", "P\n\n# H\n", "P\n");
+    expect(out).toBe("P\n\n[s]: https://s\n");
+  });
+
+  test("tail definition after a neighbour edited into a paragraph stays a definition", () => {
+    const out = spliceMarkdown("P\n\n# H\n[s]: https://s\n", "P\n\n# H\n", "P\n\nH\n");
+    expect(out).toBe("P\n\nH\n\n[s]: https://s\n");
+  });
+
+  test("inner definition after a neighbour edited into a paragraph stays a definition", () => {
+    const out = spliceMarkdown("# A\n[r]: https://x\n\n# B\n", "# A\n\n# B\n", "A\n\n# B\n");
+    expect(out).toBe("A\n\n[r]: https://x\n\n# B\n");
+  });
+
+  test("leading definitions before an edited first block get a blank line after them", () => {
+    const out = spliceMarkdown("[r]: https://x\n# A\n", "# A\n", "A\n");
+    expect(out).toBe("[r]: https://x\n\nA\n");
+  });
+
+  test("leading definitions before an untouched first block keep their bytes", () => {
+    const md = "\n[r]: https://x\n# A\n\npara\n";
+    expect(spliceMarkdown(md, "# A\n\npara\n", "# A\n\npara 2\n")).toBe("\n[r]: https://x\n# A\n\npara 2\n");
+  });
+
+  test("results always parse with every original definition intact", () => {
+    const md = "# A\n[r]: https://x\n# B\n[s]: https://s\n";
+    for (const edited of ["A\n", "A\n\nB\n", "# A\n\nB\n", "B\n", "", "new\n\n# A\n\n# B\n\nmore\n"]) {
+      const out = spliceMarkdown(md, "# A\n\n# B\n", edited) ?? md;
+      const kinds = splitBlocks(out).map((b) => b.kind);
+      expect(kinds.filter((k) => k === "definition").length, JSON.stringify({ edited, out })).toBe(2);
+      expect(out).toContain("[r]: https://x");
+      expect(out).toContain("[s]: https://s");
+    }
+  });
 });
