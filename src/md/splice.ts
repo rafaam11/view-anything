@@ -86,8 +86,12 @@ const BLANK_LINE = /\n[ \t]*\n/;
 export function spliceMarkdown(original: string, baseline: string, edited: string): string | null {
   if (edited === baseline) return null;
 
-  const O = splitBlocks(original);
-  const B = splitBlocks(baseline);
+  // Link reference definitions take no part in alignment: editors resolve reference links
+  // inline and drop the definitions. The original ones are re-emitted with their own bytes.
+  const all = splitBlocks(original);
+  const O = all.filter((b) => !isDefinition(b));
+  const defs = all.filter(isDefinition);
+  const B = splitBlocks(baseline).filter((b) => !isDefinition(b));
   if (O.length !== B.length) {
     throw new SpliceError(`block count mismatch: original ${O.length}, baseline ${B.length}`);
   }
@@ -98,9 +102,9 @@ export function spliceMarkdown(original: string, baseline: string, edited: strin
   });
   // Nothing to preserve in a file without blocks (empty or whitespace only).
   // Any leading/trailing whitespace of such a file is intentionally dropped.
-  if (O.length === 0) return edited;
+  if (O.length === 0) return defs.length ? original.trimEnd() + "\n\n" + edited : edited;
 
-  const E = splitBlocks(edited);
+  const E = splitBlocks(edited).filter((b) => !isDefinition(b));
   const bText = B.map((b) => baseline.slice(b.start, b.end));
   const eText = E.map((e) => edited.slice(e.start, e.end));
   const oText = O.map((o) => original.slice(o.start, o.end));
@@ -123,26 +127,54 @@ export function spliceMarkdown(original: string, baseline: string, edited: strin
   }
   flushRun(bi, B.length, ej, E.length);
 
+  // Definitions by slot: slot s lies between O[s-1] and O[s]. Slot 0 is part of the prefix and
+  // slot O.length part of the tail; the inner slots are emitted exactly once, in order.
+  const slots: Block[][] = Array.from({ length: O.length + 1 }, () => []);
+  for (const d of defs) slots[O.filter((o) => o.end <= d.start).length].push(d);
+  let nextSlot = 1;
+  /** Inner slots up to and including `to` that were not emitted yet. */
+  const takeSlots = (to: number): number[] => {
+    const taken: number[] = [];
+    for (; nextSlot <= Math.min(to, O.length - 1); nextSlot++) if (slots[nextSlot].length) taken.push(nextSlot);
+    return taken;
+  };
+  // Each slot's definitions keep their bytes, including the separators between them.
+  const slotText = (taken: number[]) =>
+    taken.map((s) => original.slice(slots[s][0].start, slots[s][slots[s].length - 1].end)).join("\n\n");
+
   let out = original.slice(0, O[0].start);
   let prev: Item | undefined;
   for (const item of items) {
+    const pending = item.orig !== undefined ? takeSlots(item.orig) : [];
     if (prev) {
-      let gap = "\n\n";
+      let gap: string | undefined;
       if (prev.orig !== undefined && item.orig !== undefined) {
         // Across deleted blocks, reuse the gap after `prev`.
         const orig = original.slice(O[prev.orig].end, O[prev.orig + 1].start);
         const untouched = prev.matched && item.matched && item.orig === prev.orig + 1;
         // Untouched neighbours keep their gap byte-exact. Next to an edit or a deletion a tight
         // gap ("\n") could merge blocks (lazy continuation, setext heading), so require a blank line.
-        if (untouched || BLANK_LINE.test(orig)) gap = orig;
+        // The gap holds the definitions of slot prev+1 only.
+        const after = prev.orig + 1;
+        const covers = pending.every((s) => s === after);
+        if (covers && (untouched || BLANK_LINE.test(orig))) gap = orig;
       }
+      gap ??= pending.length ? "\n\n" + slotText(pending) + "\n\n" : "\n\n";
       out += gap;
+    } else if (pending.length) {
+      out += slotText(pending) + "\n\n";
     }
     out += item.text;
     prev = item;
   }
+  const rest = takeSlots(O.length - 1);
+  if (rest.length) out += (prev ? "\n\n" : "") + slotText(rest);
   out += original.slice(O[O.length - 1].end);
   return out === original ? null : out;
+}
+
+function isDefinition(b: Block): boolean {
+  return b.kind === "definition";
 }
 
 /**

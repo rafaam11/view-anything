@@ -29,3 +29,5 @@
 .md-editor { max-width: 860px; margin: 0 auto; padding: 8px 0 96px; }
 .md-editor .va-preview { text-align: center; overflow-x: auto; }
 .md-editor .va-preview-error { color: var(--muted); text-align: left; white-space: pre-wrap; }
+/* Source/preview switching follows the cursor (code-preview.ts), so the manual toggle is hidden. */
+.md-editor .preview-toggle-button { display: none; }

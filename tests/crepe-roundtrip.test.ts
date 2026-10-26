@@ -49,3 +49,29 @@ test("editing one block of the fixture changes only that block", async () => {
     text: original.replace("> 인용문 예시", "> 고친 인용문"),
   });
 }, 20000);
+
+test("image-only paragraphs keep their alt text and written src", async () => {
+  const { createEditor } = await import("../src/md/editor");
+  const root = document.createElement("div");
+  document.body.append(root);
+  const md = "# T\n\n![한글 설명](a.png)\n\n![](./그림%201.png \"제목\")\n";
+  const editor = await createEditor(root, md, { imageUrl: (src) => "asset://" + src });
+  const out = editor.getMarkdown();
+  const img = root.querySelector("img[data-src]");
+  editor.destroy();
+  root.remove();
+  expect(out).toContain("![한글 설명](a.png)");
+  expect(out).toContain('![](./그림%201.png "제목")');
+  expect(img?.getAttribute("src")).toBe("asset://a.png");
+});
+
+test("reference-style links save as a splice, keeping the definitions", async () => {
+  const original = "# T\n\nsee [docs][d] and [x][].\n\n[d]: https://d.example\n[x]: https://x.example \"X\"\n\npara two\n";
+  const baseline = await editorBaseline(original);
+  const edited = baseline.replace("para two", "para 2");
+  expect(edited).not.toBe(baseline);
+  expect(planSave(original, baseline, edited)).toEqual({
+    kind: "splice",
+    text: original.replace("para two", "para 2"),
+  });
+}, 20000);

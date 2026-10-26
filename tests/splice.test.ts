@@ -132,3 +132,52 @@ describe("adversarial inputs", () => {
     expect(spliceMarkdown(o, b, e)).toBe("<div align=center>\n  <b>x</b>\n</div>\n\n- a\n- c\n\n|a|b|\n|-|-|\n|1|2|\n");
   });
 });
+
+describe("link reference definitions", () => {
+  // Editors inline reference links and drop the definitions; the original keeps both.
+  const withDefs = "# T\n\nsee [x][r] here\n\n[r]: https://x.example\n\npara two\n\n[s]: https://s.example \"S\"\n";
+  const defBase = "# T\n\nsee [x](https://x.example) here\n\npara two\n";
+
+  test("unchanged editor writes nothing", () => {
+    expect(spliceMarkdown(withDefs, defBase, defBase)).toBeNull();
+  });
+
+  test("editing another paragraph keeps definition bytes in place", () => {
+    const out = spliceMarkdown(withDefs, defBase, defBase.replace("para two", "para 2"));
+    expect(out).toBe(withDefs.replace("para two", "para 2"));
+  });
+
+  test("editing the block before a definition keeps the definition", () => {
+    const out = spliceMarkdown(withDefs, defBase, defBase.replace("# T", "# Title"));
+    expect(out).toBe(withDefs.replace("# T", "# Title"));
+  });
+
+  test("editing the block next to a definition keeps the definition", () => {
+    const out = spliceMarkdown(withDefs, defBase, defBase.replace("see [x](https://x.example) here", "changed"));
+    expect(out).toBe(withDefs.replace("see [x][r] here", "changed"));
+  });
+
+  test("deleting the block around a definition keeps the definition", () => {
+    const out = spliceMarkdown(withDefs, defBase, defBase.replace("para two\n", ""))!;
+    expect(out).toContain("[r]: https://x.example");
+    expect(out).toContain('[s]: https://s.example "S"');
+    expect(out).not.toContain("para two");
+  });
+
+  test("tight definition between blocks survives an adjacent edit", () => {
+    const md = "# A\n[r]: https://x\n# B\n";
+    const base = "# A\n\n# B\n";
+    const out = spliceMarkdown(md, base, "# A\n\n# B2\n")!;
+    expect(out).toContain("[r]: https://x");
+    expect(splitBlocks(out).map((b) => b.kind)).toEqual(["heading:1", "definition", "heading:1"]);
+    expect(out.startsWith("# A")).toBe(true);
+    expect(out).toContain("# B2");
+  });
+
+  test("definitions in the editor output are ignored for alignment", () => {
+    const base = "# T\n\nsee [x][r] here\n\n[r]: https://x.example\n\npara two\n";
+    expect(spliceMarkdown(withDefs, base, base.replace("para two", "para 2"))).toBe(
+      withDefs.replace("para two", "para 2"),
+    );
+  });
+});

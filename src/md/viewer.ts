@@ -61,6 +61,13 @@ function handleLinkClick(e: MouseEvent, baseDir: string, confirmLeave: () => Pro
   }
 }
 
+/** Webview accelerators that leave or reload the page. */
+function isReloadOrHistoryKey(e: KeyboardEvent): boolean {
+  if (e.key === "BrowserBack" || e.key === "BrowserForward" || e.key === "BrowserRefresh" || e.key === "F5") return true;
+  if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) return true;
+  return e.ctrlKey && e.key.toLowerCase() === "r";
+}
+
 function isKey(e: KeyboardEvent, key: string): boolean {
   return e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === key;
 }
@@ -154,9 +161,13 @@ const viewer: Viewer = {
       if (editor) setDirty(editor.getMarkdown() !== baseline);
       return dirty;
     };
+    /** The user agreed to drop unsaved edits; the page may unload without asking again. */
+    let discardApproved = false;
     const confirmLeave = async () => {
       refreshDirty();
-      return !shouldConfirmLeave({ mode, dirty }) || (await platform.confirm(LEAVE_MESSAGE));
+      if (!shouldConfirmLeave({ mode, dirty })) return true;
+      discardApproved = await platform.confirm(LEAVE_MESSAGE);
+      return discardApproved;
     };
 
     const enterEdit = async () => {
@@ -181,6 +192,7 @@ const viewer: Viewer = {
         throw e;
       }
       baseline = editor.getMarkdown();
+      discardApproved = false;
       mode = "edit";
       toggle.textContent = "읽기";
       toggle.title = "읽기 모드 (Ctrl+E)";
@@ -215,6 +227,7 @@ const viewer: Viewer = {
       refreshDirty(); // typing may have continued while the dialog or write was pending
     };
 
+    let saveAgain = false; // Ctrl+S pressed while another task was running
     const run = (task: () => Promise<void>) => {
       if (busy) return;
       busy = true;
@@ -223,7 +236,16 @@ const viewer: Viewer = {
         .catch(() => {})
         .finally(() => {
           busy = false;
+          if (saveAgain) {
+            saveAgain = false;
+            requestSave();
+          }
         });
+    };
+    const requestSave = () => {
+      if (mode !== "edit") return;
+      if (busy) saveAgain = true;
+      else run(save);
     };
     const toggleMode = () => {
       if (toggle.disabled) return;
@@ -242,13 +264,29 @@ const viewer: Viewer = {
         } else if (isKey(e, "s")) {
           e.preventDefault();
           e.stopPropagation();
-          if (mode === "edit") run(save);
+          requestSave();
+        } else if (mode === "edit" && isReloadOrHistoryKey(e)) {
+          // Back/forward/reload would unload the page and drop the editor state.
+          e.preventDefault();
+          e.stopPropagation();
         }
       },
       true,
     );
 
-    void platform.onCloseRequested(confirmLeave).catch(() => {});
+    // Mouse back/forward buttons navigate the webview history.
+    const blockHistoryButtons = (e: MouseEvent) => {
+      if (mode === "edit" && (e.button === 3 || e.button === 4)) e.preventDefault();
+    };
+    window.addEventListener("mousedown", blockHistoryButtons, true);
+    window.addEventListener("mouseup", blockHistoryButtons, true);
+    // Last line of defence for any other unload (history, reload) with unsaved edits.
+    window.addEventListener("beforeunload", (e) => {
+      refreshDirty();
+      if (!discardApproved && shouldConfirmLeave({ mode, dirty })) e.preventDefault();
+    });
+
+    platform.onCloseRequested(confirmLeave).catch((e) => console.error("close guard not installed:", e));
 
     const onLink = (e: MouseEvent) => handleLinkClick(e, baseDir, confirmLeave);
     article.addEventListener("click", onLink);

@@ -17,7 +17,31 @@ fn read_file(path: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, data).map_err(|e| format!("{path}: {e}"))
+    write_atomic(Path::new(&path), &data).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Write to a temporary sibling, then rename it over `path` (a replacing rename on Windows and
+/// Unix), so a crash or a full disk never leaves a half-written file behind.
+fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let name = path
+        .file_name()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a file path"))?;
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(name);
+    tmp_name.push(format!(".va-tmp-{}", std::process::id()));
+    let tmp = path.with_file_name(tmp_name);
+    let result = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(data)?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 /// `index.html` plus `?file=<percent-encoded path>` when a file is given.
@@ -77,6 +101,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn write_atomic_replaces_existing_file_without_leftovers() {
+        let dir = std::env::temp_dir().join(format!("va-write-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("a b.md");
+        std::fs::write(&target, b"old content that is longer").unwrap();
+        write_atomic(&target, b"new").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        write_atomic(&target, b"newer").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"newer");
+        let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(entries, vec![std::ffi::OsString::from("a b.md")]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn write_atomic_fails_cleanly_for_missing_directory() {
+        let target = std::env::temp_dir().join("va-no-such-dir-xyz").join("a.md");
+        assert!(write_atomic(&target, b"x").is_err());
+    }
 
     #[test]
     fn url_encodes_path() {

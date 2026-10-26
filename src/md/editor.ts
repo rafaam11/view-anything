@@ -21,10 +21,12 @@ function previewElement(html: string): HTMLElement {
 }
 
 export async function createEditor(el: HTMLElement, markdown: string, opts: EditorOptions = {}): Promise<Editor> {
-  const [{ Crepe }, { remarkStringifyOptionsCtx }, { default: katex }] = await Promise.all([
+  const [{ Crepe }, { remarkStringifyOptionsCtx, editorViewCtx }, { imageSchema }, { default: katex }, { attachCodePreviewSwitch }] = await Promise.all([
     import("@milkdown/crepe"),
     import("@milkdown/kit/core"),
+    import("@milkdown/kit/preset/commonmark"),
     import("katex"),
+    import("./code-preview"),
     import("@milkdown/crepe/theme/common/style.css"),
     import("./editor.css"),
   ]);
@@ -32,9 +34,14 @@ export async function createEditor(el: HTMLElement, markdown: string, opts: Edit
   const crepe = new Crepe({
     root: el,
     defaultValue: markdown,
+    features: {
+      // ImageBlock stores the display ratio in the alt text (`![1.00](…)`) and its upload UI
+      // inserts blob: URLs. Plain inline images keep alt/title as written.
+      [Crepe.Feature.ImageBlock]: false,
+    },
     featureConfigs: {
       [Crepe.Feature.CodeMirror]: {
-        // Diagrams and formulas show rendered; the toggle reveals the source.
+        // Diagrams and formulas show rendered until the cursor enters them (see code-preview.ts).
         previewOnlyByDefault: true,
         renderPreview: (language, content, applyPreview) => {
           const lang = language.toLowerCase();
@@ -59,9 +66,6 @@ export async function createEditor(el: HTMLElement, markdown: string, opts: Edit
           return null;
         },
       },
-      [Crepe.Feature.ImageBlock]: {
-        proxyDomURL: (url) => opts.imageUrl?.(url) ?? url,
-      },
     },
   });
 
@@ -69,6 +73,49 @@ export async function createEditor(el: HTMLElement, markdown: string, opts: Edit
   crepe.editor.config((ctx) => {
     ctx.update(remarkStringifyOptionsCtx, (prev) => ({ ...prev, bullet: "-" as const }));
   });
+
+  // Relative image paths do not resolve inside the webview; show them through `imageUrl` but keep
+  // the written src in the document (and in copied HTML via data-src).
+  const imageUrl = opts.imageUrl;
+  if (imageUrl) {
+    crepe.editor.use(
+      imageSchema.extendSchema((prev) => (ctx) => {
+        const base = prev(ctx);
+        return {
+          ...base,
+          parseDOM: [
+            {
+              tag: "img[src]",
+              getAttrs: (dom) => {
+                const img = dom as HTMLElement;
+                return {
+                  src: img.getAttribute("data-src") ?? img.getAttribute("src") ?? "",
+                  alt: img.getAttribute("alt") ?? "",
+                  title: img.getAttribute("title") ?? "",
+                };
+              },
+            },
+          ],
+          toDOM: (node) => ["img", { ...node.attrs, src: imageUrl(node.attrs.src as string), "data-src": node.attrs.src }],
+        };
+      }),
+    );
+  }
+
+  const host = el;
+  const previews = attachCodePreviewSwitch(host);
+  // Keyboard navigation into a code block moves the ProseMirror selection there: show its source.
+  crepe.on((api) =>
+    api.selectionUpdated((ctx, selection) => {
+      const view = ctx.get(editorViewCtx);
+      const node = (selection as { node?: { type: { name: string } } }).node;
+      let pos: number | undefined;
+      if (node?.type.name === "code_block") pos = selection.from;
+      else if (selection.$from.parent.type.name === "code_block") pos = selection.$from.before();
+      const dom = pos === undefined ? null : view.nodeDOM(pos);
+      if (dom instanceof Element) void previews.reveal(dom);
+    }),
+  );
 
   if (opts.onChange) {
     const onChange = opts.onChange;
@@ -78,6 +125,9 @@ export async function createEditor(el: HTMLElement, markdown: string, opts: Edit
   await crepe.create();
   return {
     getMarkdown: () => crepe.getMarkdown(),
-    destroy: () => void crepe.destroy(),
+    destroy: () => {
+      previews.dispose();
+      void crepe.destroy();
+    },
   };
 }
