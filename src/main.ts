@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { resolveViewer } from "./registry";
 import { platform } from "./platform";
 import { applyTheme, currentMode, cycleTheme } from "./theme";
+import { isOpenKey, routeOpen } from "./open-route";
 
 const app = document.getElementById("app")!;
 const file = new URLSearchParams(location.search).get("file");
@@ -24,7 +25,7 @@ function message(title: string, hint?: string) {
 
 async function show() {
   if (!file) {
-    message("파일을 끌어다 놓으세요");
+    message("파일을 끌어다 놓거나 Ctrl+O");
     return;
   }
   // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
@@ -42,24 +43,45 @@ async function show() {
   }
 }
 
-applyTheme(currentMode());
-window.addEventListener("keydown", (e) => {
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
-    e.preventDefault();
-    cycleTheme();
+function openPaths(paths: string[]) {
+  const { here, windows } = routeOpen(file, paths);
+  for (const p of windows) void platform.openWindow(p).catch((e) => platform.alert(String(e)).catch(() => {}));
+  if (here) location.search = "?file=" + encodeURIComponent(here);
+}
+
+let picking = false; // one dialog at a time
+async function pickAndOpen() {
+  if (picking) return;
+  picking = true;
+  try {
+    openPaths(await platform.pickFiles());
+  } catch (e) {
+    await platform.alert(String(e)).catch(() => {});
+  } finally {
+    picking = false;
   }
-});
+}
+
+applyTheme(currentMode());
+// Capture phase: the editor must not swallow app shortcuts.
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
+      e.preventDefault();
+      cycleTheme();
+    } else if (isOpenKey(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      void pickAndOpen();
+    }
+  },
+  true,
+);
 
 getCurrentWebview()
   .onDragDropEvent((ev) => {
-    if (ev.payload.type !== "drop" || ev.payload.paths.length === 0) return;
-    const [first, ...rest] = ev.payload.paths;
-    if (file) {
-      for (const p of ev.payload.paths) void platform.openWindow(p);
-    } else {
-      location.search = "?file=" + encodeURIComponent(first);
-      for (const p of rest) void platform.openWindow(p);
-    }
+    if (ev.payload.type === "drop") openPaths(ev.payload.paths);
   })
   .catch(() => {});
 

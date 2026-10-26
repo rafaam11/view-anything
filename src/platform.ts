@@ -1,6 +1,6 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, message } from "@tauri-apps/plugin-dialog";
+import { ask, message, open } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 
 export const platform = {
@@ -15,6 +15,19 @@ export const platform = {
   },
   async openWindow(path?: string): Promise<void> {
     await invoke("open_window", { path: path ?? null });
+  },
+  /** Native file-open dialog; [] when cancelled. */
+  async pickFiles(): Promise<string[]> {
+    const picked = await open({
+      multiple: true,
+      directory: false,
+      filters: [
+        { name: "Markdown", extensions: ["md", "markdown"] },
+        { name: "모든 파일", extensions: ["*"] },
+      ],
+    });
+    if (picked === null) return [];
+    return Array.isArray(picked) ? picked : [picked];
   },
   async openExternal(url: string): Promise<void> {
     await openUrl(url);
