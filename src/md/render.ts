@@ -30,8 +30,39 @@ function safeDecode(s: string): string {
   }
 }
 
-/** Absolute local path for a relative/absolute file reference, or null for URLs and anchors. */
+/**
+ * `\\server\share` (lowercased) of a UNC path, "local" for a non-UNC or `\\?\C:\` path, or null
+ * for a path that must never be touched (device namespace, `..` in a UNC path).
+ */
+function uncRoot(path: string): string | null | "local" {
+  let p = path.replace(/\//g, "\\");
+  if (!p.startsWith("\\\\")) return "local";
+  if (/^\\\\[?.]\\[A-Za-z]:\\/.test(p)) return "local";
+  const unc = /^\\\\[?.]\\UNC\\/i.exec(p);
+  if (unc) p = "\\\\" + p.slice(unc[0].length);
+  else if (/^\\\\[?.]\\/.test(p)) return null; // \\.\pipe, \\?\GLOBALROOT, ...
+  const segs = p.slice(2).split("\\");
+  if (segs.length < 2 || !segs[0] || !segs[1] || segs.some((s) => s === "." || s === "..")) return null;
+  return ("\\\\" + segs[0] + "\\" + segs[1]).toLowerCase();
+}
+
+/**
+ * Absolute local path for a relative/absolute file reference, or null for URLs and anchors.
+ * A UNC path is only returned when it lies on the same `\\server\share` as the document itself:
+ * merely touching a foreign share (asset load, existence check) would open an SMB connection and
+ * leak the user's NTLM credentials to whoever wrote the document.
+ */
 export function resolveAsset(baseDir: string, href: string): string | null {
+  const path = resolvePath(baseDir, href);
+  if (path === null) return null;
+  const root = uncRoot(path);
+  if (root === "local") return path;
+  if (root === null) return null;
+  const baseRoot = uncRoot(baseDir);
+  return baseRoot !== null && baseRoot !== "local" && baseRoot === root ? path : null;
+}
+
+function resolvePath(baseDir: string, href: string): string | null {
   if (!href || href.startsWith("#") || href.startsWith("//") || SCHEME.test(href)) return null;
   const rel = safeDecode(href.replace(/[?#].*$/, ""));
   if (!rel) return null;
@@ -101,6 +132,8 @@ const DRIVE_LETTERS = [..."abcdefghijklmnopqrstuvwxyz"].flatMap((c) => [c, c.toU
  */
 export const sanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
+  // <source srcset> would bypass the image path rewriting and the UNC check; <picture> keeps its <img>.
+  tagNames: (defaultSchema.tagNames ?? []).filter((t) => t !== "source"),
   // Drop these with their content (a stripped <style> would otherwise leave its CSS as text).
   strip: [...(defaultSchema.strip ?? []), "style", "textarea", "select", "noscript", "template"],
   attributes: {
@@ -155,12 +188,11 @@ function rehypeImages(opts: RenderOptions) {
         if (child.type !== "element") continue;
         if (child.tagName === "img" && typeof child.properties?.src === "string") {
           const src = child.properties.src;
-          if (/^\s*data:/i.test(src) && !/^\s*data:image\//i.test(src)) {
-            delete child.properties.src;
-          } else {
-            const abs = resolveAsset(opts.baseDir, src);
-            if (abs) child.properties.src = opts.assetUrl(abs);
-          }
+          const abs = resolveAsset(opts.baseDir, src);
+          if (abs) child.properties.src = opts.assetUrl(abs);
+          // Anything else that is not a web or inline image (a refused UNC path, `/\host\...`
+          // which the webview would read as `//host/...`) is dropped rather than left to the webview.
+          else if (!/^(https?:\/\/|data:image\/)/i.test(src)) delete child.properties.src;
         }
         walk(child);
       }

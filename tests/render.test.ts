@@ -106,3 +106,43 @@ test("task lists, footnotes and math survive sanitizing", async () => {
   expect(html).toContain('id="user-content-fn-1"');
   expect(html).toContain("katex-display");
 });
+
+// UNC paths would make the webview/asset handler open an SMB connection (NTLM leak) on render.
+const FOREIGN_UNC = [
+  "\\\\evil\\share\\x.png",
+  "/\\evil\\share\\x.png",
+  "\\/evil/share/x.png",
+  "%5C%5Cevil%5Cshare%5Cx.png",
+  "\\\\?\\UNC\\evil\\share\\x.png",
+  "\\\\.\\pipe\\evil",
+  "\\\\?\\GLOBALROOT\\Device\\x.png",
+];
+test("foreign unc image sources never reach assetUrl or the html", async () => {
+  const seen: string[] = [];
+  const opts = { baseDir: "D:\\d", assetUrl: (a: string) => (seen.push(a), "asset://" + a) };
+  const src = FOREIGN_UNC.map((s) => `<img src="${s}">`).join("\n\n") + "\n\n![a](/\\evil\\s\\x.png)";
+  const { html } = await renderMarkdown(src, opts);
+  expect(seen).toEqual([]);
+  expect(html).not.toMatch(/evil|pipe|GLOBALROOT/i);
+});
+test("resolveAsset only allows unc paths on the document's own share", () => {
+  for (const s of FOREIGN_UNC) expect(resolveAsset("D:\\d", s), s).toBeNull();
+  const unc = "\\\\srv\\share\\d";
+  expect(resolveAsset(unc, "./x.png")).toBe("\\\\srv\\share\\d\\x.png");
+  expect(resolveAsset(unc, "\\\\srv\\share\\y.png")).toBe("\\\\srv\\share\\y.png");
+  expect(resolveAsset(unc, "\\\\SRV\\Share\\y.png")).toBe("\\\\SRV\\Share\\y.png");
+  expect(resolveAsset(unc, "\\\\srv\\other\\x.png")).toBeNull();
+  expect(resolveAsset(unc, "\\\\evil\\share\\x.png")).toBeNull();
+  expect(resolveAsset(unc, "\\\\srv\\share\\..\\..\\evil\\s\\x.png")).toBeNull();
+  // `?` starts a query in an href, so verbatim `\\?\` paths are refused rather than guessed at
+  expect(resolveAsset("D:\\d", "\\\\?\\C:\\p\\x.png")).toBeNull();
+});
+test("a document on a unc share still shows its relative images", async () => {
+  const { html } = await renderMarkdown("![a](./x.png)", { baseDir: "\\\\srv\\share\\d", assetUrl: (a) => "asset://" + a });
+  expect(html).toContain('src="asset://\\\\srv\\share\\d\\x.png"');
+});
+test("picture sources are dropped (srcset is never rewritten)", async () => {
+  const { html } = await renderMarkdown('<picture><source srcset="\\\\evil\\s\\x.png"><img src="https://a.b/x.png"></picture>', o);
+  expect(html).not.toMatch(/<source|srcset|evil/i);
+  expect(html).toContain('src="https://a.b/x.png"');
+});
