@@ -16,6 +16,170 @@
         {
           "path": "**"
         }
+      ],
+      "deny": [
+        {
+          "path": "**/*.[eE][xX][eE]"
+        },
+        {
+          "path": "**/*.[cC][oO][mM]"
+        },
+        {
+          "path": "**/*.[bB][aA][tT]"
+        },
+        {
+          "path": "**/*.[cC][mM][dD]"
+        },
+        {
+          "path": "**/*.[mM][sS][iI]"
+        },
+        {
+          "path": "**/*.[mM][sS][pP]"
+        },
+        {
+          "path": "**/*.[mM][sS][cC]"
+        },
+        {
+          "path": "**/*.[sS][cC][rR]"
+        },
+        {
+          "path": "**/*.[pP][iI][fF]"
+        },
+        {
+          "path": "**/*.[cC][pP][lL]"
+        },
+        {
+          "path": "**/*.[hH][tT][aA]"
+        },
+        {
+          "path": "**/*.[iI][nN][fF]"
+        },
+        {
+          "path": "**/*.[rR][eE][gG]"
+        },
+        {
+          "path": "**/*.[cC][hH][mM]"
+        },
+        {
+          "path": "**/*.[lL][nN][kK]"
+        },
+        {
+          "path": "**/*.[uU][rR][lL]"
+        },
+        {
+          "path": "**/*.[sS][cC][fF]"
+        },
+        {
+          "path": "**/*.[lL][iI][bB][rR][aA][rR][yY]-[mM][sS]"
+        },
+        {
+          "path": "**/*.[sS][eE][tT][tT][iI][nN][gG][cC][oO][nN][tT][eE][nN][tT]-[mM][sS]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP][rR][eE][fF]-[mM][sS]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP][lL][iI][cC][aA][tT][iI][oO][nN]"
+        },
+        {
+          "path": "**/*.[gG][aA][dD][gG][eE][tT]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP][xX]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP][xX][bB][uU][nN][dD][lL][eE]"
+        },
+        {
+          "path": "**/*.[mM][sS][iI][xX]"
+        },
+        {
+          "path": "**/*.[mM][sS][iI][xX][bB][uU][nN][dD][lL][eE]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP][iI][nN][sS][tT][aA][lL][lL][eE][rR]"
+        },
+        {
+          "path": "**/*.[pP][sS]1"
+        },
+        {
+          "path": "**/*.[pP][sS][mM]1"
+        },
+        {
+          "path": "**/*.[pP][sS][dD]1"
+        },
+        {
+          "path": "**/*.[pP][sS]1[xX][mM][lL]"
+        },
+        {
+          "path": "**/*.[pP][sS]2"
+        },
+        {
+          "path": "**/*.[pP][sS][cC]1"
+        },
+        {
+          "path": "**/*.[mM][sS][hH]"
+        },
+        {
+          "path": "**/*.[vV][bB]"
+        },
+        {
+          "path": "**/*.[vV][bB][sS]"
+        },
+        {
+          "path": "**/*.[vV][bB][eE]"
+        },
+        {
+          "path": "**/*.[jJ][sS]"
+        },
+        {
+          "path": "**/*.[jJ][sS][eE]"
+        },
+        {
+          "path": "**/*.[wW][sS]"
+        },
+        {
+          "path": "**/*.[wW][sS][fF]"
+        },
+        {
+          "path": "**/*.[wW][sS][hH]"
+        },
+        {
+          "path": "**/*.[pP][yY]"
+        },
+        {
+          "path": "**/*.[pP][yY][wW]"
+        },
+        {
+          "path": "**/*.[jJ][aA][rR]"
+        },
+        {
+          "path": "**/*.[sS][hH]"
+        },
+        {
+          "path": "**/*.[bB][aA][sS][hH]"
+        },
+        {
+          "path": "**/*.[zZ][sS][hH]"
+        },
+        {
+          "path": "**/*.[rR][uU][nN]"
+        },
+        {
+          "path": "**/*.[bB][iI][nN]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP][iI][mM][aA][gG][eE]"
+        },
+        {
+          "path": "**/*.[dD][eE][sS][kK][tT][oO][pP]"
+        },
+        {
+          "path": "**/*.[cC][oO][mM][mM][aA][nN][dD]"
+        },
+        {
+          "path": "**/*.[aA][pP][pP]"
+        }
       ]
     },
     "dialog:default"
