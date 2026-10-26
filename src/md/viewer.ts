@@ -4,7 +4,7 @@ import { platform } from "../platform";
 import type { Viewer } from "../registry";
 import { decodeText } from "./text";
 import { renderMarkdown, resolveAsset } from "./render";
-import { renderMermaid } from "./mermaid";
+import { renderMermaid, watchTheme } from "./mermaid";
 import { buildToc } from "./toc";
 
 const EXTERNAL = /^(https?:|mailto:)/i;
@@ -18,8 +18,21 @@ function nameOf(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
-function openInThisWindow(absPath: string) {
-  location.search = "?file=" + encodeURIComponent(absPath);
+function scrollToId(raw: string) {
+  let id = raw.replace(/^#/, "");
+  try {
+    id = decodeURIComponent(id);
+  } catch {}
+  if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
+}
+
+function openInThisWindow(absPath: string, hash: string) {
+  const current = new URLSearchParams(location.search).get("file");
+  if (current === absPath) {
+    scrollToId(hash);
+    return;
+  }
+  location.assign(location.pathname + "?file=" + encodeURIComponent(absPath) + hash);
 }
 
 function handleLinkClick(e: MouseEvent, baseDir: string) {
@@ -29,16 +42,13 @@ function handleLinkClick(e: MouseEvent, baseDir: string) {
   if (!href) return;
   e.preventDefault();
   if (href.startsWith("#")) {
-    let id = href.slice(1);
-    try {
-      id = decodeURIComponent(id);
-    } catch {}
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToId(href);
   } else if (EXTERNAL.test(href)) {
     void platform.openExternal(href);
   } else {
     const abs = resolveAsset(baseDir, href);
-    if (abs && MD_FILE.test(abs)) openInThisWindow(abs);
+    const hashAt = href.indexOf("#");
+    if (abs && MD_FILE.test(abs)) openInThisWindow(abs, hashAt >= 0 ? href.slice(hashAt) : "");
   }
 }
 
@@ -77,23 +87,33 @@ const viewer: Viewer = {
     el.replaceChildren(root);
 
     const render = async () => {
-      const { html, headings } = await renderMarkdown(decoded.text, {
-        baseDir,
-        assetUrl: (abs) => platform.assetUrl(abs),
-      });
-      article.innerHTML = html;
-      body.querySelector("nav.toc")?.remove();
-      if (headings.length > 0) body.prepend(buildToc(headings, article));
-      await renderMermaid(article);
+      try {
+        const { html, headings } = await renderMarkdown(decoded.text, {
+          baseDir,
+          assetUrl: (abs) => platform.assetUrl(abs),
+        });
+        article.innerHTML = html;
+        body.querySelector("nav.toc")?.remove();
+        if (headings.length > 0) body.prepend(buildToc(headings, article));
+        if (location.hash) scrollToId(location.hash);
+        await renderMermaid(article);
+        if (location.hash) scrollToId(location.hash); // diagrams change layout height
+      } catch (e) {
+        const err = document.createElement("div");
+        err.className = "md-banner";
+        err.textContent = "렌더링 실패: " + String(e);
+        article.replaceChildren(err);
+      }
     };
     await render();
 
-    article.addEventListener("click", (e) => handleLinkClick(e, baseDir));
+    const onLink = (e: MouseEvent) => handleLinkClick(e, baseDir);
+    article.addEventListener("click", onLink);
+    article.addEventListener("auxclick", onLink); // middle-click must not navigate the webview
 
-    // Re-render diagrams when the theme changes.
-    new MutationObserver(() => {
+    watchTheme(() => {
       void renderMermaid(article);
-    }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    });
   },
 };
 export default viewer;

@@ -35,6 +35,23 @@ test("resolveAsset handles parent dirs, absolute and posix bases", () => {
 test("raw html is not executed", async () => {
   expect((await renderMarkdown("<script>x</script><img src=x onerror=y>", o)).html).not.toMatch(/<script|onerror/);
 });
+test("unknown fence languages render as plain code", async () => {
+  const src = "```zenoh\nx\n```\n\n```cmake\nset(A 1)\n```\n\n```powershell\nGet-Item\n```";
+  const { html } = await renderMarkdown(src, o);
+  expect(html).toContain("set(A 1)");
+  expect(html).toContain("Get-Item");
+});
+test("math in heading does not duplicate katex text in id or toc", async () => {
+  const { headings } = await renderMarkdown("# Energy $E=mc^2$", o);
+  expect(headings).toEqual([{ depth: 1, id: "energy-emc2", text: "Energy E=mc^2" }]);
+});
+test("resolveAsset unc, drive root and posix root", () => {
+  expect(resolveAsset("\\\\srv\\share\\d", "x.png")).toBe("\\\\srv\\share\\d\\x.png");
+  expect(resolveAsset("\\\\srv\\share\\d", "../../x.png")).toBe("\\\\srv\\share\\x.png");
+  expect(resolveAsset("D:", "x.png")).toBe("D:\\x.png");
+  expect(resolveAsset("", "x.png")).toBe("/x.png");
+  expect(resolveAsset("/", "x.png")).toBe("/x.png");
+});
 test("frontmatter is not rendered", async () => {
   expect((await renderMarkdown("---\ntitle: t\n---\n\n# H", o)).html).not.toContain("title: t");
 });

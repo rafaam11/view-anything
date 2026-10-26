@@ -35,19 +35,25 @@ export function resolveAsset(baseDir: string, href: string): string | null {
   if (!rel) return null;
   if (DRIVE.test(rel) || rel.startsWith("/") || rel.startsWith("\\")) return rel;
 
-  const sep = baseDir.includes("\\") ? "\\" : "/";
+  const sep = baseDir.includes("\\") || DRIVE.test(baseDir) ? "\\" : "/";
   let prefix = "";
   let rest = baseDir;
-  if (DRIVE.test(rest)) {
+  let floor = 0; // segments that ".." must not remove (UNC server and share)
+  if (/^[\\/]{2}[^\\/]/.test(rest)) {
+    prefix = sep + sep;
+    rest = rest.slice(2);
+    floor = 2;
+  } else if (DRIVE.test(rest)) {
     prefix = rest.slice(0, 2);
     rest = rest.slice(2);
   }
-  const lead = /^[\\/]/.test(rest) ? sep : "";
+  const lead = floor ? "" : sep;
   const parts = rest.split(/[\\/]/).filter(Boolean);
   for (const seg of rel.split(/[\\/]/)) {
     if (seg === "" || seg === ".") continue;
-    if (seg === "..") parts.pop();
-    else parts.push(seg);
+    if (seg === "..") {
+      if (parts.length > floor) parts.pop();
+    } else parts.push(seg);
   }
   return prefix + lead + parts.join(sep);
 }
@@ -120,11 +126,11 @@ export async function renderMarkdown(src: string, opts: RenderOptions): Promise<
   const file = await mdProcessor()
     .use(remarkRehype, { handlers: { yaml: () => undefined } })
     .use(rehypeMermaid)
+    .use(rehypeSlug)
+    .use(rehypeHeadings, headings)
     .use(rehypeKatex)
     .use(rehypeHighlight, { detect: false })
-    .use(rehypeSlug)
     .use(rehypeImages, opts)
-    .use(rehypeHeadings, headings)
     .use(rehypeStringify)
     .process(src);
   return { html: String(file), headings };
