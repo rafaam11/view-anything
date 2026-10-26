@@ -6,7 +6,7 @@ viewers["md"] = loadMd;
 viewers["markdown"] = loadMd;
 
 export function resolveViewer(path: string): (() => Promise<Viewer>) | null {
-  const name = path.split(/[\/]/).pop() ?? "";
+  const name = path.split(/[\\/]/).pop() ?? "";
   const dot = name.lastIndexOf(".");
   if (dot < 0) return null;
   return viewers[name.slice(dot + 1).toLowerCase()] ?? null;

@@ -1,6 +1,6 @@
 export type ThemeMode = "system" | "light" | "dark";
 const ORDER: ThemeMode[] = ["system", "light", "dark"];
-const KEY = "va-theme";
+const KEY = "va.theme";
 
 export function nextMode(m: ThemeMode): ThemeMode {
   return ORDER[(ORDER.indexOf(m) + 1) % ORDER.length];

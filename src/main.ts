@@ -1,3 +1,4 @@
+import "./styles.css";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { resolveViewer } from "./registry";
 import { platform } from "./platform";
@@ -23,7 +24,7 @@ function message(title: string, hint?: string) {
 
 async function show() {
   if (!file) {
-    message("파일을 끌어다 놓거나 Ctrl+O");
+    message("파일을 끌어다 놓으세요");
     return;
   }
   const load = resolveViewer(file);
