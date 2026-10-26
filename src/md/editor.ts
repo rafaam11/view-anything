@@ -21,7 +21,7 @@ function previewElement(html: string): HTMLElement {
 }
 
 export async function createEditor(el: HTMLElement, markdown: string, opts: EditorOptions = {}): Promise<Editor> {
-  const [{ Crepe }, { remarkStringifyOptionsCtx, editorViewCtx }, { imageSchema }, { default: katex }, { attachCodePreviewSwitch }] = await Promise.all([
+  const [{ Crepe }, { remarkStringifyOptionsCtx, editorViewCtx, editorViewOptionsCtx }, { imageSchema }, { default: katex }, { attachCodePreviewSwitch }] = await Promise.all([
     import("@milkdown/crepe"),
     import("@milkdown/kit/core"),
     import("@milkdown/kit/preset/commonmark"),
@@ -72,6 +72,17 @@ export async function createEditor(el: HTMLElement, markdown: string, opts: Edit
   // Serialize like typical hand-written markdown so edited blocks diff minimally.
   crepe.editor.config((ctx) => {
     ctx.update(remarkStringifyOptionsCtx, (prev) => ({ ...prev, bullet: "-" as const }));
+  });
+
+  // No browser spellcheck squiggles (Korean text) in the editable root.
+  crepe.editor.config((ctx) => {
+    ctx.update(editorViewOptionsCtx, (prev) => ({
+      ...prev,
+      attributes: (state) => {
+        const base = typeof prev.attributes === "function" ? prev.attributes(state) : prev.attributes;
+        return { ...(base ?? {}), spellcheck: "false" };
+      },
+    }));
   });
 
   // Relative image paths do not resolve inside the webview; show them through `imageUrl` but keep

@@ -21,7 +21,7 @@
   --crepe-base-font-size: 16px;
   --crepe-font-title: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
   --crepe-font-default: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
-  --crepe-font-code: ui-monospace, "Cascadia Code", Consolas, monospace;
+  --crepe-font-code: "Cascadia Mono", "Cascadia Code", Consolas, "D2Coding", "Courier New", monospace;
 
   --crepe-shadow-1: 0 1px 3px 1px rgba(0, 0, 0, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --crepe-shadow-2: 0 2px 6px 2px rgba(0, 0, 0, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
@@ -31,3 +31,4 @@
 .md-editor .va-preview-error { color: var(--muted); text-align: left; white-space: pre-wrap; }
 /* Source/preview switching follows the cursor (code-preview.ts), so the manual toggle is hidden. */
 .md-editor .preview-toggle-button { display: none; }
+.md-editor .cm-editor, .md-editor .cm-content, .md-editor .cm-scroller { font-family: "Cascadia Mono", "Cascadia Code", Consolas, "D2Coding", "Courier New", monospace; }
