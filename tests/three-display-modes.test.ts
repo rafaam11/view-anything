@@ -147,3 +147,45 @@ test("edges arriving after a switch to solid stay hidden; a file removed meanwhi
   expect(modes2.pendingEdges).toBe(0);
   expect(progress).toHaveBeenLastCalledWith(2, 2); // released jobs count as done
 });
+
+test("meshes sharing a geometry all get the worker's edges (one job)", async () => {
+  const g = new BoxGeometry();
+  const material = new MeshStandardMaterial();
+  const a = new Mesh(g, material);
+  const b = new Mesh(g, material);
+  const root = new Group().add(a, b);
+  const { runner, flush, pending } = deferred();
+  const modes = new DisplayModes(null, new GeometryJobs(runner), { syncEdgeTriangles: 0 });
+  modes.apply(root, "edges");
+  expect(pending).toHaveLength(1);
+  await flush();
+  expect(edgesOf(a)).toBeDefined();
+  expect(edgesOf(b)).toBeDefined();
+  expect(edgesOf(a)!.geometry).toBe(edgesOf(b)!.geometry);
+});
+
+test("a mesh whose edge job failed stays without edges and is not asked again", async () => {
+  const { root, a } = scene();
+  let runs = 0;
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const modes = new DisplayModes(
+      null,
+      new GeometryJobs(async () => {
+        runs++;
+        throw new Error("no worker");
+      }),
+      { syncEdgeTriangles: 0 },
+    );
+    modes.apply(root, "edges");
+    await vi.waitFor(() => expect(modes.pendingEdges).toBe(0));
+    expect(runs).toBe(2);
+    modes.apply(root, "edges");
+    expect(modes.pendingEdges).toBe(0);
+    expect(runs).toBe(2);
+    expect(edgesOf(a)).toBeUndefined();
+  } finally {
+    console.warn = warn;
+  }
+});

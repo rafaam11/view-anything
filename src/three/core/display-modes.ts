@@ -1,10 +1,10 @@
 // Display modes (solid, wire, solid + edges, x-ray) applied to the materials under a root, plus
-// the shared section planes. Edge lines (EdgesGeometry, 30°) are built the first time a mesh needs
-// them and cached per geometry: tiny meshes right away, the rest in the geometry worker (attached
-// as they arrive). They hang under their mesh (userData.vaEdges) so they follow its transform and
-// visibility.
-import { BufferAttribute, BufferGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, type Material, type Mesh, type Object3D, type Plane } from "three";
-import { EDGE_THRESHOLD_DEG, GeometryJobs, PRIORITY, triangles } from "./geometry-jobs";
+// the shared section planes. Edge lines (EdgesGeometry semantics at 30°, see fast-edges.ts) are
+// built the first time a mesh needs them and cached per geometry: tiny meshes right away, the rest
+// in the geometry worker (attached to every mesh sharing the geometry when they arrive). They hang
+// under their mesh (userData.vaEdges) so they follow its transform and visibility.
+import { BufferAttribute, BufferGeometry, LineBasicMaterial, LineSegments, type Material, type Mesh, type Object3D, type Plane } from "three";
+import { edgePositions, GeometryJobs, inputOf, PRIORITY, triangles } from "./geometry-jobs";
 
 export type DisplayMode = "solid" | "wire" | "edges" | "xray";
 export const DISPLAY_MODES: readonly DisplayMode[] = ["solid", "wire", "edges", "xray"];
@@ -42,7 +42,8 @@ export class EdgeCache {
   get(geometry: BufferGeometry): BufferGeometry {
     let edges = this.cache.get(geometry);
     if (!edges) {
-      edges = new EdgesGeometry(geometry, EDGE_THRESHOLD_DEG);
+      edges = new BufferGeometry();
+      edges.setAttribute("position", new BufferAttribute(edgePositions(inputOf(geometry)), 3));
       this.cache.set(geometry, edges);
     }
     return edges;
@@ -123,8 +124,8 @@ export class DisplayModes {
   readonly edgeCache = new EdgeCache();
   readonly edgeMaterial: LineBasicMaterial;
   private mode: DisplayMode = "solid";
-  /** Geometries whose edges are being built in the worker -> the mesh to attach them to. */
-  private readonly wanted = new Map<BufferGeometry, Mesh>();
+  /** Geometries whose edges are being built in the worker -> the meshes to attach them to. */
+  private readonly wanted = new Map<BufferGeometry, Set<Mesh>>();
   private jobsDone = 0;
   private jobsTotal = 0;
 
@@ -154,19 +155,23 @@ export class DisplayModes {
 
   private requestEdges(mesh: Mesh): void {
     const g = mesh.geometry;
-    if (this.wanted.has(g)) return;
-    this.wanted.set(g, mesh);
+    const waiting = this.wanted.get(g);
+    if (waiting) {
+      waiting.add(mesh); // shares a geometry whose edges are already on their way
+      return;
+    }
+    this.wanted.set(g, new Set([mesh]));
     this.jobsTotal++;
     this.hooks.progress?.(this.jobsDone, this.jobsTotal);
     void this.jobs.request("edges", g, PRIORITY.edges).then((positions) => {
-      const target = this.wanted.get(g);
-      if (!target) return; // released meanwhile (counted there)
+      const targets = this.wanted.get(g);
+      if (!targets) return; // released meanwhile (counted there)
       this.wanted.delete(g);
       if (positions) {
         const edges = new BufferGeometry();
         edges.setAttribute("position", new BufferAttribute(positions, 3));
         this.edgeCache.put(g, edges);
-        this.attach(target, edges);
+        for (const target of targets) this.attach(target, edges);
       }
       this.jobDone();
       this.hooks.render?.();
@@ -207,6 +212,7 @@ export class DisplayModes {
         const cached = this.edgeCache.peek(mesh.geometry);
         const n = triangles(mesh.geometry);
         if (cached) this.attach(mesh, cached);
+        else if (this.jobs.failed("edges", mesh.geometry)) continue; // no worker for it: no edges
         else if (n < syncLimit && n <= budget) {
           budget -= n;
           this.attach(mesh, this.edgeCache.get(mesh.geometry));
@@ -228,7 +234,10 @@ export class DisplayModes {
     }
     root.traverse((o) => {
       const g = (o as Mesh).geometry;
-      if (!g || !this.wanted.has(g)) return;
+      const meshes = g && this.wanted.get(g);
+      if (!meshes) return;
+      meshes.delete(o as Mesh);
+      if (meshes.size > 0) return; // still wanted by meshes outside `root`
       this.wanted.delete(g);
       this.jobs.cancel(g);
       this.edgeCache.release(g);

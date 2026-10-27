@@ -109,10 +109,15 @@ export class Picker {
 
   /** Ask the worker for a BVH (no-op if there is one or it is on its way). */
   request(g: BufferGeometry, priority: number): void {
-    if (g.boundsTree) return;
+    if (g.boundsTree || this.jobs.failed("bvh", g)) return;
     this.live.add(g);
     void this.jobs.request("bvh", g, priority).then((data) => {
-      if (!data || !this.live.has(g) || g.boundsTree) return;
+      if (!data) {
+        // Failed (marked in the jobs, never asked again) or cancelled.
+        if (this.live.delete(g)) this.opts.onReady?.();
+        return;
+      }
+      if (!this.live.has(g) || g.boundsTree) return;
       this.live.delete(g);
       g.boundsTree = bvhFrom(data, g);
       this.opts.onReady?.();
@@ -156,7 +161,8 @@ export class Picker {
           this.hits.length = 0;
           if (g.boundsTree) g.boundsTree.raycastObject3D(mesh, raycaster, this.hits);
           else if (small) mesh.raycast(raycaster, this.hits);
-          else {
+          else if (!this.jobs.failed("bvh", g)) {
+            // A mesh whose BVH failed (no worker) is skipped for good, not waited for.
             skipped = Math.min(skipped, reach);
             if (opts.build) this.request(g, PRIORITY.pick);
           }

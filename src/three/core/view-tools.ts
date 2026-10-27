@@ -6,7 +6,7 @@ import { AXES, AXIS_NAMES, Clipper } from "./clipping";
 import { canShowEdges, DISPLAY_MODE_LABELS, DISPLAY_MODES, DisplayModes, type DisplayMode } from "./display-modes";
 import { CURSOR_TRIANGLE_LIMIT, decimalsFor, displayBox, formatPoint, formatSize, meshTriangles, Picker, type PickResult } from "./info";
 import { UNIT_LABELS, UNIT_MM, type FramePreset, type Unit } from "./frames";
-import { GeometryJobs, type JobRunner } from "./geometry-jobs";
+import { GeometryJobs, JobTooLargeError, type JobRunner } from "./geometry-jobs";
 
 /** What the tools need from the stage. */
 export interface ToolStage {
@@ -82,6 +82,7 @@ export class ViewTools {
   private pressed = false;
   private lastUnit: Unit | null = null;
   private lastFrame: FramePreset | null = null;
+  private jobFailureNoticed = false;
   private readonly reverse = new WeakMap<Map<string, Object3D>, Map<Object3D, string>>();
 
   constructor(
@@ -89,7 +90,17 @@ export class ViewTools {
     private readonly host: ToolHost,
   ) {
     // Set here, not as field initializers: they need `host` (a parameter property).
-    this.jobs = new GeometryJobs(host.jobRunner);
+    this.jobs = new GeometryJobs(host.jobRunner, {
+      failed: (_kind, _g, error) => {
+        if (this.jobFailureNoticed) return;
+        this.jobFailureNoticed = true;
+        host.notice(
+          error instanceof JobTooLargeError
+            ? "백그라운드 작업자를 쓸 수 없어 큰 메시의 엣지 표시와 커서 좌표를 껐습니다."
+            : "일부 메시의 엣지 표시나 커서 좌표를 만들지 못했습니다.",
+        );
+      },
+    });
     this.modes = new DisplayModes(this.clipper.planes, this.jobs, {
       render: () => stage.requestRender(),
       progress: (done, total) => host.edgeProgress?.(done, total),

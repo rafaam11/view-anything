@@ -198,3 +198,28 @@ test("Picker: prebuild queues every mesh; release cancels what is still queued",
   expect(far.geometry.boundsTree).toBeUndefined();
   expect(jobs.size).toBe(0);
 });
+
+test("Picker: a failed BVH job is not retried on every pick and is no longer waited for", async () => {
+  const { camera, root } = pickScene();
+  let runs = 0;
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const onReady = vi.fn();
+    const picker = new Picker(
+      new GeometryJobs(async () => {
+        runs++;
+        throw new Error("too big without a worker");
+      }),
+      { syncTriangles: 0, onReady },
+    );
+    expect(picker.pick(root, camera, new Vector2(0, 0), { build: true }).waiting).toBe(true);
+    await vi.waitFor(() => expect(runs).toBe(2));
+    await vi.waitFor(() => expect(onReady).toHaveBeenCalled());
+    for (let i = 0; i < 5; i++) expect(picker.pick(root, camera, new Vector2(0, 0), { build: true })).toEqual({ hit: null, waiting: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(runs).toBe(2);
+  } finally {
+    console.warn = warn;
+  }
+});
