@@ -13,6 +13,8 @@ pub enum Scalar {
     U16,
     I32,
     U32,
+    I64,
+    U64,
     F32,
     F64,
 }
@@ -21,7 +23,7 @@ impl Scalar {
         match self {
             Self::I8 | Self::U8 => 1,
             Self::I16 | Self::U16 => 2,
-            Self::F64 => 8,
+            Self::F64 | Self::I64 | Self::U64 => 8,
             _ => 4,
         }
     }
@@ -33,6 +35,8 @@ impl Scalar {
             Self::U16 => "ushort",
             Self::I32 => "int",
             Self::U32 => "uint",
+            Self::I64 => "int64",
+            Self::U64 => "uint64",
             Self::F32 => "float",
             Self::F64 => "double",
         }
@@ -45,6 +49,8 @@ impl Scalar {
             "ushort" | "uint16" => Self::U16,
             "int" | "int32" => Self::I32,
             "uint" | "uint32" => Self::U32,
+            "int64" => Self::I64,
+            "uint64" => Self::U64,
             "float" | "float32" => Self::F32,
             "double" | "float64" => Self::F64,
             _ => return Err(format!("지원하지 않는 PLY 타입: {s}")),
@@ -58,8 +64,17 @@ impl Scalar {
             Self::U16 => u16::from_le_bytes(b[..2].try_into().unwrap()) as f64,
             Self::I32 => i32::from_le_bytes(b[..4].try_into().unwrap()) as f64,
             Self::U32 => u32::from_le_bytes(b[..4].try_into().unwrap()) as f64,
+            Self::I64 => i64::from_le_bytes(b[..8].try_into().unwrap()) as f64,
+            Self::U64 => u64::from_le_bytes(b[..8].try_into().unwrap()) as f64,
             Self::F32 => f32::from_le_bytes(b[..4].try_into().unwrap()) as f64,
             Self::F64 => f64::from_le_bytes(b[..8].try_into().unwrap()),
+        }
+    }
+    pub fn text(self, b: &[u8]) -> String {
+        match self {
+            Self::I64 => i64::from_le_bytes(b[..8].try_into().unwrap()).to_string(),
+            Self::U64 => u64::from_le_bytes(b[..8].try_into().unwrap()).to_string(),
+            _ => self.number(b).to_string(),
         }
     }
     fn ascii(self, s: &str, out: &mut Vec<u8>) -> Result<()> {
@@ -79,6 +94,8 @@ impl Scalar {
             Self::U16 => put!(u16),
             Self::I32 => put!(i32),
             Self::U32 => put!(u32),
+            Self::I64 => put!(i64),
+            Self::U64 => put!(u64),
             Self::F32 => put!(f32),
             Self::F64 => put!(f64),
         };
@@ -192,9 +209,18 @@ pub enum Parsed {
     Mesh,
 }
 
+#[allow(dead_code)] // Also used by the standalone benchmark and codec tests.
 pub fn read<R: BufRead>(
+    r: R,
+    ext: &str,
+    check: &mut impl FnMut(usize, usize) -> Result<()>,
+) -> Result<Parsed> {
+    read_budget(r, ext, usize::MAX, check)
+}
+pub fn read_budget<R: BufRead>(
     mut r: R,
     ext: &str,
+    available: usize,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<Parsed> {
     let mut header = 0;
@@ -251,6 +277,8 @@ pub fn read<R: BufRead>(
                 ("I", "2") => Scalar::I16,
                 ("U", "2") => Scalar::U16,
                 ("I", "4") => Scalar::I32,
+                ("I", "8") => Scalar::I64,
+                ("U", "8") => Scalar::U64,
                 ("U", "4") => Scalar::U32,
                 ("F", "4") => Scalar::F32,
                 ("F", "8") => Scalar::F64,
@@ -390,6 +418,14 @@ pub fn read<R: BufRead>(
     })?;
     let fixed = fields.iter().all(|f| f.list.is_none());
     let expected = checked_size(n, stride)?;
+    // Includes the source positions, ID history, query index and two display copies.
+    let remaining = available
+        .checked_sub(n * 348)
+        .ok_or("예상 작업 메모리 8GiB 한도를 초과합니다")?;
+    let record_limit = MAX_BYTES.min(remaining / 3);
+    if expected > record_limit {
+        return Err("디코딩/작업 메모리 예산을 초과합니다".into());
+    }
     let mut bytes = Vec::new();
     let mut offsets = Vec::with_capacity(n + 1);
     if mode == "binary_compressed" && matches!(format, Format::Pcd { .. }) {
@@ -397,6 +433,13 @@ pub fn read<R: BufRead>(
         r.read_exact(&mut lens).map_err(|e| e.to_string())?;
         let packed = u32::from_le_bytes(lens[..4].try_into().unwrap()) as usize;
         let unpacked = u32::from_le_bytes(lens[4..].try_into().unwrap()) as usize;
+        if packed
+            .checked_add(unpacked)
+            .and_then(|v| v.checked_add(expected))
+            .is_none_or(|v| v > remaining)
+        {
+            return Err("압축 해제 메모리 예산을 초과합니다".into());
+        }
         let dense_stride = fields
             .iter()
             .filter(|f| f.name != "_")
@@ -460,10 +503,17 @@ pub fn read<R: BufRead>(
                     f.count
                 };
                 let extra = checked_size(c, f.scalar.size())?;
-                if bytes.len().checked_add(extra).is_none_or(|s| s > MAX_BYTES) {
+                if bytes
+                    .len()
+                    .checked_add(extra)
+                    .is_none_or(|s| s > record_limit)
+                {
                     return Err("디코딩 크기 초과".into());
                 }
-                for _ in 0..c {
+                for k in 0..c {
+                    if k % 16384 == 0 {
+                        check(i, n)?;
+                    }
                     read_scalar(&mut r, f.scalar, ascii, big, &mut token, &mut bytes)?;
                 }
             }
@@ -509,6 +559,7 @@ fn read_scalar<R: BufRead>(
 ) -> Result<()> {
     if ascii {
         token.clear();
+        let mut whitespace = 0usize;
         loop {
             let b = r.fill_buf().map_err(|e| e.to_string())?;
             if b.is_empty() {
@@ -519,6 +570,10 @@ fn read_scalar<R: BufRead>(
             for &c in b {
                 used += 1;
                 if c.is_ascii_whitespace() {
+                    whitespace += 1;
+                    if whitespace > 1024 * 1024 {
+                        return Err("숫자 사이 공백이 1MiB를 초과합니다".into());
+                    }
                     if !token.is_empty() {
                         done = true;
                         break;
@@ -626,7 +681,7 @@ pub fn write<W: Write>(
                         "COUNT" => f.count.to_string(),
                         _ => match f.scalar {
                             Scalar::F32 | Scalar::F64 => "F",
-                            Scalar::I8 | Scalar::I16 | Scalar::I32 => "I",
+                            Scalar::I8 | Scalar::I16 | Scalar::I32 | Scalar::I64 => "I",
                             _ => "U",
                         }
                         .into(),
@@ -680,6 +735,61 @@ pub fn write<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn organized_invalid_and_empty_clouds_roundtrip() {
+        let input = b"VERSION .7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\nWIDTH 1\nHEIGHT 2\nVIEWPOINT 1 2 3 1 0 0 0\nPOINTS 2\nDATA ascii\nnan inf -inf\n1 2 3\n";
+        let c = parse(input, "pcd");
+        let mut out = vec![];
+        write(&c, &[0, 1], &mut out, &mut |_, _| Ok(())).unwrap();
+        let d = parse(&out, "pcd");
+        assert_eq!(d.bytes, c.bytes);
+        assert!(matches!(
+            d.format,
+            Format::Pcd {
+                width: 1,
+                height: 2,
+                ..
+            }
+        ));
+        out.clear();
+        write(&c, &[1], &mut out, &mut |_, _| Ok(())).unwrap();
+        assert!(matches!(
+            parse(&out, "pcd").format,
+            Format::Pcd {
+                width: 1,
+                height: 1,
+                ..
+            }
+        ));
+        out.clear();
+        write(&c, &[], &mut out, &mut |_, _| Ok(())).unwrap();
+        assert_eq!(parse(&out, "pcd").len(), 0);
+    }
+    #[test]
+    fn ply_nonpoint_elements_are_readonly_and_truncated_lists_fail() {
+        let c = parse(b"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nelement edge 1\nproperty int a\nend_header\n1 2 3\n0\n", "ply");
+        assert!(!c.editable);
+        assert!(c.warning.is_some());
+        let bad = b"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nproperty list uchar int descriptor\nend_header\n1 2 3 4 5 6\n";
+        assert!(read(std::io::Cursor::new(bad), "ply", &mut |_, _| Ok(())).is_err());
+    }
+    #[test]
+    fn uint64_attributes_do_not_round_through_f64() {
+        let bytes=b"VERSION .7\nFIELDS x y z stamp\nSIZE 4 4 4 8\nTYPE F F F U\nWIDTH 1\nHEIGHT 1\nPOINTS 1\nDATA ascii\n1 2 3 18446744073709551615\n";
+        let c = parse(bytes, "pcd");
+        let (_, stamp) = c.values(0).last().unwrap();
+        assert_eq!(Scalar::U64.text(stamp), "18446744073709551615");
+        let mut out = vec![];
+        write(&c, &[0], &mut out, &mut |_, _| Ok(())).unwrap();
+        assert_eq!(parse(&out, "pcd").bytes, c.bytes);
+    }
+    #[test]
+    fn budget_rejects_before_body_allocation() {
+        let header = pcd_header("binary");
+        assert!(
+            matches!(read_budget(std::io::Cursor::new(header),"pcd",16,&mut|_,_|Ok(())),Err(e) if e.contains("메모리"))
+        );
+    }
     fn parse(b: &[u8], ext: &str) -> Cloud {
         match read(std::io::Cursor::new(b), ext, &mut |_, _| Ok(())).unwrap() {
             Parsed::Cloud(c) => c,

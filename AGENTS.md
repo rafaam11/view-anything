@@ -1,8 +1,8 @@
 # view-anything
 
 탐색기에서 더블클릭하면 메모장처럼 바로 열리는 가벼운 범용 뷰어.
-Markdown(읽기 + Typora식 WYSIWYG 편집)과 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 드래그 append, 단일 HTML 내보내기)를 우선 지원하고,
-포인트클라우드·JSON/YAML/CSV·이미지·PDF로 확장한다.
+Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 드래그 append, 단일 HTML 내보내기),
+포인트클라우드(PCD/PLY 검사·정리·원본 속성 보존 저장)를 지원한다. JSON/YAML/CSV·이미지·PDF로 확장한다.
 
 - 설계: `docs/superpowers/specs/2026-10-26-view-anything-design.md` (결정 사항의 source of truth)
 - 소통·문서는 한국어. 코드 식별자와 커밋 메시지는 영어.
@@ -23,10 +23,13 @@ Markdown(읽기 + Typora식 WYSIWYG 편집)과 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB
 - 검증: `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run check:bundle`, `cargo test --manifest-path src-tauri/Cargo.toml`
 - `npm run build:runtime`: HTML 내보내기용 뷰어 런타임(`vite.runtime.config.ts` → `build/runtime/va-runtime.js`, IIFE 한 파일)을 빌드한다. `build`와 `predev`가 먼저 실행하므로 보통 직접 돌릴 일은 없다. 앱의 내보내기 코드가 이 파일을 `?raw`로 인라인하므로 앱 빌드 전에 있어야 한다.
 - 측정 스크립트(커밋하지 않는 데이터만 만든다): `node scripts/bench-stl.mjs [삼각형 수]`(임시 폴더에 합성 바이너리 STL을 만들어 parseMesh 시간 측정), `node scripts/bench-edges.mjs [삼각형 수]`(엣지 추출 시간, three EdgesGeometry와 결과 비교).
+- 포인트클라우드 측정: `cargo run --release --manifest-path src-tauri/Cargo.toml --example bench-cloud -- 10000000`. OS 임시 폴더의 합성 XYZRGB+ring PCD만 사용한다.
 
 ## 3D 모듈 구조 (`src/three/`)
 - `formats.ts`: 확장자 판별, 바이너리 STL 판별. three를 import하지 않는다(진입 청크에서 쓴다).
 - `viewer.ts`: 앱 3D 뷰어(레지스트리가 lazy import). 파일 큐, 드롭·append, 패널, 메뉴바, 진행률·배너. Tauri(`platform.ts`)를 쓰는 앱 전용 코드다.
+- `cloud/`: PCD/점 PLY의 앱 전용 지연 로딩 UI. Rust 세션의 25,000점 청크로 표시하며 GPU ID로 원본점을 조회한다. 미리보기/적용/20회 undo·redo/다른 이름 저장과 HTML 내보내기 잠금, 화면 갱신 실패 복구를 관리한다.
+- `src-tauri/src/cloud/`: 원본 점 레코드와 f64 좌표, ID 이력을 보관한다. 파싱/선택/필터/저장은 `spawn_blocking`, 이웃 검색은 kiddo + 4스레드 rayon. 계산은 앱 전체 하나씩, 세션은 창 소유. 원본 파일은 덮어쓰지 않는다.
 - `load.ts`, `io/source.ts`: 파일 읽기(asset 프로토콜 병렬 Range 요청, 실패 시 `read_file_raw`). glTF는 UI 스레드의 GLTFLoader, 나머지는 파싱 워커.
 - `worker/`: Web Worker 코드.
   - `parse.worker.ts` + `parse-mesh.ts`(STL/OBJ/PLY) + `occt.ts`(STEP/IGES, occt-import-js wasm를 이 형식일 때만 동적 import). `protocol.ts`는 양쪽이 쓰는 순수 메시지 정의.
@@ -39,6 +42,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집)과 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB
 - `core/`, `worker/`, `export-runtime/`, `io/source.ts`는 `platform.ts`나 `@tauri-apps/*`를 import하지 않는다.
 - 진입 청크와 md 뷰어 청크는 three와 occt를 정적으로 참조하지 않는다. `scripts/check-bundle.mjs`(`npm run check:bundle`, `npm run build` 뒤 실행)가 이를 검사하고, 런타임 번들(`build/runtime/va-runtime.js`)이 있는지, Tauri 참조나 ES 모듈 구문이 없는지도 확인한다.
 - 무거운 계산(파싱, 엣지, BVH, 압축)은 워커에서 한다. UI 스레드에서는 작은 메시만 처리하고, 큰 GPU 업로드는 청크로 나눠 한 프레임에 하나씩 올린다.
+- 포인트클라우드는 JS 워커 대신 Rust 백그라운드에서 처리한다. 장면 원본 점 합계 1천만(숨김·편집으로 제거된 원본점도 예약), 디코딩 2GiB/세션, 예상 작업 메모리 8GiB/앱을 제한한다. 실제 OS/GPU 메모리의 하드 상한은 아니다.
 - 파일을 제거하면 geometry, material, texture, 엣지 선, BVH를 모두 dispose한다(`tests/three-viewer-append.test.ts`의 dispose 점검 테스트).
 - 부품 이름 같은 파일 유래 문자열은 textContent로만 표시한다.
 

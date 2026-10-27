@@ -71,6 +71,7 @@
           "stl",
           "obj",
           "ply",
+          "pcd",
           "gltf",
           "glb",
           "step",

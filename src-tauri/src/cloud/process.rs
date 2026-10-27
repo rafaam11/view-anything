@@ -81,6 +81,12 @@ pub fn run(
             check(i, active.len())?;
         }
         if finite(&cloud.positions[id as usize]) {
+            // Bound squared distances and population-variance sums before building the tree.
+            if matches!(op, Operation::Sor { .. } | Operation::Radius { .. })
+                && cloud.positions[id as usize].iter().any(|v| v.abs() > 1e150)
+            {
+                return Err("SOR/반경 계산 범위를 넘는 좌표입니다 (절댓값 ≤ 1e150 필요)".into());
+            }
             ids.push(id);
         }
     }
@@ -277,6 +283,44 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn extreme_neighbor_coordinates_and_cancellation_are_errors() {
+        let c = cloud(&[[1e200, 0., 0.]; 3]);
+        for op in [
+            Operation::Sor { k: 1, sigma: 2. },
+            Operation::Radius { radius: 1., min: 1 },
+        ] {
+            assert!(run(&c, &[0, 1, 2], &op, &mut |_, _| Ok(())).is_err());
+        }
+        let c = cloud(&[[0., 0., 0.]; 3]);
+        assert!(
+            run(
+                &c,
+                &[0, 1, 2],
+                &Operation::Voxel { size: 1. },
+                &mut |_, _| Err("cancel".into())
+            )
+            .is_err()
+        );
+    }
+    #[test]
+    fn box_selection_includes_boundary_and_obeys_clipping() {
+        let c = cloud(&[[0., 0., 0.], [1., 1., 1.], [-1., 0., 0.], [0.5, 0.5, 0.5]]);
+        let op = Operation::Select {
+            matrix: [
+                1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.,
+            ],
+            planes: vec![[1., 0., 0., -0.5]],
+            region: Region::Box {
+                min: [0.; 3],
+                max: [1.; 3],
+            },
+        };
+        assert_eq!(
+            run(&c, &[0, 1, 2, 3], &op, &mut |_, _| Ok(())).unwrap(),
+            vec![1, 3]
+        );
+    }
     fn cloud(points: &[[f64; 3]]) -> Cloud {
         Cloud {
             format: super::super::codec::Format::Ply,

@@ -4673,6 +4673,7 @@ name = "view-anything"
 version = "0.2.0"
 dependencies = [
  "kiddo",
+ "libc",
  "percent-encoding",
  "rayon",
  "serde",

@@ -4,7 +4,7 @@
 // scene-tree node carries its id as userData.vaId (glTF node extras), so the runtime can map the
 // tree back onto the loaded objects. File objects keep their full matrix: the per-file source
 // frame and unit (objectMatrix) is baked into the file node.
-import { Group, LineSegments, Mesh, Points, type Material, type Object3D } from "three";
+import { BufferGeometry, Group, LineSegments, Mesh, Points, type PointsMaterial, type Material, type Object3D } from "three";
 import type { TreeNode } from "../core/scene-model";
 import type { ExportNode } from "./state";
 
@@ -57,6 +57,7 @@ function cleanMaterial(m: Material): Material {
 export function buildExportScene(sources: readonly ExportSource[]): ExportScene {
   const scene = new Group();
   const clones = new Map<Material, Material>();
+  const pointGeometries: BufferGeometry[] = [];
   const material = (m: Material): Material => {
     let c = clones.get(m);
     if (!c) {
@@ -74,7 +75,14 @@ export function buildExportScene(sources: readonly ExportSource[]): ExportScene 
       const r = o as Partial<Mesh & Points & LineSegments>;
       let out: Object3D;
       if (r.isMesh) out = new Mesh(r.geometry, materials(r.material as Material | Material[]));
-      else if (r.isPoints) out = new Points(r.geometry, materials(r.material as Material | Material[]));
+      else if (r.isPoints) {
+        const g = new BufferGeometry();
+        for (const [name, attr] of Object.entries(r.geometry!.attributes)) if (!name.startsWith("va")) g.setAttribute(name, attr);
+        g.setIndex(r.geometry!.index); g.boundingBox = r.geometry!.boundingBox; g.boundingSphere = r.geometry!.boundingSphere;
+        pointGeometries.push(g);
+        out = new Points(g, materials(r.material as Material | Material[]));
+        out.userData.vaPointSize = (r.material as PointsMaterial).size;
+      }
       else if ((r as LineSegments).isLineSegments) out = new LineSegments(r.geometry, materials(r.material as Material | Material[]));
       else out = new Group();
       out.name = o.name;
@@ -94,7 +102,7 @@ export function buildExportScene(sources: readonly ExportSource[]): ExportScene 
   }
   return {
     scene,
-    dispose: () => clones.forEach((m) => m.dispose()),
+    dispose: () => { clones.forEach((m) => m.dispose()); pointGeometries.forEach((g) => g.dispose()); },
   };
 }
 

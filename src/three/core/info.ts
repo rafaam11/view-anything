@@ -49,6 +49,13 @@ export function meshTriangles(root: Object3D): number {
   return n;
 }
 
+/** Point primitives, without scanning their coordinates. */
+export function pointCount(root: Object3D): number {
+  let n = 0;
+  root.traverse((o) => { const p = o as Object3D & { isPoints?: boolean; geometry?: BufferGeometry }; if (p.isPoints) n += p.geometry?.getAttribute("position")?.count ?? 0; });
+  return n;
+}
+
 /** Decimals for lengths in a scene whose largest extent is `extent` (about 4 significant digits). */
 export function decimalsFor(extent: number): number {
   if (!(extent > 0) || !Number.isFinite(extent)) return 3;

@@ -72,7 +72,7 @@ export function confirmRestart(dirty: boolean): Promise<boolean> {
     const text = document.createElement("p");
     text.textContent = "지금 재시작하여 업데이트를 설치할까요?";
     const warning = document.createElement("p");
-    warning.textContent = dirty ? "저장하지 않은 Markdown 변경은 사라집니다. 저장하려면 취소하세요." : "";
+    warning.textContent = dirty ? "저장하지 않은 변경과 진행 중인 작업은 사라집니다. 저장하려면 취소하세요." : "";
     const cancel = document.createElement("button");
     cancel.textContent = "취소";
     cancel.autofocus = true;

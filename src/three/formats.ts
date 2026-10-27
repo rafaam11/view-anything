@@ -1,12 +1,13 @@
 // 3D format detection. Must stay free of three.js imports: the registry and the
 // file dialog use it from the entry chunk.
 
-export type ThreeDFormat = "stl" | "obj" | "ply" | "gltf" | "glb" | "step" | "iges";
+export type ThreeDFormat = "stl" | "obj" | "ply" | "pcd" | "gltf" | "glb" | "step" | "iges";
 
 const BY_EXTENSION: Readonly<Record<string, ThreeDFormat>> = {
   stl: "stl",
   obj: "obj",
   ply: "ply",
+  pcd: "pcd",
   gltf: "gltf",
   glb: "glb",
   step: "step",

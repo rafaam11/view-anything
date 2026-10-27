@@ -4,7 +4,8 @@
 // presets), 보기 menu (display modes, sections, standard views), dimensions and cursor readout.
 // No Tauri, no network: everything it needs is in the page.
 import threeCss from "../core/three.css?inline";
-import { BufferAttribute, type BufferGeometry, type Mesh, type Object3D } from "three";
+import { BufferAttribute, type BufferGeometry, type Mesh, type Object3D, type Points, type PointsMaterial } from "three";
+import { renderableSizes } from "../core/build-objects";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { Stage, WebGLUnavailableError } from "../core/stage";
@@ -173,6 +174,11 @@ class ExportedViewer {
     const sizes: number[] = [];
     const byId = new Map<string, Object3D>();
     scene.traverse((o) => {
+      if ((o as Points).isPoints && typeof o.userData.vaPointSize === "number") {
+        const material = (o as Points).material as PointsMaterial;
+        material.size = Math.max(1, Math.min(10, o.userData.vaPointSize));
+        material.sizeAttenuation = false;
+      }
       const id = o.userData.vaId;
       if (typeof id === "string") byId.set(id, o);
     });
@@ -195,7 +201,7 @@ class ExportedViewer {
       const drawables: Object3D[] = [];
       group.traverse((o) => { if ((o as Mesh).geometry && o.visible) drawables.push(o); });
       pending.push(...drawables);
-      sizes.push(...drawables.map((o) => meshTriangles(o)));
+      sizes.push(...renderableSizes(drawables));
       this.stage.add(group, drawables);
     }
     this.tools.restoreSections(this.state.sections);

@@ -18,7 +18,7 @@ const CHUNK: usize = 25_000;
 #[derive(Default)]
 pub struct Clouds {
     sessions: Mutex<HashMap<String, Arc<Mutex<Session>>>>,
-    jobs: Mutex<HashMap<String, (String, Arc<AtomicBool>)>>,
+    jobs: Mutex<HashMap<String, (String, Option<String>, Arc<AtomicBool>)>>,
     busy: AtomicBool,
     seq: AtomicU64,
 }
@@ -163,7 +163,7 @@ impl Clouds {
         Ok(s)
     }
     pub fn close_window(&self, owner: &str) {
-        for (_, (w, c)) in self.jobs.lock().unwrap().iter() {
+        for (_, (w, _, c)) in self.jobs.lock().unwrap().iter() {
             if w == owner {
                 c.store(true, Ordering::Relaxed);
             }
@@ -212,11 +212,10 @@ pub async fn cloud_request(
         return Err("다른 포인트클라우드 작업이 진행 중입니다".into());
     }
     let cancel = Arc::new(AtomicBool::new(false));
-    state
-        .jobs
-        .lock()
-        .unwrap()
-        .insert(job_id.clone(), (window.label().into(), cancel.clone()));
+    state.jobs.lock().unwrap().insert(
+        job_id.clone(),
+        (window.label().into(), session.clone(), cancel.clone()),
+    );
     let guard = JobGuard {
         app: app.clone(),
         id: job_id.clone(),
@@ -262,7 +261,7 @@ pub async fn cloud_request(
             if size > codec::MAX_BYTES as u64 {
                 return Err("입력 파일 2GiB 한도를 초과합니다".into());
             }
-            // Compressed decoding may hold input + planar + records. Reserve worst case before allocation.
+            // The decoder checks actual header sizes against the remaining app budget before allocation.
             let used = state
                 .sessions
                 .lock()
@@ -270,10 +269,12 @@ pub async fn cloud_request(
                 .values()
                 .map(|s| s.lock().unwrap().estimate())
                 .sum::<usize>();
-            if used > APP_BYTES - 6 * 1024 * 1024 * 1024 {
-                return Err("안전한 디코딩 공간이 부족합니다. 다른 클라우드를 닫아 주세요".into());
-            }
-            let cloud = match codec::read(std::io::BufReader::new(f), &ext, &mut check)? {
+            let cloud = match codec::read_budget(
+                std::io::BufReader::new(f),
+                &ext,
+                APP_BYTES.saturating_sub(used),
+                &mut check,
+            )? {
                 Parsed::Cloud(c) => c,
                 Parsed::Mesh => return Ok(None),
             };
@@ -317,7 +318,11 @@ pub async fn cloud_request(
                 .sessions
                 .lock()
                 .unwrap()
-                .insert(id, Arc::new(Mutex::new(s)));
+                .insert(id.clone(), Arc::new(Mutex::new(s)));
+            if check(1, 1).is_err() {
+                state.sessions.lock().unwrap().remove(&id);
+                return Err("작업을 취소했습니다".into());
+            }
             return Ok(Some(m));
         }
         let id = session.ok_or("세션 ID 누락")?;
@@ -326,6 +331,9 @@ pub async fn cloud_request(
             let s = handle.lock().unwrap();
             if Some(s.revision) != revision {
                 return Err("작업본이 변경되었습니다. 다시 시도하세요".into());
+            }
+            if s.preview.is_some() && !matches!(action, Action::Apply | Action::DiscardPreview) {
+                return Err("미리보기를 먼저 적용하거나 취소하세요".into());
             }
             if !s.cloud.editable
                 && !matches!(
@@ -384,7 +392,11 @@ pub async fn cloud_request(
             }
             _ => {}
         }
-        check(1, 1)?;
+        // Once the atomic file commit succeeds it wins over a late cancellation.
+        // Reporting cancellation here would leave a written file but an unsaved UI state.
+        if !matches!(action, Action::Save { .. }) {
+            check(1, 1)?;
+        }
         let mut s = handle.lock().unwrap();
         if s.closed || Some(s.revision) != revision {
             return Err("세션이 닫혔거나 변경되었습니다".into());
@@ -502,7 +514,11 @@ fn save(
         if !overwrite && target.exists() {
             return Err("저장 대상이 새로 생겼습니다. 다시 확인하세요".into());
         }
-        std::fs::rename(&temp, &target).map_err(|e| e.to_string())
+        if overwrite {
+            std::fs::rename(&temp, &target).map_err(|e| e.to_string())
+        } else {
+            rename_new(&temp, &target).map_err(|e| e.to_string())
+        }
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(&temp);
@@ -510,24 +526,84 @@ fn save(
     result
 }
 
+/// Atomic no-replace, also on removable FAT/exFAT volumes without hard-link support.
+fn rename_new(source: &Path, target: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::{MOVEFILE_WRITE_THROUGH, MoveFileExW};
+        let from = source
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        let to = target
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        // SAFETY: both paths are owned NUL-terminated buffers and remain alive during the call.
+        if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::{ffi::CString, os::unix::ffi::OsStrExt};
+        let from = CString::new(source.as_os_str().as_bytes())?;
+        let to = CString::new(target.as_os_str().as_bytes())?;
+        // SAFETY: valid C strings; AT_FDCWD resolves the absolute sibling paths.
+        if unsafe {
+            libc::renameat2(
+                libc::AT_FDCWD,
+                from.as_ptr(),
+                libc::AT_FDCWD,
+                to.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        } != 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        std::fs::hard_link(source, target)?;
+        let _ = std::fs::remove_file(source);
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub fn cloud_cancel(window: tauri::WebviewWindow, state: tauri::State<Clouds>, job_id: String) {
-    if let Some((owner, c)) = state.jobs.lock().unwrap().get(&job_id) {
+    if let Some((owner, _, c)) = state.jobs.lock().unwrap().get(&job_id) {
         if owner == window.label() {
             c.store(true, Ordering::Relaxed);
         }
     }
 }
 #[tauri::command]
-pub fn cloud_close(
+pub async fn cloud_close(
     window: tauri::WebviewWindow,
-    state: tauri::State<Clouds>,
+    app: tauri::AppHandle,
     session: String,
 ) -> Result<()> {
-    let s = state.session(window.label(), &session)?;
-    s.lock().unwrap().closed = true;
-    state.sessions.lock().unwrap().remove(&session);
-    Ok(())
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<Clouds>();
+        for (owner, id, cancel) in state.jobs.lock().unwrap().values() {
+            if owner == window.label() && id.as_deref() == Some(&session) {
+                cancel.store(true, Ordering::Relaxed);
+            }
+        }
+        let s = state.session(window.label(), &session)?;
+        s.lock().unwrap().closed = true;
+        state.sessions.lock().unwrap().remove(&session);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Deserialize)]
@@ -623,13 +699,90 @@ pub async fn cloud_point(
 ) -> Result<serde_json::Value> {
     let h = app.state::<Clouds>().session(window.label(), &session)?;
     tauri::async_runtime::spawn_blocking(move||{let s=h.lock().unwrap();if point as usize>=s.cloud.len()||s.ids().binary_search(&point).is_err(){return Err("표시 중인 점이 아닙니다".into());}
-        let fields=s.cloud.values(point).map(|(f,b)|{let values=b.chunks(f.scalar.size()).take(4096).map(|v|f.scalar.number(v).to_string()).collect::<Vec<_>>();(f.name.clone(),serde_json::json!({"values":values,"count":b.len()/f.scalar.size()}))}).collect::<serde_json::Map<_,_>>();Ok(serde_json::json!({"id":point,"position":s.cloud.positions[point as usize],"fields":fields}))
+        let mut remaining = 4096;
+        let fields=s.cloud.values(point).map(|(f,b)|{let values=b.chunks(f.scalar.size()).take(remaining).map(|v|f.scalar.text(v)).collect::<Vec<_>>();remaining -= values.len();(f.name.clone(),serde_json::json!({"values":values,"count":b.len()/f.scalar.size()}))}).collect::<serde_json::Map<_,_>>();Ok(serde_json::json!({"id":point,"position":s.cloud.positions[point as usize],"fields":fields}))
     }).await.map_err(|e|e.to_string())?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn atomic_save_preserves_source_and_existing_target_on_error_or_cancel() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("va-cloud-save-{}-{unique}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        let source = dir.join("source.pcd");
+        let data = b"VERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nWIDTH 2\nHEIGHT 1\nPOINTS 2\nDATA ascii\n1 2 3\n4 5 6\n";
+        std::fs::write(&source, data).unwrap();
+        let source = source.canonicalize().unwrap();
+        let Parsed::Cloud(c) =
+            codec::read(std::io::Cursor::new(data), "pcd", &mut |_, _| Ok(())).unwrap()
+        else {
+            panic!()
+        };
+        assert!(
+            save(&c, &[0], &source, &source, true, "source", &mut |_, _| Ok(
+                ()
+            ))
+            .is_err()
+        );
+        let target = dir.join("edited.pcd");
+        save(&c, &[1], &source, &target, false, "first", &mut |_, _| {
+            Ok(())
+        })
+        .unwrap();
+        let original_saved = std::fs::read(&target).unwrap();
+        assert!(
+            save(
+                &c,
+                &[0],
+                &source,
+                &target,
+                false,
+                "existing",
+                &mut |_, _| Ok(())
+            )
+            .is_err()
+        );
+        assert!(
+            save(&c, &[0], &source, &target, true, "cancel", &mut |_, _| Err(
+                "cancelled".into()
+            ))
+            .is_err()
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), original_saved);
+        assert_eq!(std::fs::read(&source).unwrap(), data);
+        let collision = dir.join("collision.tmp");
+        std::fs::write(&collision, b"replacement").unwrap();
+        assert!(rename_new(&collision, &target).is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), original_saved);
+        save(
+            &c,
+            &[0, 1],
+            &source,
+            &target,
+            true,
+            "replace",
+            &mut |_, _| Ok(()),
+        )
+        .unwrap();
+        let Parsed::Cloud(reopened) = codec::read(
+            std::io::Cursor::new(std::fs::read(&target).unwrap()),
+            "pcd",
+            &mut |_, _| Ok(()),
+        )
+        .unwrap() else {
+            panic!()
+        };
+        assert_eq!(reopened.bytes, c.bytes);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 3);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
     fn session() -> Session {
         let c = Cloud {
             format: codec::Format::Ply,

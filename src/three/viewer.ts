@@ -18,6 +18,8 @@ import { formatProgress, formatStatus, progressPercent, RetryableCadError, type 
 import { canCoarsen } from "./worker/cad-params";
 import { loadGltfFile, loadMeshFile } from "./load";
 import { workerRunner } from "./geometry-worker";
+import type { CloudController } from "./cloud/controller";
+import { pointCount } from "./core/info";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -168,8 +170,10 @@ export class ThreeViewer {
   /** Top-left "파일 · 보기". */
   readonly menubar: Menubar;
   private exporting = false;
+  private clouds: CloudController | null = null;
+  private cloudLoading: Promise<CloudController> | null = null;
 
-  constructor(readonly stage: Stage, root: HTMLElement) {
+  constructor(readonly stage: Stage, private readonly root: HTMLElement) {
     const toolbar = buildToolbar((action) => this.run(action));
     toolbar.append(this.displaySelects());
     this.panel = new ScenePanel({
@@ -189,7 +193,7 @@ export class ThreeViewer {
       displayFrame: () => this.display,
       jobRunner: workerRunner(),
       edgeProgress: (done, total) => this.edgeProgress(done, total),
-      selected: (id) => this.panel.setSelected(id),
+      selected: (id) => { this.panel.setSelected(id); this.clouds?.select(id); },
       notice: (message) => this.banner.show(message),
     });
     this.status.setAttribute("role", "status");
@@ -274,6 +278,7 @@ export class ThreeViewer {
     const apply = (e: Event) => {
       frameTip();
       this.setDisplay(frame.value as FramePreset, unit.value as Unit);
+      frame.value = this.display; unit.value = this.displayUnit; frameTip();
       // Hand the keyboard back to the stage so F and 1-7 work right away.
       (e.target as HTMLSelectElement).blur();
     };
@@ -288,19 +293,23 @@ export class ThreeViewer {
    * does not switch the unit to m, so changing the frame never silently rescales unit-tagged files.
    */
   setDisplay(display: FramePreset, unit: Unit): void {
+    if (this.exporting || this.clouds?.isBusy()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); return; }
     this.display = display;
     this.displayUnit = unit;
     this.stage.setDisplay(display, unit);
+    void this.clouds?.framesChanged();
   }
 
   /** Set a file's source frame and unit (STEP/IGES keep their fixed mm), then fit all. */
   setFileFrame(fileId: string, frame: ObjectFrame): void {
+    if (this.exporting || this.clouds?.isBusy()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); const file = this.model.files.find((f) => f.id === fileId); if (file) this.panel.addFile(file); return; }
     const file = this.model.files.find((f) => f.id === fileId);
     const built = this.objects.get(fileId);
     if (!file || !built) return;
     file.sourceFrame = frame.frame;
     file.sourceUnit = fixedSourceUnit(file.format) ?? frame.unit;
     this.stage.setObjectFrame(built.group, { frame: file.sourceFrame, unit: file.sourceUnit });
+    void this.clouds?.framesChanged(fileId);
   }
 
   run(action: KeyAction): void {
@@ -314,6 +323,7 @@ export class ThreeViewer {
    */
   async exportHtml(): Promise<void> {
     if (this.exporting) return;
+    if (this.clouds?.isBusy()) { this.banner.show("포인트클라우드 작업이 끝난 뒤 내보내세요."); return; }
     if (this.entries.size > 0) {
       this.banner.show("파일을 불러오는 중에는 내보낼 수 없습니다. 불러오기가 끝난 뒤 다시 시도하세요.");
       return;
@@ -326,8 +336,12 @@ export class ThreeViewer {
       this.banner.show("내보낼 표시 중인 모델이 없습니다.");
       return;
     }
+    if (this.clouds && !this.clouds.lockExport()) { this.banner.show("포인트클라우드 화면을 복구한 뒤 내보내세요."); return; }
     this.exporting = true;
     try {
+      if (this.clouds?.entries.size) {
+        if (!await platform.confirm("HTML에는 현재 표시 중인 점·색상·크기를 담습니다. 사용자 정의 점 속성과 편집·PCD/PLY 저장 기능은 포함되지 않는 보기 전용 파일입니다. 계속할까요?")) return;
+      }
       const { exportHtml } = await import("./export/export-html");
       await exportHtml({
         files,
@@ -346,6 +360,7 @@ export class ThreeViewer {
       this.banner.show(`HTML로 내보내지 못했습니다. (${e instanceof Error ? e.message : String(e)})`);
     } finally {
       this.exporting = false;
+      this.clouds?.unlockExport();
     }
   }
 
@@ -362,6 +377,7 @@ export class ThreeViewer {
    * `coarser`: STEP/IGES "정밀도를 낮춰 다시 시도" retries so far.
    */
   load(path: string, coarser = 0): Promise<string | null> {
+    if (this.exporting) { this.banner.show("HTML 내보내기가 끝난 뒤 파일을 추가하세요."); return Promise.resolve(null); }
     const entry: Entry = { id: `f${this.nextId++}`, path, name: baseName(path), controller: new AbortController() };
     this.entries.set(entry.id, entry);
     this.panel.addLoading(entry.id, entry.name);
@@ -373,6 +389,11 @@ export class ThreeViewer {
 
   /** Remove a file: abort it if still queued or loading, dispose its objects, drop it from the panel. */
   remove(fileId: string): void {
+    if (this.exporting) { this.banner.show("HTML 내보내기가 끝난 뒤 파일을 제거하세요."); return; }
+    if (this.clouds?.entries.has(fileId)) {
+      void this.clouds.canRemove(fileId).then((ok) => { if (ok && !this.exporting) { this.entries.get(fileId)?.controller.abort(); this.discard(fileId); } });
+      return;
+    }
     this.entries.get(fileId)?.controller.abort();
     this.discard(fileId);
   }
@@ -387,6 +408,7 @@ export class ThreeViewer {
   }
 
   setVisible(nodeId: string, visible: boolean): void {
+    if (this.exporting) { this.banner.show("HTML 내보내기가 끝난 뒤 표시를 바꾸세요."); const file = this.model.files.find((f) => f.id === nodeId.split("/")[0]); if (file) this.panel.addFile(file); return; }
     if (!setVisible(this.model, nodeId, visible)) return;
     const fileId = nodeId.split("/")[0];
     const o = this.objects.get(fileId)?.nodes.get(nodeId);
@@ -401,6 +423,7 @@ export class ThreeViewer {
   }
 
   private discard(fileId: string): void {
+    this.clouds?.remove(fileId);
     const built = this.objects.get(fileId);
     // Model first, then the stage: removing from the stage refreshes the tools (dimensions,
     // triangle totals, edge limit), which must no longer see this file.
@@ -438,7 +461,15 @@ export class ThreeViewer {
     try {
       let root: TreeNode;
       let built: BuiltFile;
-      if (format === "stl" || format === "obj" || format === "ply" || format === "step" || format === "iges") {
+      let cloud: BuiltFile | null = null;
+      if (format === "pcd" || format === "ply") {
+        onProgress("read", 0, 0);
+        cloud = await (await this.cloudController()).open(id, path, signal);
+      }
+      if (cloud) {
+        root = { id, name, kind: "file", visible: true, children: [], meshIds: [0] };
+        built = cloud;
+      } else if (format === "stl" || format === "obj" || format === "ply" || format === "step" || format === "iges") {
         onProgress("read", 0, 0);
         const parsed = await loadMeshFile(path, format, onProgress, signal, () => (workerUsed = false), coarser);
         root = buildTree(parsed.tree, name, id, parsed.meshes.map((m) => m.name));
@@ -453,9 +484,13 @@ export class ThreeViewer {
       }
       if (signal.aborted) {
         disposeObject(built.group);
+        this.clouds?.remove(id);
         return null;
       }
-      const file: SceneFile = { id, path, name, format, sourceFrame: "as-is", sourceUnit: fixedSourceUnit(format) ?? "as-is", root };
+      const reserved = [...this.objects].reduce((n, [key, value]) => n + (this.clouds?.entries.get(key)?.meta.originalCount ?? pointCount(value.group)), 0);
+      const incoming = this.clouds?.entries.get(id)?.meta.originalCount ?? pointCount(built.group);
+      if (reserved + incoming > 10_000_000) { disposeObject(built.group); throw new Error("장면의 원본 점 합계가 1천만 점 한도를 초과합니다. 다른 파일을 제거하세요."); }
+      const file: SceneFile = { id, path, name, format: format!, sourceFrame: "as-is", sourceUnit: fixedSourceUnit(format!) ?? "as-is", root };
       this.model.files.push(file);
       this.objects.set(id, built);
       this.panel.addFile(file);
@@ -469,7 +504,8 @@ export class ThreeViewer {
         this.discard(id);
         return null;
       }
-      this.loadStatus.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
+      const points = this.clouds?.entries.get(id)?.meta;
+      this.loadStatus.textContent = points ? `점 ${(points.count - points.invalid).toLocaleString()} · ${((performance.now() - started) / 1000).toFixed(1)}초` : formatStatus(built.triangles, performance.now() - started, workerUsed);
       // Hover picking: BVHs built in the worker while the user looks at the model.
       this.tools.prebuild(built.group);
       return id;
@@ -494,6 +530,28 @@ export class ThreeViewer {
       this.panel.removeFile(entry.id);
       this.updateTitle();
     }
+  }
+
+  private cloudController(): Promise<CloudController> {
+    return this.cloudLoading ??= import("./cloud/controller").then(({ CloudController }) => {
+      this.clouds = new CloudController({
+        stage: this.stage, tools: this.tools,
+        file: (id) => this.model.files.find((f) => f.id === id), built: (id) => this.objects.get(id),
+        notice: (text) => this.banner.show(text), unit: () => UNIT_LABELS[this.displayUnit],
+        replace: async (id, built) => {
+          const file = this.model.files.find((f) => f.id === id), old = this.objects.get(id);
+          if (!file || !old) { disposeObject(built.group); return; }
+          built.group.visible = file.root.visible;
+          this.objects.set(id, built);
+          this.tools.fileRemoved(id, old.group);
+          this.stage.remove(old.group); disposeObject(old.group);
+          this.stage.add(built.group, built.renderables, { frame: file.sourceFrame, unit: file.sourceUnit });
+          await this.stage.reveal(built.renderables, renderableSizes(built.renderables));
+          this.tools.select(id);
+        },
+      }, this.root);
+      return this.clouds;
+    });
   }
 }
 

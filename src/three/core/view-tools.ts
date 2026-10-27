@@ -4,7 +4,7 @@
 import { Box3, Box3Helper, Color, Vector2, Vector3, type Camera, type Intersection, type Material, type Matrix4, type Object3D } from "three";
 import { AXES, AXIS_NAMES, Clipper } from "./clipping";
 import { canShowEdges, DISPLAY_MODE_LABELS, DISPLAY_MODES, DisplayModes, type DisplayMode } from "./display-modes";
-import { CURSOR_TRIANGLE_LIMIT, decimalsFor, displayBox, formatPoint, formatSize, meshTriangles, Picker, type PickResult } from "./info";
+import { CURSOR_TRIANGLE_LIMIT, decimalsFor, displayBox, formatPoint, formatSize, meshTriangles, pointCount, Picker, type PickResult } from "./info";
 import { UNIT_LABELS, UNIT_MM, type FramePreset, type Unit } from "./frames";
 import { GeometryJobs, JobTooLargeError, type JobRunner } from "./geometry-jobs";
 
@@ -319,7 +319,8 @@ export class ViewTools {
       const box = displayBox(object, this.stage.displayToWorld);
       const name = this.host.nodeName(this.selection) ?? "";
       const size = box.isEmpty() ? "-" : formatSize(box.getSize(new Vector3()).toArray(), unit, decimals);
-      this.dims.textContent = `선택 ${name}: ${size} · 삼각형 ${meshTriangles(object).toLocaleString("en-US")}`;
+      const points = pointCount(object);
+      this.dims.textContent = `선택 ${name}: ${size} · 삼각형 ${meshTriangles(object).toLocaleString("en-US")}${points ? ` · 점 ${points.toLocaleString("en-US")}` : ""}`;
       if (!box.isEmpty()) this.showBox(box);
       return;
     }
@@ -327,7 +328,8 @@ export class ViewTools {
     const size = scene.isEmpty() ? "-" : formatSize(scene.getSize(new Vector3()).toArray(), unit, decimals);
     // One file: its triangle count is already in the load status.
     const count = files.length > 1 ? ` · 삼각형 ${this.totalTriangles().toLocaleString("en-US")}` : "";
-    this.dims.textContent = `전체 ${size}${count}`;
+    const points = pointCount(this.stage.content);
+    this.dims.textContent = `전체 ${size}${count}${points ? ` · 점 ${points.toLocaleString("en-US")}` : ""}`;
   }
 
   private showBox(box: Box3): void {
