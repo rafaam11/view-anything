@@ -7,7 +7,8 @@ import { Stage, WebGLUnavailableError } from "./core/stage";
 import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
 import { buildTree, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
 import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
-import { formatProgress, formatStatus, progressPercent, type Phase } from "./worker/protocol";
+import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
+import { canCoarsen } from "./worker/cad-params";
 import { loadGltfFile, loadMeshFile } from "./load";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
@@ -27,6 +28,7 @@ function isAbort(e: unknown): boolean {
 /** User-facing (Korean) text for a load failure. */
 export function describeLoadError(name: string, e: unknown): string {
   const text = e instanceof Error ? e.message : String(e);
+  if (e instanceof RetryableCadError) return `${name}: 파일이 너무 크거나 손상됨. (${text})`;
   if (e instanceof RangeError || /allocation failed|out of memory|invalid array length/i.test(text)) {
     return `${name}: 메모리가 부족해 열 수 없습니다. 파일이 너무 큽니다.`;
   }
@@ -52,7 +54,8 @@ class Progress {
     this.root.hidden = false;
     this.name.textContent = fileName;
     this.phase.textContent = formatProgress(phase, loaded, total, note);
-    const percent = progressPercent(loaded, total);
+    const percent = phase === "tessellate" ? null : progressPercent(loaded, total);
+    this.root.classList.toggle("spinning", phase === "tessellate");
     this.bar.classList.toggle("indeterminate", percent === null);
     this.fill.style.width = percent === null ? "" : `${percent}%`;
   }
@@ -62,9 +65,16 @@ class Progress {
   }
 }
 
-class Banner {
+export interface BannerAction {
+  label: string;
+  run: () => void;
+}
+
+export class Banner {
   readonly root = el("div", "va3d-banner");
   private readonly text = el("span");
+  private readonly action = el("button", "va3d-banner-action");
+  private onAction: (() => void) | null = null;
 
   constructor() {
     const close = el("button");
@@ -72,13 +82,26 @@ class Banner {
     close.textContent = "×";
     close.title = "닫기";
     close.addEventListener("click", () => (this.root.hidden = true));
+    this.action.type = "button";
+    this.action.addEventListener("click", () => {
+      const run = this.onAction;
+      this.onAction = null;
+      this.root.hidden = true;
+      run?.();
+    });
     this.root.setAttribute("role", "alert");
     this.root.append(this.text, close);
     this.root.hidden = true;
   }
 
-  show(message: string): void {
+  /** Show `message`, optionally with one action button (e.g. a retry) that also closes the banner. */
+  show(message: string, action?: BannerAction): void {
     this.text.textContent = message;
+    this.onAction = action?.run ?? null;
+    if (action) {
+      this.action.textContent = action.label;
+      this.text.after(this.action);
+    } else this.action.remove();
     this.root.hidden = false;
   }
 }
@@ -120,8 +143,11 @@ class ThreeViewer {
     else this.stage.setView(action.view);
   }
 
-  /** Load one file into the scene; failures go to the banner. Returns the file id, or null. */
-  async load(path: string, signal?: AbortSignal): Promise<string | null> {
+  /**
+   * Load one file into the scene; failures go to the banner. Returns the file id, or null.
+   * `coarser`: STEP/IGES "정밀도를 낮춰 다시 시도" retries so far.
+   */
+  async load(path: string, signal?: AbortSignal, coarser = 0): Promise<string | null> {
     const name = baseName(path);
     const format = formatOf(path);
     const id = `f${this.nextId++}`;
@@ -132,18 +158,15 @@ class ThreeViewer {
     try {
       let root: TreeNode;
       let built: BuiltFile;
-      if (format === "stl" || format === "obj" || format === "ply") {
+      if (format === "stl" || format === "obj" || format === "ply" || format === "step" || format === "iges") {
         onProgress("read", 0, 0);
-        const parsed = await loadMeshFile(path, format, onProgress, signal, () => (workerUsed = false));
+        const parsed = await loadMeshFile(path, format, onProgress, signal, () => (workerUsed = false), coarser);
         root = buildTree(parsed.tree, name, id, parsed.meshes.map((m) => m.name));
         built = buildParsedFile(parsed, root);
       } else if (format === "gltf" || format === "glb") {
         onProgress("read", 0, 0);
         const scene = await loadGltfFile(path, onProgress, signal);
         ({ root, built } = adoptGltfScene(scene, name, id));
-      } else if (format === "step" || format === "iges") {
-        this.banner.show(`${name}: STEP/IGES 지원은 준비 중입니다.`);
-        return null;
       } else {
         this.banner.show(`${name}: 지원하지 않는 형식입니다.`);
         return null;
@@ -162,7 +185,12 @@ class ThreeViewer {
       this.status.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
       return id;
     } catch (e) {
-      if (!isAbort(e)) this.banner.show(describeLoadError(name, e));
+      if (isAbort(e)) return null;
+      const retry = e instanceof RetryableCadError && (e.byteLength === undefined || canCoarsen(e.byteLength, coarser));
+      this.banner.show(
+        describeLoadError(name, e),
+        retry ? { label: "정밀도를 낮춰 다시 시도", run: () => void this.load(path, signal, coarser + 1) } : undefined,
+      );
       return null;
     } finally {
       this.progress.hide();

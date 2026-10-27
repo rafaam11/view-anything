@@ -30,11 +30,19 @@ export function parseMesh(format: MeshFormat, buffer: ArrayBuffer, maxTriangles 
     default:
       throw new Error(`unsupported mesh format: ${String(format)}`);
   }
-  file.meshes = file.meshes.map((m) => {
-    const pieces = chunkMesh(m, maxTriangles);
-    return pieces.length === 1 ? m : { name: m.name, primitive: m.primitive, positions: new Float32Array(0), bounds: m.bounds, chunks: pieces };
-  });
+  file.meshes = chunkMeshes(file.meshes, maxTriangles);
   return file;
+}
+
+/** Replace each mesh larger than `maxTriangles` by a chunked one (see `chunkMesh`). */
+export function chunkMeshes(meshes: MeshData[], maxTriangles: number): MeshData[] {
+  return meshes.map((m) => {
+    const pieces = chunkMesh(m, maxTriangles);
+    if (pieces.length === 1) return m;
+    const chunked: MeshData = { name: m.name, positions: new Float32Array(0), bounds: m.bounds, chunks: pieces };
+    if (m.primitive) chunked.primitive = m.primitive;
+    return chunked;
+  });
 }
 
 function single(geometry: BufferGeometry, primitive: Primitive, dropNormals: boolean): ParsedFile {
@@ -79,7 +87,8 @@ function floats(attr: AnyAttribute, size: number): Float32Array | undefined {
   return out;
 }
 
-function bounds(p: Float32Array): number[] {
+/** Axis-aligned bounds [minX, minY, minZ, maxX, maxY, maxZ] of packed xyz positions. */
+export function bounds(p: Float32Array): number[] {
   if (p.length < 3) return [0, 0, 0, 0, 0, 0];
   let [x0, y0, z0, x1, y1, z1] = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
   for (let i = 0; i < p.length; i += 3) {

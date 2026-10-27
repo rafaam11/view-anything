@@ -55,6 +55,20 @@
   from { left: -30%; }
   to { left: 100%; }
 }
+/* STEP/IGES tessellation: no percent, a spinner before the phase text instead. */
+.va3d-progress.spinning .va3d-progress-phase::before {
+  content: "";
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 6px;
+  vertical-align: -0.1em;
+  border: 2px solid var(--border);
+  border-top-color: var(--fg);
+  border-radius: 50%;
+  animation: va3d-spin 0.8s linear infinite;
+}
+@keyframes va3d-spin { to { transform: rotate(360deg); } }
 
 .va3d-banner {
   position: absolute;
@@ -72,6 +86,7 @@
   border-radius: 6px;
 }
 .va3d-banner span { flex: 1; word-break: break-word; }
+.va3d-banner .va3d-banner-action { flex: none; border: 1px solid currentColor; border-radius: 4px; padding: 0 8px; }
 .va3d-banner button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 0 4px; }
 
 .va3d-status {

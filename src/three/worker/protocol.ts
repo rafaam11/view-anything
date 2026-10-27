@@ -3,9 +3,34 @@
 import type { ParsedTree } from "../core/scene-model";
 
 export type MeshFormat = "stl" | "obj" | "ply";
+/** B-rep formats, tessellated by occt-import-js (wasm) inside the worker. */
+export type CadFormat = "step" | "iges";
+export type WorkerFormat = MeshFormat | CadFormat;
 export type Primitive = "triangles" | "lines" | "points";
-/** read/parse: bytes or nothing; upload: chunks put on the GPU so far / total chunks. */
-export type Phase = "read" | "parse" | "upload";
+/**
+ * read/parse: bytes or nothing; tessellate: STEP/IGES meshing (no progress, spinner only);
+ * upload: chunks put on the GPU so far / total chunks.
+ */
+export type Phase = "read" | "parse" | "tessellate" | "upload";
+
+/** Default mesh colour (sRGB hex) when a file has none. */
+export const DEFAULT_COLOR = 0xb4bcc6;
+
+export function isCadFormat(format: string): format is CadFormat {
+  return format === "step" || format === "iges";
+}
+
+/**
+ * A STEP/IGES failure that a coarser tessellation may avoid: the wasm aborted, ran out of memory,
+ * or occt gave up on the file. The UI offers "정밀도를 낮춰 다시 시도".
+ */
+export class RetryableCadError extends Error {
+  /** `byteLength`: the file size, when known (decides whether a coarser tier is left). */
+  constructor(message: string, readonly byteLength?: number) {
+    super(message);
+    this.name = "RetryableCadError";
+  }
+}
 
 export interface MeshData {
   name: string;
@@ -30,17 +55,20 @@ export interface ParsedFile {
   meshes: MeshData[];
 }
 
-/** UI -> worker. `parse` makes the worker fetch `url` itself; `buffer` hands it the bytes. */
+/**
+ * UI -> worker. `parse` makes the worker fetch `url` itself; `buffer` hands it the bytes.
+ * `coarser` (STEP/IGES only): retries so far, each one a coarser deflection tier.
+ */
 export type ToWorker =
-  | { type: "parse"; id: number; url: string; format: MeshFormat }
-  | { type: "buffer"; id: number; format: MeshFormat; buffer: ArrayBuffer };
+  | { type: "parse"; id: number; url: string; format: WorkerFormat; coarser?: number }
+  | { type: "buffer"; id: number; format: WorkerFormat; buffer: ArrayBuffer; coarser?: number };
 
 /** Worker -> UI. `need-buffer`: the worker's fetch failed; the UI should read the file and send `buffer`. */
 export type FromWorker =
   | { type: "progress"; id: number; phase: Phase; loaded: number; total: number }
   | { type: "need-buffer"; id: number; message: string }
   | { type: "done"; id: number; file: ParsedFile }
-  | { type: "error"; id: number; message: string };
+  | { type: "error"; id: number; message: string; retryable?: boolean; byteLength?: number };
 
 /** The draw pieces of a mesh: its chunks, or the mesh itself. */
 export function meshPieces(m: MeshData): MeshData[] {
@@ -88,15 +116,18 @@ export function progressThrottle(emit: (phase: Phase, loaded: number, total: num
   };
 }
 
-const PHASE_LABEL: Record<Phase, string> = { read: "읽는 중", parse: "해석 중", upload: "GPU 업로드" };
+const PHASE_LABEL: Record<Phase, string> = { read: "읽는 중", parse: "해석 중", tessellate: "형상 변환 중", upload: "GPU 업로드" };
 
-/** "읽는 중 42%", "읽는 중 12.3 MB" (unknown total), "해석 중", "GPU 업로드 3/6"; optional " · note". */
+/**
+ * "읽는 중 42%", "읽는 중 12.3 MB" (unknown total), "해석 중", "형상 변환 중" (never a percent),
+ * "GPU 업로드 3/6"; optional " · note".
+ */
 export function formatProgress(phase: Phase, loaded: number, total: number, note?: string): string {
-  const percent = progressPercent(loaded, total);
+  const percent = phase === "tessellate" ? null : progressPercent(loaded, total);
   let text: string;
   if (phase === "upload" && total > 0) text = `${PHASE_LABEL[phase]} ${loaded}/${total}`;
   else if (percent !== null) text = `${PHASE_LABEL[phase]} ${percent}%`;
-  else if (loaded > 0) text = `${PHASE_LABEL[phase]} ${(loaded / (1 << 20)).toFixed(1)} MB`;
+  else if (loaded > 0 && phase !== "tessellate") text = `${PHASE_LABEL[phase]} ${(loaded / (1 << 20)).toFixed(1)} MB`;
   else text = PHASE_LABEL[phase];
   return note ? `${text} · ${note}` : text;
 }

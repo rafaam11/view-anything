@@ -19,7 +19,7 @@ import {
   type Texture,
 } from "three";
 import { buildTree, type ParsedTree, type TreeNode } from "./scene-model";
-import { meshPieces, type MeshData, type ParsedFile } from "../worker/protocol";
+import { DEFAULT_COLOR, meshPieces, type MeshData, type ParsedFile } from "../worker/protocol";
 
 export interface BuiltFile {
   /** The file's root object; its matrix carries the per-file source-frame transform. */
@@ -31,8 +31,6 @@ export interface BuiltFile {
   /** Every draw object, in scene order (the stage uploads them in batches). */
   renderables: Object3D[];
 }
-
-const DEFAULT_COLOR = 0xb4bcc6;
 
 type Renderable = Mesh | Points | LineSegments;
 

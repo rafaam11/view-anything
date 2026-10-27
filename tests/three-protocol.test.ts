@@ -55,3 +55,8 @@ test("formatStatus: triangle count, seconds, worker note", () => {
   expect(formatStatus(6_000_000, 2400, true)).toBe("삼각형 6,000,000 · 2.4초");
   expect(formatStatus(12, 51, false)).toBe("삼각형 12 · 0.1초 · 워커 미사용");
 });
+
+test("formatProgress: tessellate phase never shows a percent", () => {
+  expect(formatProgress("tessellate", 0, 0)).toBe("형상 변환 중");
+  expect(formatProgress("tessellate", 1, 4)).toBe("형상 변환 중");
+});
