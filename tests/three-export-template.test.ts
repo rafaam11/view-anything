@@ -1,7 +1,7 @@
 // HTML export: single-file template (escaping, CSP), base64 codec, the 50 MB warning and the state
 // JSON schema.
 import { expect, test } from "vitest";
-import { assembleHtml, defaultHtmlPath, EXPORT_CSP, escapeScript, exportTitle, jsonForScript, prepareHtml, renderHtml, renderHtmlBytes } from "../src/three/export/template";
+import { assembleHtml, assembleHtmlAsync, defaultHtmlPath, EXPORT_CSP, escapeScript, exportTitle, jsonForScript, prepareHtml, renderHtml, renderHtmlBytes } from "../src/three/export/template";
 import { base64Length, encodeBase64Into, fromBase64, toBase64 } from "../src/three/export/codec";
 import { exceedsSizeWarning, SIZE_WARN_BYTES } from "../src/three/export/size";
 import { parseState, STATE_VERSION, type ExportState } from "../src/three/export/state";
@@ -46,6 +46,18 @@ test("base64 round trip, including sizes that are not multiples of 3 and > one c
   expect(new TextDecoder().decode(fromBase64("aGVs\nbG8="))).toBe("hello");
 });
 
+test("large HTML assembly yields and preserves base64 chunk boundaries", async () => {
+  const prepared = prepareHtml({ title: "t", state: sampleState(), runtime: "void 0" });
+  for (const remainder of [0, 1, 2]) {
+    const bytes = Uint8Array.from({ length: 768 * 1024 + remainder }, (_, i) => i % 251);
+    let yielded = false;
+    setTimeout(() => { yielded = true; }, 0);
+    const actual = await assembleHtmlAsync(prepared, bytes);
+    if (remainder) expect(yielded).toBe(true);
+    expect(Buffer.from(actual).equals(Buffer.from(assembleHtml(prepared, bytes)))).toBe(true);
+  }
+});
+
 test("50 MB warning boundary", () => {
   expect(SIZE_WARN_BYTES).toBe(50 * 1024 * 1024);
   expect(exceedsSizeWarning(SIZE_WARN_BYTES)).toBe(false);
@@ -79,7 +91,7 @@ test("renderHtml: one offline file with CSP, the GLB, the state and the runtime;
   expect(html.startsWith("<!doctype html>")).toBe(true);
   expect(html).toContain(`<meta http-equiv="Content-Security-Policy" content="${EXPORT_CSP}">`);
   // Embedded textures: GLTFLoader's ImageBitmapLoader fetch()es blob: URLs; still nothing external.
-  expect(EXPORT_CSP).toBe("default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; connect-src blob: data:");
+  expect(EXPORT_CSP).toBe("default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; connect-src blob: data:; worker-src blob:");
   expect(EXPORT_CSP).not.toMatch(/https?:/);
   expect(EXPORT_CSP).not.toContain("*");
   // Exactly the three script elements we wrote, each closed once.

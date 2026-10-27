@@ -3,6 +3,7 @@
 // start or dies, small jobs run inline and big ones are refused (guardedInlineRunner): the UI
 // thread is never frozen by a large edge or BVH build.
 import { abortError, guardedInlineRunner, type GeometryInput, type JobKind, type JobResult, type JobRunner } from "./core/geometry-jobs";
+import GeometryWorker from "./worker/geometry.worker?worker&inline";
 
 export interface WorkerLike {
   onmessage: ((e: MessageEvent) => void) | null;
@@ -11,7 +12,7 @@ export interface WorkerLike {
   terminate(): void;
 }
 
-const defaultSpawn = (): WorkerLike => new Worker(new URL("./worker/geometry.worker.ts", import.meta.url), { type: "module" });
+const defaultSpawn = (): WorkerLike => new GeometryWorker();
 
 /** `spawn`: worker factory (tests). */
 export function workerRunner(spawn: (() => WorkerLike) | null = typeof Worker === "undefined" ? null : defaultSpawn): JobRunner {

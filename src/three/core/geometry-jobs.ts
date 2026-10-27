@@ -106,6 +106,35 @@ export function triangles(geometry: BufferGeometry): number {
   return Math.floor((geometry.index ? geometry.index.count : (geometry.getAttribute("position")?.count ?? 0)) / 3);
 }
 
+/** Large input copies yield between chunks, including interleaved/normalized glTF accessors. */
+export async function inputOfAsync(geometry: BufferGeometry, signal: AbortSignal): Promise<GeometryInput> {
+  const attr = geometry.getAttribute("position");
+  if (attr.count <= 65_536 && (geometry.index?.count ?? 0) <= 196_608) return inputOf(geometry);
+  const positions = new Float32Array(attr.count * 3);
+  const plain = (attr as BufferAttribute).isBufferAttribute && attr.array instanceof Float32Array && !attr.normalized && attr.itemSize === 3;
+  const pause = async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (signal.aborted) throw abortError();
+  };
+  for (let start = 0; start < attr.count; start += 65_536) {
+    await pause();
+    const end = Math.min(start + 65_536, attr.count);
+    if (plain) positions.set((attr.array as Float32Array).subarray(start * 3, end * 3), start * 3);
+    else for (let i = start; i < end; i++) {
+      positions[3 * i] = attr.getX(i);
+      positions[3 * i + 1] = attr.getY(i);
+      positions[3 * i + 2] = attr.getZ(i);
+    }
+  }
+  const src = geometry.index?.array;
+  const index = !src ? null : src instanceof Uint16Array ? new Uint16Array(src.length) : new Uint32Array(src.length);
+  if (src && index) for (let start = 0; start < src.length; start += 196_608) {
+    await pause();
+    index.set(src.subarray(start, start + 196_608), start);
+  }
+  return { positions, index };
+}
+
 export function inputTriangles(input: GeometryInput): number {
   return Math.floor((input.index ? input.index.length : input.positions.length / 3) / 3);
 }
@@ -150,7 +179,7 @@ export class GeometryJobs {
   private readonly failures: Record<JobKind, WeakSet<BufferGeometry>> = { edges: new WeakSet(), bvh: new WeakSet() };
 
   constructor(
-    private readonly runner: JobRunner = inlineRunner,
+    private readonly runner: JobRunner = guardedInlineRunner,
     private readonly hooks: GeometryJobHooks = {},
   ) {}
 
@@ -210,7 +239,10 @@ export class GeometryJobs {
     const abort = (this.runningAbort = new AbortController());
     let result: Promise<JobResult>;
     try {
-      result = this.runner(job.kind, inputOf(job.geometry), abort.signal);
+      const large = job.geometry.getAttribute("position").count > 65_536 || (job.geometry.index?.count ?? 0) > 196_608;
+      result = large
+        ? inputOfAsync(job.geometry, abort.signal).then((input) => this.runner(job.kind, input, abort.signal))
+        : this.runner(job.kind, inputOf(job.geometry), abort.signal);
     } catch (e) {
       result = Promise.reject(e);
     }

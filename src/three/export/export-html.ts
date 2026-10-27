@@ -9,7 +9,7 @@ import type { SceneFile } from "../core/scene-model";
 import type { FramePreset, Unit } from "../core/frames";
 import type { DisplayMode } from "../core/display-modes";
 import { buildExportScene, exportGlb, exportTree, visibleFiles } from "./scene";
-import { assembleHtml, defaultHtmlPath, exportTitle, prepareHtml } from "./template";
+import { assembleHtmlAsync, defaultHtmlPath, exportTitle, prepareHtml } from "./template";
 import { STATE_VERSION, type ExportSection, type ExportState } from "./state";
 import { exceedsSizeWarning, formatMegabytes } from "./size";
 
@@ -104,7 +104,7 @@ export async function exportHtml(input: ExportInput): Promise<string | null> {
     }
     input.progress("HTML 만드는 중");
     await nextFrame();
-    const bytes = assembleHtml(prepared, packed);
+    const bytes = await assembleHtmlAsync(prepared, packed);
     input.progress("저장 중");
     await platform.writeFileRaw(path, bytes);
     return path;

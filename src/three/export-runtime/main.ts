@@ -10,6 +10,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { Stage, WebGLUnavailableError } from "../core/stage";
 import { ScenePanel } from "../core/panel";
 import { ViewTools } from "../core/view-tools";
+import { workerRunner } from "../geometry-worker";
 import { Menubar } from "../core/menubar";
 import { buildToolbar, focusCanvas, viewMenuItems } from "../core/view-menu";
 import { keyAction, type KeyAction } from "../core/keys";
@@ -102,6 +103,7 @@ class ExportedViewer {
       select: (id) => this.tools.select(id),
     });
     this.tools = new ViewTools(stage, {
+      jobRunner: workerRunner(),
       files: () => this.files,
       nodeName: (id) => findNode(this.model, id)?.name,
       displayUnit: () => state.unit,

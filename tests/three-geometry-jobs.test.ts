@@ -9,6 +9,7 @@ import {
   GeometryJobs,
   guardedInlineRunner,
   inputOf,
+  inputOfAsync,
   JobTooLargeError,
   PRIORITY,
   type JobKind,
@@ -41,6 +42,23 @@ test("inputOf copies: transferring the copy leaves the geometry usable", () => {
   const input = inputOf(g);
   expect(input.positions).not.toBe(g.getAttribute("position").array);
   expect(input.index).not.toBe(g.index!.array);
+});
+
+test("large input copies yield, preserve data and stop on cancellation", async () => {
+  const g = new BufferGeometry();
+  const p = new Float32Array(70_000 * 3);
+  p[p.length - 1] = 42;
+  g.setAttribute("position", new BufferAttribute(p, 3));
+  const abort = new AbortController();
+  let yielded = false;
+  setTimeout(() => { yielded = true; }, 0);
+  const result = await inputOfAsync(g, abort.signal);
+  expect(yielded).toBe(true);
+  expect(result.positions[result.positions.length - 1]).toBe(42);
+  expect(result.positions).not.toBe(p);
+  const pending = inputOfAsync(g, abort.signal);
+  abort.abort();
+  await expect(pending).rejects.toMatchObject({ name: "AbortError" });
 });
 
 function manual() {

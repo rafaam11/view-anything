@@ -8,7 +8,7 @@ import type { ExportState } from "./state";
 
 // connect-src blob: data: lets GLTFLoader read embedded textures (ImageBitmapLoader fetches blob:
 // URLs); nothing external is reachable.
-export const EXPORT_CSP = "default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; connect-src blob: data:";
+export const EXPORT_CSP = "default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; connect-src blob: data:; worker-src blob:";
 
 const BACKSLASH = String.fromCharCode(92);
 /** U+2028 / U+2029: valid in JSON, line terminators in older JS parsers. */
@@ -89,6 +89,20 @@ export function assembleHtml(prepared: PreparedHtml, glb: Uint8Array): Uint8Arra
   out.set(prepared.head, 0);
   const end = encodeBase64Into(glb, out, prepared.head.length);
   out.set(prepared.tail, end);
+  return out;
+}
+
+/** Yield between 768 KiB (base64-aligned) slices so large exports keep the UI responsive. */
+export async function assembleHtmlAsync(prepared: PreparedHtml, glb: Uint8Array): Promise<Uint8Array> {
+  const out = new Uint8Array(prepared.byteLength(glb.length));
+  out.set(prepared.head);
+  let offset = prepared.head.length;
+  const chunk = 768 * 1024;
+  for (let i = 0; i < glb.length; i += chunk) {
+    offset = encodeBase64Into(glb.subarray(i, i + chunk), out, offset);
+    if (i + chunk < glb.length) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  out.set(prepared.tail, offset);
   return out;
 }
 
