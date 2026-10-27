@@ -363,3 +363,70 @@ test("export refuses while files load, and with nothing visible; Ctrl+Shift+E ru
   await empty.exportHtml();
   expect(root.querySelector(".va3d-banner")!.textContent).toContain("내보낼 표시 중인 모델이 없습니다");
 });
+
+/**
+ * Disposal check (no WebGL in node, so no renderer.info.memory): every geometry, material and
+ * texture a file brings, plus its edge lines and BVHs, is disposed when the file is removed,
+ * over repeated load/remove cycles of mixed formats.
+ */
+test("load + remove, repeated: every geometry, material, texture, edge line and BVH is released", async () => {
+  const { BoxGeometry, Group: G, Mesh: M, MeshStandardMaterial, Texture } = await import("three");
+  const v = make();
+  v.tools.setMode("edges");
+  const gltfScene = () => {
+    const shared = new BoxGeometry();
+    const textured = new MeshStandardMaterial({ map: new Texture(), normalMap: new Texture() });
+    const part = new G();
+    part.name = "part";
+    part.add(new M(shared, textured), new M(shared, new MeshStandardMaterial()));
+    return new G().add(part, new M(new BoxGeometry(2, 1, 1), textured));
+  };
+  for (let round = 0; round < 3; round++) {
+    for (const [path, impl] of [
+      [P("a.stl"), async () => parsed()],
+      [P("b.glb"), async () => gltfScene()],
+    ] as const) {
+      loadImpl = impl;
+      const id = await v.load(path);
+      expect(id).not.toBeNull();
+      const group = v.objects.get(id!)!.group;
+      await vi.waitFor(() => {
+        // Edge lines (inline jobs) on every mesh, BVHs prebuilt.
+        group.traverse((o) => {
+          if ((o as Mesh).isMesh && !o.userData.vaEdges) {
+            expect(o.children.some((c) => c.userData.vaEdges)).toBe(true);
+            expect((o as Mesh).geometry.boundsTree).toBeDefined();
+          }
+        });
+      });
+      const live = new Set<{ dispose(): void }>();
+      const disposed = new Set<unknown>();
+      const track = (r: { addEventListener(t: "dispose", f: () => void): void; dispose(): void }) => {
+        if (live.has(r)) return;
+        live.add(r);
+        r.addEventListener("dispose", () => disposed.add(r));
+      };
+      const meshGeometries: Mesh["geometry"][] = [];
+      group.traverse((o) => {
+        const m = o as Mesh;
+        if (!m.isMesh && !o.userData.vaEdges) return;
+        track(m.geometry);
+        if (o.userData.vaEdges) return; // the shared edge material lives as long as the viewer
+        meshGeometries.push(m.geometry);
+        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+          track(mat);
+          for (const value of Object.values(mat)) if (value && (value as { isTexture?: boolean }).isTexture) track(value as never);
+        }
+      });
+      expect(live.size).toBeGreaterThanOrEqual(path.endsWith("glb") ? 8 : 5);
+      row(id!)!.querySelector<HTMLButtonElement>(".va3d-remove")!.click();
+      expect([...live].filter((r) => !disposed.has(r))).toEqual([]);
+      for (const g of meshGeometries) {
+        expect(g.boundsTree).toBeUndefined();
+        expect(v.tools.modes.edgeCache.peek(g)).toBeUndefined();
+      }
+      expect(v.objects.size).toBe(0);
+      expect(stage.content.children).toHaveLength(0);
+    }
+  }
+});
