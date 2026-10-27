@@ -2,7 +2,8 @@
  * Scene panel model: files -> assembly tree -> meshes. Pure data, no three.js,
  * no Tauri; shared with the exported-HTML runtime.
  *
- * Node ids are stable path strings: the file node id is the file id, and each
+ * Node ids are stable path strings: the file node id is the file id (which
+ * must not contain '/'), and each
  * child appends its index (`${fileId}/0/2/1`). Direct meshes of an assembly
  * become mesh leaves `${nodeId}/m${k}`. Rebuilding the same input yields the
  * same ids, so exported HTML can map visibility state back onto nodes.
@@ -56,9 +57,11 @@ export interface SceneModel {
 /**
  * Build the file's tree. An unnamed root is merged into the file node; a
  * named root becomes the file node's single child. Empty names fall back to
- * the first mesh's name, then to `Part N` (N counts per file, pre-order).
+ * the first mesh's name (leaf nodes only), then to `Part N` (N counts per
+ * file, pre-order). `fileId` must not contain '/' (ids are '/'-joined paths).
  */
 export function buildTree(parsed: ParsedTree, fileName: string, fileId: string, meshNames: string[] = []): TreeNode {
+  if (fileId.includes("/")) throw new Error(`fileId must not contain '/': ${fileId}`);
   let partCounter = 0;
   const autoName = (meshes: number[]): string => {
     const fromMesh = meshes.length > 0 ? meshNames[meshes[0]]?.trim() : "";
@@ -83,7 +86,8 @@ export function buildTree(parsed: ParsedTree, fileName: string, fileId: string, 
   };
 
   const build = (node: ParsedTree, id: string): TreeNode => {
-    const name = node.name?.trim() || autoName(node.meshes);
+    // Assemblies never borrow a mesh name: their direct meshes already show it as /m leaves.
+    const name = node.name?.trim() || autoName(node.children.length > 0 ? [] : node.meshes);
     const { children, meshIds } = buildChildren(node, id);
     return { id, name, kind: node.children.length > 0 ? "assembly" : "part", visible: true, children, meshIds };
   };

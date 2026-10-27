@@ -100,6 +100,25 @@ describe("buildTree", () => {
   });
 });
 
+describe("buildTree guards", () => {
+  test("an unnamed assembly does not borrow its direct mesh's name", () => {
+    const root = buildTree(
+      { name: "Top", meshes: [], children: [{ name: "", meshes: [0], children: [{ name: "Leaf", meshes: [1], children: [] }] }] },
+      "t.step",
+      "f5",
+      ["Plate", "LeafMesh"],
+    );
+    const asm = root.children[0].children[0];
+    expect(asm.kind).toBe("assembly");
+    expect(asm.name).toBe("Part 1");
+    expect(asm.children.map((c) => c.name)).toEqual(["Leaf", "Plate"]);
+  });
+
+  test("rejects a fileId containing '/'", () => {
+    expect(() => buildTree({ meshes: [], children: [] }, "x.stl", "a/b")).toThrow();
+  });
+});
+
 describe("model operations", () => {
   function model(): SceneModel {
     return { files: [file("a", occtFixture, occtMeshNames), file("b", { meshes: [0], children: [] })] };

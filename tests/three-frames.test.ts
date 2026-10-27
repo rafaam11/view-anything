@@ -43,16 +43,26 @@ describe("basis", () => {
     expectVec(mul3(basis("yup-lh"), [0, 1, 0]), [0, 0, 1]);
   });
 
-  test("forward axes map to canonical forward (+X)", () => {
-    expectVec(mul3(basis("ros"), [1, 0, 0]), [1, 0, 0]); // REP-103: X forward
-    expectVec(mul3(basis("zup-lh"), [1, 0, 0]), [1, 0, 0]); // Unreal: X forward
-    expectVec(mul3(basis("yup-lh"), [0, 0, 1]), [1, 0, 0]); // Unity: Z forward
-    expectVec(mul3(basis("yup-rh"), [0, 0, 1]), [1, 0, 0]); // glTF: +Z front
+  test("Y-up front (+Z) faces the CAD front-view camera at C -Y", () => {
+    expectVec(mul3(basis("yup-rh"), [0, 0, 1]), [0, -1, 0]); // glTF/SolidWorks front
+    expectVec(mul3(basis("yup-lh"), [0, 0, 1]), [0, -1, 0]); // Unity forward
   });
 
-  test("Unity and Unreal right axes map to canonical right (-Y)", () => {
-    expectVec(mul3(basis("yup-lh"), [1, 0, 0]), [0, -1, 0]);
+  test("Y-up conversion keeps X fixed for RH and mirrors it for Unity LH", () => {
+    expectVec(mul3(basis("yup-rh"), [1, 0, 0]), [1, 0, 0]);
+    // Unity's +X (its right) shows on screen left when its front faces the camera
+    expectVec(mul3(basis("yup-lh"), [1, 0, 0]), [-1, 0, 0]);
+  });
+
+  test("Z-up presets keep X; Unreal mirrors Y", () => {
+    expectVec(mul3(basis("ros"), [1, 0, 0]), [1, 0, 0]);
+    expectVec(mul3(basis("zup-lh"), [1, 0, 0]), [1, 0, 0]);
     expectVec(mul3(basis("zup-lh"), [0, 1, 0]), [0, -1, 0]);
+  });
+
+  test("Y-up bases match the Rx(+90°) literal", () => {
+    expect(basis("yup-rh")).toEqual([1, 0, 0, 0, 0, 1, 0, -1, 0]);
+    expect(basis("yup-lh")).toEqual([-1, 0, 0, 0, 0, 1, 0, -1, 0]);
   });
 
   test("ros and zup-rh are identity, all bases are orthonormal", () => {
@@ -141,8 +151,8 @@ describe("toDisplay / toSource", () => {
   test("convert points between source and display coordinates", () => {
     const p = [1, 2, 3];
     const d = toDisplay(p, "zup-rh", "mm", "yup-rh", "in");
-    // yup-rh (x,y,z) -> canonical (z,x,y); 1in = 25.4mm
-    expectVec(d, [76.2, 25.4, 50.8]);
+    // yup-rh (x,y,z) -> canonical (x,-z,y); 1in = 25.4mm
+    expectVec(d, [25.4, -76.2, 50.8]);
     expectVec(toSource(d, "zup-rh", "mm", "yup-rh", "in"), p);
   });
 

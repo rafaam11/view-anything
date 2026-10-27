@@ -30,13 +30,20 @@ describe("fitDistance", () => {
 });
 
 describe("standardViewDirection", () => {
-  test("Z-up display: top is +Z, front is +X, right is -Y", () => {
+  test("Z-up display follows CAD convention: front -Y, right +X, top +Z", () => {
     expectVec(standardViewDirection("top", "zup-rh"), [0, 0, 1]);
     expectVec(standardViewDirection("bottom", "zup-rh"), [0, 0, -1]);
-    expectVec(standardViewDirection("front", "zup-rh"), [1, 0, 0]);
-    expectVec(standardViewDirection("back", "zup-rh"), [-1, 0, 0]);
-    expectVec(standardViewDirection("right", "zup-rh"), [0, -1, 0]);
-    expectVec(standardViewDirection("left", "zup-rh"), [0, 1, 0]);
+    expectVec(standardViewDirection("front", "zup-rh"), [0, -1, 0]);
+    expectVec(standardViewDirection("back", "zup-rh"), [0, 1, 0]);
+    expectVec(standardViewDirection("right", "zup-rh"), [1, 0, 0]);
+    expectVec(standardViewDirection("left", "zup-rh"), [-1, 0, 0]);
+    const s = 1 / Math.sqrt(3);
+    expectVec(standardViewDirection("iso", "zup-rh"), [s, -s, s]);
+  });
+
+  test("Y-up display: front camera sits on the model's +Z front", () => {
+    expectVec(standardViewDirection("front", "yup-rh"), [0, 0, 1]);
+    expectVec(standardViewDirection("front", "yup-lh"), [0, 0, 1]);
   });
 
   test("top view in any display frame points along that frame's up", () => {
@@ -54,10 +61,19 @@ describe("standardViewDirection", () => {
     }
   });
 
-  test("up vector is display up, except top/bottom which use forward", () => {
+  test("up vector is display up; top uses +Y, bottom -Y (canonical)", () => {
     expectVec(standardViewUp("front", "zup-rh"), [0, 0, 1]);
     expectVec(standardViewUp("iso", "yup-rh"), [0, 1, 0]);
-    expectVec(standardViewUp("top", "zup-rh"), [1, 0, 0]);
-    expectVec(standardViewUp("bottom", "zup-rh"), [1, 0, 0]);
+    expectVec(standardViewUp("top", "zup-rh"), [0, 1, 0]);
+    expectVec(standardViewUp("bottom", "zup-rh"), [0, -1, 0]);
+  });
+});
+
+describe("fitDistance guards", () => {
+  test("clamps aspect to a small positive minimum and radius to >= 0", () => {
+    expect(Number.isFinite(fitDistance(1, 45, 0))).toBe(true);
+    expect(fitDistance(1, 45, 0)).toBeCloseTo(fitDistance(1, 45, 1e-3), 9);
+    expect(fitDistance(1, 45, -2)).toBeCloseTo(fitDistance(1, 45, 1e-3), 9);
+    expect(fitDistance(-5, 45, 1)).toBe(0);
   });
 });

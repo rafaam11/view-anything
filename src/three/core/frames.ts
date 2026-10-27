@@ -7,22 +7,24 @@
  * Matrix layout: every matrix here is COLUMN-MAJOR, exactly like three.js
  * `Matrix3.fromArray` / `Matrix4.fromArray` expect (element [col * n + row]).
  *
- * Canonical frame C: Z-up, right-handed, X forward, Y left (ROS REP-103 axes).
+ * Canonical frame C: Z-up, right-handed (CAD convention). Standard views
+ * look at C like a CAD tool: front camera at -Y looking +Y (X right, Z up).
  * `basis(p)` maps preset coordinates to C; its columns are the images of the
- * preset's e_x, e_y, e_z expressed in C. In C: forward = (1,0,0),
- * left = (0,1,0), right = (0,-1,0), up = (0,0,1).
+ * preset's e_x, e_y, e_z expressed in C.
  *
- * - zup-rh (CATIA/NX/Creo/STEP): X forward, Y left, Z up -> identity.
- * - ros (REP-103): X forward, Y left, Z up -> identity (default unit m).
- * - yup-rh (glTF/Maya/SolidWorks): +Y up, +Z front, so +X = Y x Z = left.
- *   Columns: e_x -> left (0,1,0), e_y -> up (0,0,1), e_z -> forward (1,0,0).
- *   det = +1.
- * - yup-lh (Unity): X right, Y up, Z forward.
- *   Columns: e_x -> right (0,-1,0), e_y -> up (0,0,1), e_z -> forward (1,0,0).
- *   det = -1.
- * - zup-lh (Unreal): X forward, Y right, Z up.
- *   Columns: e_x -> forward (1,0,0), e_y -> right (0,-1,0), e_z -> up (0,0,1).
- *   det = -1.
+ * - zup-rh (CATIA/NX/Creo/STEP): identity.
+ * - ros (REP-103: X forward, Y left, Z up): identity (default unit m). A ROS
+ *   model's forward (+X) therefore faces the right-view camera (accepted).
+ * - yup-rh (glTF/Maya/SolidWorks): standard Y-up -> Z-up conversion that keeps
+ *   X fixed, Rx(+90°) (Blender/CAD). Columns: e_x -> (1,0,0), e_y -> (0,0,1),
+ *   e_z -> (0,-1,0). The model's front (+Z) lands on C -Y, facing the front
+ *   view camera. det = +1.
+ * - yup-lh (Unity: X right, Y up, Z forward, LH): Unity forward (+Z) -> C -Y
+ *   so it faces the front camera, up -> +Z. Seen from that camera the model's
+ *   own right appears on screen left, so e_x -> (-1,0,0).
+ *   Columns: (-1,0,0), (0,0,1), (0,-1,0). det = -1.
+ * - zup-lh (Unreal: X forward, Y right, Z up, LH): X kept, Y mirrored.
+ *   Columns: (1,0,0), (0,-1,0), (0,0,1). det = -1.
  *
  * All bases are signed permutations (orthonormal), so the inverse is the
  * transpose.
@@ -37,17 +39,12 @@ export const FRAME_PRESETS: readonly FramePreset[] = ["zup-rh", "yup-rh", "ros",
 /** Millimetres per unit. */
 export const UNIT_MM: Readonly<Record<Unit, number>> = { mm: 1, cm: 10, m: 1000, in: 25.4 };
 
-const FORWARD = [1, 0, 0];
-const LEFT = [0, 1, 0];
-const RIGHT = [0, -1, 0];
-const UP = [0, 0, 1];
-
 const BASES: Record<FramePreset, number[]> = {
-  "zup-rh": [...FORWARD, ...LEFT, ...UP],
-  ros: [...FORWARD, ...LEFT, ...UP],
-  "yup-rh": [...LEFT, ...UP, ...FORWARD],
-  "yup-lh": [...RIGHT, ...UP, ...FORWARD],
-  "zup-lh": [...FORWARD, ...RIGHT, ...UP],
+  "zup-rh": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+  ros: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+  "yup-rh": [1, 0, 0, 0, 0, 1, 0, -1, 0],
+  "yup-lh": [-1, 0, 0, 0, 0, 1, 0, -1, 0],
+  "zup-lh": [1, 0, 0, 0, -1, 0, 0, 0, 1],
 };
 
 /** Column-major 3x3 mapping preset coordinates to the canonical frame C. */
@@ -113,7 +110,8 @@ export function applyMatrix4(m: number[], p: Vec3): number[] {
 
 /**
  * Column-major 4x4 mapping display-frame coordinates to three.js world
- * (Y-up RH): B_yup⁻¹·B_display. Default display zup-rh sends (0,0,1) to (0,1,0).
+ * (Y-up RH): B_yup⁻¹·B_display. Default display zup-rh sends (0,0,1) to (0,1,0)
+ * and C -Y (front) to world +Z, where three's default camera sits.
  */
 export function displayRootMatrix(display: FramePreset): number[] {
   return toMatrix4(multiply3(transpose3(BASES["yup-rh"]), BASES[display]));
