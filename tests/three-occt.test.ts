@@ -185,3 +185,29 @@ test("mapOcctResult: big meshes are split into draw chunks", () => {
 test("mapOcctResult: unsuccessful result throws", () => {
   expect(() => mapOcctResult({ success: false, root: { name: "", meshes: [], children: [] }, meshes: [] })).toThrow();
 });
+
+test("readCad: a source holder is emptied right after occt read it (bytes can be GC'd during mapping)", () => {
+  const source: { bytes: Uint8Array | null } = { bytes: new Uint8Array(4) };
+  let duringMap: Uint8Array | null | undefined;
+  const mesh = {
+    attributes: {
+      position: {
+        get array() {
+          duringMap = source.bytes;
+          return [0, 0, 0, 1, 0, 0, 0, 1, 0];
+        },
+      },
+    },
+  };
+  const ok: OcctResult = { success: true, root: { name: "", meshes: [0], children: [] }, meshes: [mesh] };
+  const fake: OcctModule = {
+    ReadStepFile: (c) => {
+      expect(c).toHaveLength(4);
+      return ok;
+    },
+    ReadIgesFile: () => ok,
+  };
+  readCad(fake, "step", source, occtParams(4));
+  expect(duringMap).toBeNull();
+  expect(source.bytes).toBeNull();
+});

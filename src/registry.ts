@@ -1,6 +1,14 @@
 import { THREE_D_EXTENSIONS } from "./three/formats";
 
-export type Viewer = { mount(el: HTMLElement, path: string): Promise<void> };
+export type Viewer = {
+  mount(el: HTMLElement, path: string): Promise<void>;
+  /**
+   * Files dropped (or Ctrl+O-picked) onto a window that shows this viewer. Returns the paths it
+   * did not take; those open in new windows. `newWindow` (Shift-drop): take nothing. Viewers
+   * without it never take files (md: every file opens a new window).
+   */
+  accept?(paths: string[], opts: { newWindow: boolean }): string[];
+};
 
 const viewers: Record<string, () => Promise<Viewer>> = {};
 const loadMd = () => import("./md/viewer").then((m) => m.default);

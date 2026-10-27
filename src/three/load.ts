@@ -49,6 +49,8 @@ export function loadMeshFile(
     }
     const id = 1;
     let heard = false;
+    /** Set once the worker reports tessellation (with the file size): only then is a crash retryable. */
+    let tessellatingBytes: number | null = null;
     let settled = false;
     const finish = () => {
       settled = true;
@@ -70,6 +72,7 @@ export function loadMeshFile(
       if (settled || msg.id !== id) return;
       switch (msg.type) {
         case "progress":
+          if (msg.phase === "tessellate") tessellatingBytes = msg.byteLength ?? null;
           onProgress(msg.phase, msg.loaded, msg.total);
           break;
         case "need-buffer": {
@@ -92,16 +95,18 @@ export function loadMeshFile(
           resolve(msg.file);
           break;
         case "error":
-          fail(msg.retryable ? new RetryableCadError(msg.message, msg.byteLength) : new Error(msg.message));
+          fail(msg.retryable ? new RetryableCadError(msg.message, msg.byteLength, coarser) : new Error(msg.message));
           break;
       }
     };
     worker.onerror = (e: ErrorEvent) => {
       e.preventDefault();
       if (heard) {
-        // A worker that dies mid-tessellation has most likely run out of memory.
+        // A worker that dies mid-tessellation has most likely run out of memory: a coarser
+        // tessellation may fit. Dying while reading or parsing is not helped by that.
         const message = e.message || "worker failed";
-        return fail(isCadFormat(format) ? new RetryableCadError(message) : new Error(message));
+        const retryable = isCadFormat(format) && tessellatingBytes !== null;
+        return fail(retryable ? new RetryableCadError(message, tessellatingBytes!, coarser) : new Error(message));
       }
       // The worker never started (e.g. blocked by CSP): parse on this thread instead.
       finish();

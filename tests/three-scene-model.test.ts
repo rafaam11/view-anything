@@ -56,11 +56,12 @@ describe("buildTree", () => {
     const asm = root.children[0];
     expect(asm.id).toBe("f1/0");
     expect(asm.kind).toBe("assembly");
-    expect(asm.children.map((c) => c.id)).toEqual(["f1/0/0", "f1/0/1", "f1/0/2"]);
-    // named node keeps its name; empty name with empty mesh name -> Part N; no meshes -> Part N
-    expect(asm.children.map((c) => c.name)).toEqual(["Bolt", "Part 1", "Part 2"]);
-    expect(asm.children.map((c) => c.kind)).toEqual(["part", "part", "part"]);
-    expect(asm.children.map((c) => c.meshIds)).toEqual([[0], [1], []]);
+    // the empty third child (no meshes, no children) is pruned
+    expect(asm.children.map((c) => c.id)).toEqual(["f1/0/0", "f1/0/1"]);
+    // named node keeps its name; empty name with empty mesh name -> Part N
+    expect(asm.children.map((c) => c.name)).toEqual(["Bolt", "Part 1"]);
+    expect(asm.children.map((c) => c.kind)).toEqual(["part", "part"]);
+    expect(asm.children.map((c) => c.meshIds)).toEqual([[0], [1]]);
     // empty node name falls back to the mesh name
     expect(root.children[1]).toMatchObject({ id: "f1/1", name: "Nut", kind: "part", meshIds: [2] });
   });
@@ -97,6 +98,41 @@ describe("buildTree", () => {
       ["f4/0/m0", "Plate", "mesh", [0]],
       ["f4/0/m1", "Part 1", "mesh", [1]],
     ]);
+  });
+});
+
+describe("buildTree pruning", () => {
+  test("empty nodes and subtrees with no meshes never become Part N leaves", () => {
+    const root = buildTree(
+      {
+        name: "",
+        meshes: [],
+        children: [
+          { name: "", meshes: [], children: [] },
+          { name: "Hollow", meshes: [], children: [{ name: "", meshes: [], children: [] }] },
+          { name: "", meshes: [0], children: [] },
+          { name: "Asm", meshes: [], children: [{ name: "", meshes: [], children: [] }, { name: "", meshes: [1], children: [] }] },
+        ],
+      },
+      "p.step",
+      "f6",
+      ["", ""],
+    );
+    // ids keep the source index (stable), names count only kept nodes
+    expect(root.children.map((c) => [c.id, c.name, c.kind])).toEqual([
+      ["f6/2", "Part 1", "part"],
+      ["f6/3", "Asm", "assembly"],
+    ]);
+    expect(root.children[1].children.map((c) => [c.id, c.name])).toEqual([["f6/3/1", "Part 2"]]);
+  });
+
+  test("an assembly whose children are all empty becomes a part with its own meshes", () => {
+    const root = buildTree({ name: "Top", meshes: [0], children: [{ name: "", meshes: [], children: [] }] }, "t.step", "f7", ["Plate"]);
+    expect(root.children[0]).toMatchObject({ id: "f7/0", name: "Top", kind: "part", meshIds: [0], children: [] });
+  });
+
+  test("a file with nothing renderable has no children", () => {
+    expect(buildTree({ name: "Empty", meshes: [], children: [] }, "e.step", "f8").children).toEqual([]);
   });
 });
 

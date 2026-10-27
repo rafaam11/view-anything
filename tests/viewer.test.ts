@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, expect, test, vi } from "vitest";
+import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 
 const disk = new Map<string, Uint8Array>();
 /** When set, the next readFile waits for it (simulates a slow focus re-read). */
@@ -55,6 +55,11 @@ async function mount(path: string, text: string) {
   return { el, toggle, article, editorHost };
 }
 
+beforeAll(async () => {
+  // Preload the viewer and the (mocked) editor so the first test does not pay for module loading.
+  await Promise.all([import("../src/md/viewer"), import("../src/md/editor")]);
+});
+
 beforeEach(() => {
   gate = null;
 });
@@ -69,9 +74,11 @@ test("an edit toggle during a focus re-read is queued, not dropped", async () =>
   await settle();
   expect(v.editorHost.hidden).toBe(true);
   release();
-  await settle();
-  expect(v.editorHost.hidden).toBe(false);
-  expect(v.toggle.textContent).toBe("읽기");
+  // The queued toggle then lazy-loads the editor module: wait for the outcome, not a tick count.
+  await vi.waitFor(() => {
+    expect(v.editorHost.hidden).toBe(false);
+    expect(v.toggle.textContent).toBe("읽기");
+  });
 });
 
 test("leaving edit mode onto a file that became read-only keeps the read-only state", async () => {

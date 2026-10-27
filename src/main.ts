@@ -1,12 +1,22 @@
 import "./styles.css";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { resolveViewer } from "./registry";
+import { resolveViewer, type Viewer } from "./registry";
 import { platform } from "./platform";
 import { applyTheme, currentMode, cycleTheme } from "./theme";
-import { isOpenKey, routeOpen } from "./open-route";
+import { isOpenKey, routeDrop, type WindowKind } from "./open-route";
+import { isThreeD } from "./three/formats";
 
 const app = document.getElementById("app")!;
-const file = new URLSearchParams(location.search).get("file");
+let file = new URLSearchParams(location.search).get("file");
+/** What the window shows; decides where dropped and picked files go. */
+let kind: WindowKind = file ? kindOf(file) : "empty";
+/** The mounted viewer (null while mounting, or when the file could not be shown). */
+let viewer: Viewer | null = null;
+
+function kindOf(path: string): WindowKind {
+  // Anything that is not a 3D model (md, unsupported, ...) keeps the v0.1 rule: new windows.
+  return isThreeD(path) ? "3d" : "md";
+}
 
 function message(title: string, hint?: string) {
   const box = document.createElement("div");
@@ -36,25 +46,66 @@ async function show() {
     return;
   }
   try {
-    const viewer = await load();
-    await viewer.mount(app, file);
+    const v = await load();
+    await v.mount(app, file);
+    viewer = v;
   } catch (e) {
     message("파일을 열 수 없습니다", String(e));
   }
 }
 
-function openPaths(paths: string[]) {
-  const { here, windows } = routeOpen(file, paths);
-  for (const p of windows) void platform.openWindow(p).catch((e) => platform.alert(String(e)).catch(() => {}));
-  if (here) location.search = "?file=" + encodeURIComponent(here);
+/** Settles once the current file is mounted (or failed to). */
+let ready = show();
+
+function openWindows(paths: string[]) {
+  for (const p of paths) void platform.openWindow(p).catch((e) => platform.alert(String(e)).catch(() => {}));
 }
+
+async function openPaths(paths: string[], shift: boolean) {
+  const route = routeDrop(kind, paths, shift);
+  const windows = [...route.windows];
+  if (route.here) {
+    if (kindOf(route.here) === "3d") {
+      // An empty window becomes a 3D window in place (no reload), so the rest can be appended.
+      file = route.here;
+      kind = "3d";
+      history.replaceState(history.state, "", "?file=" + encodeURIComponent(route.here));
+      ready = show();
+    } else {
+      openWindows(windows);
+      location.search = "?file=" + encodeURIComponent(route.here);
+      return;
+    }
+  }
+  if (route.append.length > 0) {
+    await ready;
+    windows.push(...(viewer?.accept?.(route.append, { newWindow: false }) ?? route.append));
+  }
+  openWindows(windows);
+}
+
+/** Shift as the drop happened: the OS state where available, else the last key events seen. */
+let shiftHeld = false;
+async function shiftState(): Promise<boolean> {
+  try {
+    const os = await platform.modifierShift();
+    if (os !== null) return os;
+  } catch {
+    // fall through to the tracked state
+  }
+  return shiftHeld;
+}
+const trackShift = (e: KeyboardEvent) => (shiftHeld = e.shiftKey);
+window.addEventListener("keydown", trackShift, true);
+window.addEventListener("keyup", trackShift, true);
+window.addEventListener("blur", () => (shiftHeld = false));
 
 let picking = false; // one dialog at a time
 async function pickAndOpen() {
   if (picking) return;
   picking = true;
   try {
-    openPaths(await platform.pickFiles());
+    await openPaths(await platform.pickFiles(), false);
   } catch (e) {
     await platform.alert(String(e)).catch(() => {});
   } finally {
@@ -81,8 +132,10 @@ window.addEventListener(
 
 getCurrentWebview()
   .onDragDropEvent((ev) => {
-    if (ev.payload.type === "drop") openPaths(ev.payload.paths);
+    if (ev.payload.type !== "drop") return;
+    const paths = ev.payload.paths;
+    void shiftState()
+      .then((shift) => openPaths(paths, shift))
+      .catch((e) => platform.alert(String(e)).catch(() => {}));
   })
   .catch(() => {});
-
-void show();

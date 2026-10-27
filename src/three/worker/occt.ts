@@ -45,11 +45,27 @@ export async function loadOcct(wasmUrl?: string): Promise<OcctModule> {
 
 const LABEL: Record<CadFormat, string> = { step: "STEP", iges: "IGES" };
 
-/** Tessellate a STEP/IGES file (whole file in `content`) into transferable meshes. */
-export function readCad(occt: OcctModule, format: CadFormat, content: Uint8Array, params: OcctParams, maxTriangles = CHUNK_TRIANGLES): ParsedFile {
-  const result = format === "step" ? occt.ReadStepFile(content, params) : occt.ReadIgesFile(content, params);
+/** The file bytes, handed over so readCad can drop them once occt has its own copy. */
+export interface CadSource {
+  bytes: Uint8Array | null;
+}
+
+/**
+ * Tessellate a STEP/IGES file (whole file in `content`) into transferable meshes. Given a
+ * CadSource, its `bytes` are cleared as soon as occt has read them, so (with no other reference
+ * left) the file buffer can be collected while the result is converted.
+ */
+export function readCad(occt: OcctModule, format: CadFormat, content: Uint8Array | CadSource, params: OcctParams, maxTriangles = CHUNK_TRIANGLES): ParsedFile {
+  const result = readWith(occt, format, content, params);
+  if (!(content instanceof Uint8Array)) content.bytes = null;
   if (!result?.success) throw new Error(`${LABEL[format]} 파일을 해석하지 못했습니다`);
   return mapOcctResult(result, maxTriangles);
+}
+
+function readWith(occt: OcctModule, format: CadFormat, content: Uint8Array | CadSource, params: OcctParams): OcctResult {
+  const bytes = content instanceof Uint8Array ? content : content.bytes;
+  if (!bytes) throw new Error("readCad: source bytes were already released");
+  return format === "step" ? occt.ReadStepFile(bytes, params) : occt.ReadIgesFile(bytes, params);
 }
 
 /**

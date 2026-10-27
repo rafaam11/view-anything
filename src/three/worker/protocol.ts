@@ -25,8 +25,11 @@ export function isCadFormat(format: string): format is CadFormat {
  * or occt gave up on the file. The UI offers "정밀도를 낮춰 다시 시도".
  */
 export class RetryableCadError extends Error {
-  /** `byteLength`: the file size, when known (decides whether a coarser tier is left). */
-  constructor(message: string, readonly byteLength?: number) {
+  /**
+   * `byteLength`: the file size, when known; `coarser`: the retries the failed attempt was made
+   * with. Together they decide whether a coarser tier is left (no size known: no retry).
+   */
+  constructor(message: string, readonly byteLength?: number, readonly coarser = 0) {
     super(message);
     this.name = "RetryableCadError";
   }
@@ -63,9 +66,12 @@ export type ToWorker =
   | { type: "parse"; id: number; url: string; format: WorkerFormat; coarser?: number }
   | { type: "buffer"; id: number; format: WorkerFormat; buffer: ArrayBuffer; coarser?: number };
 
-/** Worker -> UI. `need-buffer`: the worker's fetch failed; the UI should read the file and send `buffer`. */
+/**
+ * Worker -> UI. `need-buffer`: the worker's fetch failed; the UI should read the file and send
+ * `buffer`. The `tessellate` progress carries the file's `byteLength`.
+ */
 export type FromWorker =
-  | { type: "progress"; id: number; phase: Phase; loaded: number; total: number }
+  | { type: "progress"; id: number; phase: Phase; loaded: number; total: number; byteLength?: number }
   | { type: "need-buffer"; id: number; message: string }
   | { type: "done"; id: number; file: ParsedFile }
   | { type: "error"; id: number; message: string; retryable?: boolean; byteLength?: number };

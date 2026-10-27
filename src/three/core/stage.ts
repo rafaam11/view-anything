@@ -156,8 +156,11 @@ export class Stage {
     for (let b = 0; b < batches.length; b++) {
       if (this.disposed || signal?.aborted) return;
       for (const i of batches[b]) {
-        objects[i].visible = true;
-        delete objects[i].userData.vaPending;
+        const o = objects[i];
+        // Hidden by the user while pending (setObjectVisible): stays hidden, just no longer pending.
+        o.visible = o.userData.vaHidden !== true;
+        delete o.userData.vaPending;
+        delete o.userData.vaHidden;
       }
       if (b === 0) await this.renderer.compileAsync(this.scene, this.camera);
       if (this.disposed || signal?.aborted) return;
@@ -165,6 +168,19 @@ export class Stage {
       onStep?.(b + 1, batches.length);
       await nextFrame();
     }
+  }
+
+  /**
+   * Show or hide an object for the user (scene panel). An object still waiting for `reveal` keeps
+   * its pending state; `reveal` then applies the wish instead of showing it unconditionally.
+   */
+  setObjectVisible(object: Object3D, visible: boolean): void {
+    if (object.userData.vaPending) {
+      if (visible) delete object.userData.vaHidden;
+      else object.userData.vaHidden = true;
+    } else object.visible = visible;
+    this.updateBounds();
+    this.requestRender();
   }
 
   remove(object: Object3D): void {
@@ -180,7 +196,7 @@ export class Stage {
     const part = new Box3();
     // Visible content plus objects still waiting for upload (hidden only because they are pending).
     const visit = (o: Object3D) => {
-      if (!o.visible && !o.userData.vaPending) return;
+      if (!o.visible && !(o.userData.vaPending && !o.userData.vaHidden)) return;
       const g = (o as Object3D & { geometry?: BufferGeometry }).geometry;
       if (g) {
         if (!g.boundingBox) g.computeBoundingBox();

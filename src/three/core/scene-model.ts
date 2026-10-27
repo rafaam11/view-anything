@@ -58,7 +58,9 @@ export interface SceneModel {
  * Build the file's tree. An unnamed root is merged into the file node; a
  * named root becomes the file node's single child. Empty names fall back to
  * the first mesh's name (leaf nodes only), then to `Part N` (N counts per
- * file, pre-order). `fileId` must not contain '/' (ids are '/'-joined paths).
+ * file, pre-order). Nodes with no meshes anywhere below them are pruned; ids
+ * keep the source child index, so pruning never renumbers the rest.
+ * `fileId` must not contain '/' (ids are '/'-joined paths).
  */
 export function buildTree(parsed: ParsedTree, fileName: string, fileId: string, meshNames: string[] = []): TreeNode {
   if (fileId.includes("/")) throw new Error(`fileId must not contain '/': ${fileId}`);
@@ -68,9 +70,14 @@ export function buildTree(parsed: ParsedTree, fileName: string, fileId: string, 
     return fromMesh || `Part ${++partCounter}`;
   };
 
+  // Kept children with their source index (ids use it, so they stay stable when siblings are pruned).
+  const live = (node: ParsedTree): [ParsedTree, number][] =>
+    node.children.map((child, i): [ParsedTree, number] => [child, i]).filter(([child]) => !isEmpty(child));
+
   const buildChildren = (node: ParsedTree, id: string): { children: TreeNode[]; meshIds: number[] } => {
-    const children = node.children.map((child, i) => build(child, `${id}/${i}`));
-    if (node.children.length === 0) return { children, meshIds: [...node.meshes] };
+    const kept = live(node);
+    const children = kept.map(([child, i]) => build(child, `${id}/${i}`));
+    if (kept.length === 0) return { children, meshIds: [...node.meshes] };
     // Assembly with its own meshes: expose each as a toggleable mesh leaf.
     node.meshes.forEach((meshId, k) => {
       children.push({
@@ -87,16 +94,22 @@ export function buildTree(parsed: ParsedTree, fileName: string, fileId: string, 
 
   const build = (node: ParsedTree, id: string): TreeNode => {
     // Assemblies never borrow a mesh name: their direct meshes already show it as /m leaves.
-    const name = node.name?.trim() || autoName(node.children.length > 0 ? [] : node.meshes);
+    const assembly = live(node).length > 0;
+    const name = node.name?.trim() || autoName(assembly ? [] : node.meshes);
     const { children, meshIds } = buildChildren(node, id);
-    return { id, name, kind: node.children.length > 0 ? "assembly" : "part", visible: true, children, meshIds };
+    return { id, name, kind: assembly ? "assembly" : "part", visible: true, children, meshIds };
   };
 
   const merged = !parsed.name?.trim();
   const { children, meshIds } = merged
     ? buildChildren(parsed, fileId)
-    : { children: [build(parsed, `${fileId}/0`)], meshIds: [] };
+    : { children: isEmpty(parsed) ? [] : [build(parsed, `${fileId}/0`)], meshIds: [] };
   return { id: fileId, name: fileName, kind: "file", visible: true, children, meshIds };
+}
+
+/** A node with no meshes anywhere below it: pruned from the panel tree (no empty "Part N" rows). */
+function isEmpty(node: ParsedTree): boolean {
+  return node.meshes.length === 0 && node.children.every(isEmpty);
 }
 
 function findIn(node: TreeNode, id: string): TreeNode | undefined {

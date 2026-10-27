@@ -2,10 +2,13 @@
 // registry, so three.js never reaches the entry or md chunks.
 import "./core/three.css";
 import type { Viewer } from "../registry";
-import { formatOf } from "./formats";
+import { formatOf, isThreeD } from "./formats";
+import { platform } from "../platform";
+import { windowTitle } from "../open-route";
 import { Stage, WebGLUnavailableError } from "./core/stage";
 import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
-import { buildTree, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
+import { buildTree, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
+import { ScenePanel } from "./core/panel";
 import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
 import { canCoarsen } from "./worker/cad-params";
@@ -70,6 +73,9 @@ export interface BannerAction {
   run: () => void;
 }
 
+/** Longest banner text, in characters (longer messages are cut with "…"). */
+const BANNER_MAX = 300;
+
 export class Banner {
   readonly root = el("div", "va3d-banner");
   private readonly text = el("span");
@@ -96,7 +102,8 @@ export class Banner {
 
   /** Show `message`, optionally with one action button (e.g. a retry) that also closes the banner. */
   show(message: string, action?: BannerAction): void {
-    this.text.textContent = message;
+    // Worker and occt errors can be long (stack-like dumps): the banner keeps the start.
+    this.text.textContent = message.length > BANNER_MAX ? message.slice(0, BANNER_MAX) + "…" : message;
     this.onAction = action?.run ?? null;
     if (action) {
       this.action.textContent = action.label;
@@ -106,14 +113,32 @@ export class Banner {
   }
 }
 
-class ThreeViewer {
+/** Whether a "정밀도를 낮춰 다시 시도" retry would really tessellate more coarsely. */
+export function canRetryCoarser(e: unknown): boolean {
+  return e instanceof RetryableCadError && e.byteLength !== undefined && canCoarsen(e.byteLength, e.coarser);
+}
+
+/** A file from the moment it is queued until it is loaded, failed or removed. */
+interface Entry {
+  id: string;
+  path: string;
+  name: string;
+  controller: AbortController;
+}
+
+export class ThreeViewer {
   readonly model: SceneModel = { files: [] };
   readonly objects = new Map<string, BuiltFile>();
   private nextId = 1;
   private readonly progress = new Progress();
   private readonly banner = new Banner();
+  private readonly panel: ScenePanel;
   /** Plain-text status line (bottom left): triangle count and load time of the last file. */
   private readonly status = el("div", "va3d-status");
+  /** Queued or loading files (not yet settled), by file id. */
+  private readonly entries = new Map<string, Entry>();
+  /** Files load one at a time (one parse worker, one upload), in the order they were added. */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(readonly stage: Stage, root: HTMLElement) {
     const toolbar = el("div", "va3d-toolbar");
@@ -126,8 +151,9 @@ class ThreeViewer {
       b.addEventListener("click", () => this.run(action));
       toolbar.append(b);
     }
+    this.panel = new ScenePanel({ toggle: (id, v) => this.setVisible(id, v), remove: (id) => this.remove(id) });
     this.status.setAttribute("role", "status");
-    root.append(toolbar, this.progress.root, this.banner.root, this.status);
+    root.append(this.panel.root, toolbar, this.progress.root, this.banner.root, this.status);
     window.addEventListener("keydown", (e) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
@@ -143,18 +169,76 @@ class ThreeViewer {
     else this.stage.setView(action.view);
   }
 
+  /** Take the 3D files of `paths` (appended to the scene); return the rest. `newWindow`: take nothing. */
+  accept(paths: string[], opts: { newWindow: boolean }): string[] {
+    if (opts.newWindow) return [...paths];
+    for (const p of paths) if (isThreeD(p)) void this.load(p);
+    return paths.filter((p) => !isThreeD(p));
+  }
+
   /**
-   * Load one file into the scene; failures go to the banner. Returns the file id, or null.
+   * Queue one file for loading (shown in the panel right away); failures go to the banner.
+   * Resolves with the file id once it is on screen, or null (failed, removed or aborted).
    * `coarser`: STEP/IGES "정밀도를 낮춰 다시 시도" retries so far.
    */
-  async load(path: string, signal?: AbortSignal, coarser = 0): Promise<string | null> {
-    const name = baseName(path);
+  load(path: string, coarser = 0): Promise<string | null> {
+    const entry: Entry = { id: `f${this.nextId++}`, path, name: baseName(path), controller: new AbortController() };
+    this.entries.set(entry.id, entry);
+    this.panel.addLoading(entry.id, entry.name);
+    this.updateTitle();
+    const run = this.queue.then(() => this.loadEntry(entry, coarser));
+    this.queue = run.catch(() => {});
+    return run;
+  }
+
+  /** Remove a file: abort it if still queued or loading, dispose its objects, drop it from the panel. */
+  remove(fileId: string): void {
+    this.entries.get(fileId)?.controller.abort();
+    this.discard(fileId);
+  }
+
+  /** Abort every queued or loading file. */
+  abortAll(): void {
+    for (const e of this.entries.values()) e.controller.abort();
+  }
+
+  setVisible(nodeId: string, visible: boolean): void {
+    if (!setVisible(this.model, nodeId, visible)) return;
+    const fileId = nodeId.split("/")[0];
+    const o = this.objects.get(fileId)?.nodes.get(nodeId);
+    if (o) this.stage.setObjectVisible(o, visible);
+  }
+
+  private discard(fileId: string): void {
+    const built = this.objects.get(fileId);
+    if (built) {
+      this.stage.remove(built.group);
+      disposeObject(built.group);
+      this.objects.delete(fileId);
+    }
+    removeFile(this.model, fileId);
+    this.panel.removeFile(fileId);
+    if (this.model.files.length === 0) this.status.textContent = "";
+    this.updateTitle();
+  }
+
+  private updateTitle(): void {
+    void platform.setWindowTitle(windowTitle(this.panel.names())).catch(() => {});
+  }
+
+  private async loadEntry(entry: Entry, coarser: number): Promise<string | null> {
+    const { id, path, name } = entry;
+    const signal = entry.controller.signal;
+    if (signal.aborted) {
+      this.settle(entry);
+      return null;
+    }
     const format = formatOf(path);
-    const id = `f${this.nextId++}`;
     const started = performance.now();
     let workerUsed = true;
-    const onProgress = (phase: Phase, loaded: number, total: number) =>
-      this.progress.show(name, phase, loaded, total, workerUsed ? undefined : "워커 미사용");
+    const onProgress = (phase: Phase, loaded: number, total: number) => {
+      if (!signal.aborted) this.progress.show(name, phase, loaded, total, workerUsed ? undefined : "워커 미사용");
+    };
     try {
       let root: TreeNode;
       let built: BuiltFile;
@@ -171,29 +255,46 @@ class ThreeViewer {
         this.banner.show(`${name}: 지원하지 않는 형식입니다.`);
         return null;
       }
-      if (signal?.aborted) {
+      if (signal.aborted) {
         disposeObject(built.group);
         return null;
       }
       const file: SceneFile = { id, path, name, format, sourceFrame: "as-is", sourceUnit: "as-is", root };
       this.model.files.push(file);
       this.objects.set(id, built);
+      this.panel.addFile(file);
       // Hidden until uploaded batch by batch; fit first so every batch lands in view.
       this.stage.add(built.group, built.renderables);
       if (this.model.files.length === 1) this.stage.fitAll("iso");
+      else this.stage.fitAll();
       await this.stage.reveal(built.renderables, renderableSizes(built.renderables), (k, n) => onProgress("upload", k, n), signal);
+      if (signal.aborted) {
+        // Removed (or aborted) mid-upload: nothing of it may stay on screen or in memory.
+        this.discard(id);
+        return null;
+      }
       this.status.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
       return id;
     } catch (e) {
-      if (isAbort(e)) return null;
-      const retry = e instanceof RetryableCadError && (e.byteLength === undefined || canCoarsen(e.byteLength, coarser));
+      this.discard(id);
+      if (isAbort(e) || signal.aborted) return null;
       this.banner.show(
         describeLoadError(name, e),
-        retry ? { label: "정밀도를 낮춰 다시 시도", run: () => void this.load(path, signal, coarser + 1) } : undefined,
+        canRetryCoarser(e) ? { label: "정밀도를 낮춰 다시 시도", run: () => void this.load(path, coarser + 1) } : undefined,
       );
       return null;
     } finally {
-      this.progress.hide();
+      this.settle(entry);
+    }
+  }
+
+  /** The entry is done: forget it; a file that never made it into the scene leaves the panel. */
+  private settle(entry: Entry): void {
+    this.entries.delete(entry.id);
+    this.progress.hide();
+    if (!this.objects.has(entry.id)) {
+      this.panel.removeFile(entry.id);
+      this.updateTitle();
     }
   }
 }
@@ -210,6 +311,9 @@ function showNotice(el: HTMLElement, title: string, hint: string): void {
   el.replaceChildren(box);
 }
 
+/** The window's 3D viewer once mounted (one per window). */
+let current: ThreeViewer | null = null;
+
 const viewer: Viewer = {
   async mount(host: HTMLElement, path: string): Promise<void> {
     const root = el("div", "va3d");
@@ -225,7 +329,11 @@ const viewer: Viewer = {
       return;
     }
     const v = new ThreeViewer(stage, root);
+    current = v;
     await v.load(path);
+  },
+  accept(paths: string[], opts: { newWindow: boolean }): string[] {
+    return current ? current.accept(paths, opts) : [...paths];
   },
 };
 

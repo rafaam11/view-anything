@@ -98,3 +98,43 @@
   pointer-events: none;
   user-select: text;
 }
+
+/* Scene panel (left, collapsible). */
+.va3d-panel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  bottom: 28px;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.va3d-panel.collapsed { bottom: auto; width: auto; }
+.va3d-panel button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; border-radius: 3px; }
+.va3d-panel button:hover { background: var(--border); }
+.va3d-panel-head { display: flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; border-bottom: 1px solid var(--border); }
+.va3d-panel.collapsed .va3d-panel-head { border-bottom: 0; }
+.va3d-panel-toggle { padding: 2px 6px; color: var(--muted) !important; }
+.va3d-panel-title { color: var(--muted); font-size: 0.75rem; }
+.va3d-tree { flex: 1; overflow: auto; padding: 2px 0; }
+.va3d-row { display: flex; align-items: center; gap: 2px; padding-right: 4px; min-height: 22px; white-space: nowrap; }
+.va3d-row:hover { background: color-mix(in srgb, var(--border) 45%, transparent); }
+.va3d-twisty, .va3d-twisty-space { flex: none; width: 18px; padding: 0 !important; text-align: center; color: var(--muted) !important; }
+.va3d-eye { flex: none; width: 20px; padding: 0 !important; font-size: 0.7rem; }
+.va3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.va3d-node[data-depth="0"] > .va3d-row > .va3d-name { font-weight: 600; }
+.va3d-remove { flex: none; padding: 0 5px !important; color: var(--muted) !important; }
+.va3d-remove:hover { color: #d1242f !important; }
+.va3d-loading { flex: none; color: var(--muted); font-size: 0.75rem; }
+.va3d-node.loading > .va3d-row > .va3d-name { color: var(--muted); }
+/* Hidden nodes, and everything under them, are dimmed. */
+.va3d-node.off .va3d-name { opacity: 0.45; }
+.va3d-node.off .va3d-eye { color: var(--muted); }
+
+/* The banner starts right of the panel. */
+.va3d-panel ~ .va3d-banner { left: 276px; max-width: min(640px, calc(100% - 620px)); }
+.va3d-panel.collapsed ~ .va3d-banner { left: 56px; max-width: min(640px, calc(100% - 400px)); }
