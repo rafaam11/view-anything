@@ -3,7 +3,7 @@ mod args;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{percent_decode, utf8_percent_encode, NON_ALPHANUMERIC};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use args::file_arg;
@@ -17,8 +17,63 @@ fn read_file(path: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    let target = write_target(Path::new(&path));
-    write_atomic(&target, &data).map_err(|e| format!("{path}: {e}"))
+    write_bytes(&path, &data)
+}
+
+fn read_raw(path: &str) -> Result<Vec<u8>, String> {
+    std::fs::read(path).map_err(|e| format!("{path}: {e}"))
+}
+
+fn write_bytes(path: &str, data: &[u8]) -> Result<(), String> {
+    let target = write_target(Path::new(path));
+    write_atomic(&target, data).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Raw bytes for large files: a `Response` skips the JSON number-array encoding of `read_file`.
+/// Async so a big read runs off the main thread.
+#[tauri::command]
+async fn read_file_raw(path: String) -> Result<tauri::ipc::Response, String> {
+    read_raw(&path).map(tauri::ipc::Response::new)
+}
+
+/// The `x-va-path` header value: a percent-encoded UTF-8 path (headers cannot carry it raw).
+fn decode_path_header(value: Option<&[u8]>) -> Result<String, String> {
+    let raw = value.ok_or("missing x-va-path header")?;
+    let path = percent_decode(raw)
+        .decode_utf8()
+        .map_err(|e| format!("x-va-path is not UTF-8: {e}"))?
+        .into_owned();
+    if path.is_empty() {
+        return Err("empty x-va-path header".into());
+    }
+    Ok(path)
+}
+
+/// Raw-body counterpart of `write_file`: the body is the file content, the path is in `x-va-path`.
+#[tauri::command]
+async fn write_file_raw(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let path = decode_path_header(request.headers().get("x-va-path").map(|v| v.as_bytes()))?;
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(data) => write_bytes(&path, data),
+        tauri::ipc::InvokeBody::Json(_) => Err("write_file_raw expects a raw byte body".into()),
+    }
+}
+
+/// Whether Shift is held right now (drop events do not carry modifier keys). `None` where the
+/// OS offers no global key state query.
+#[tauri::command]
+fn modifier_shift() -> Option<bool> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_SHIFT};
+        // SAFETY: GetAsyncKeyState has no preconditions; the high bit means "key is down".
+        let state = unsafe { GetAsyncKeyState(VK_SHIFT as i32) };
+        Some((state as u16 & 0x8000) != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
 }
 
 /// Lets the viewer check a link target before leaving the current document.
@@ -133,7 +188,15 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_file, write_file, path_exists, open_window])
+        .invoke_handler(tauri::generate_handler![
+            read_file,
+            write_file,
+            read_file_raw,
+            write_file_raw,
+            modifier_shift,
+            path_exists,
+            open_window
+        ])
         .setup(|app| {
             let argv: Vec<String> = std::env::args().collect();
             create_window(app.handle(), file_arg(&argv))?;
@@ -221,6 +284,52 @@ mod tests {
         assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
         assert_eq!(std::fs::read(&real).unwrap(), b"new");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn raw_write_then_read_round_trips_every_byte() {
+        let dir = std::env::temp_dir().join(format!("va-raw-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("모델 a.stl");
+        let data: Vec<u8> = (0..=255u8).cycle().take(70_000).collect();
+        write_bytes(target.to_str().unwrap(), &data).unwrap();
+        assert_eq!(read_raw(target.to_str().unwrap()).unwrap(), data);
+        write_bytes(target.to_str().unwrap(), b"").unwrap();
+        assert_eq!(read_raw(target.to_str().unwrap()).unwrap(), b"");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn read_raw_reports_the_path_on_error() {
+        let err = read_raw("va-no-such-file-xyz.stl").unwrap_err();
+        assert!(err.contains("va-no-such-file-xyz.stl"), "{err}");
+    }
+
+    #[test]
+    fn path_header_is_percent_decoded() {
+        assert_eq!(decode_path_header(Some(b"D%3A%5Ca%20b.stl")).unwrap(), "D:\\a b.stl");
+        assert_eq!(
+            decode_path_header(Some(b"%2Fhome%2F%ED%8F%B4%EB%8D%94%2Fx.html")).unwrap(),
+            "/home/폴더/x.html"
+        );
+        assert_eq!(decode_path_header(Some(b"plain.glb")).unwrap(), "plain.glb");
+    }
+
+    #[test]
+    fn path_header_rejects_missing_empty_and_invalid_utf8() {
+        assert!(decode_path_header(None).is_err());
+        assert!(decode_path_header(Some(b"")).is_err());
+        assert!(decode_path_header(Some(b"%FF%FE")).is_err());
+    }
+
+    #[test]
+    fn modifier_shift_does_not_panic() {
+        let v = modifier_shift();
+        if cfg!(windows) {
+            assert!(v.is_some());
+        } else {
+            assert_eq!(v, None);
+        }
     }
 
     #[test]

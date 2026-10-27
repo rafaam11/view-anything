@@ -27,4 +27,13 @@ export default defineConfig(() => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  // Mesh parsing runs in ES module workers.
+  worker: {
+    format: "es" as const,
+  },
+  build: {
+    target: "es2022",
+    // dist/.vite/manifest.json feeds scripts/check-bundle.mjs.
+    manifest: true,
+  },
 }));

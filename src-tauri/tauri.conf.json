@@ -15,19 +15,21 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost https: data: blob:",
         "font-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost"
+        "connect-src": "ipc: http://ipc.localhost asset: http://asset.localhost",
+        "worker-src": "'self' blob:"
       },
       "devCsp": {
         "default-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost https: data: blob:",
         "font-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost ws://localhost:1420 ws://localhost:1421"
+        "connect-src": "ipc: http://ipc.localhost asset: http://asset.localhost ws://localhost:1420 ws://localhost:1421",
+        "worker-src": "'self' blob:"
       },
       "dangerousDisableAssetCspModification": [
         "style-src"
@@ -61,6 +63,21 @@
           "markdown"
         ],
         "name": "Markdown",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "stl",
+          "obj",
+          "ply",
+          "gltf",
+          "glb",
+          "step",
+          "stp",
+          "iges",
+          "igs"
+        ],
+        "name": "3D Model",
         "role": "Viewer"
       }
     ]

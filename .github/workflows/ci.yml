@@ -31,5 +31,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
+      - run: npm run build
+      - run: npm run check:bundle
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: node scripts/check-version.mjs

@@ -1,7 +1,8 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, message, open } from "@tauri-apps/plugin-dialog";
+import { ask, message, open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { THREE_D_EXTENSIONS } from "./three/formats";
 
 export const platform = {
   async readFile(path: string): Promise<Uint8Array> {
@@ -9,6 +10,22 @@ export const platform = {
   },
   async writeFile(path: string, data: Uint8Array): Promise<void> {
     await invoke("write_file", { path, data: Array.from(data) });
+  },
+  /** Raw-bytes IPC (no JSON number array), for large files. */
+  async readFileRaw(path: string): Promise<ArrayBuffer> {
+    return invoke<ArrayBuffer>("read_file_raw", { path });
+  },
+  /** Raw-bytes atomic write; the path travels percent-encoded in the `x-va-path` header. */
+  async writeFileRaw(path: string, data: Uint8Array): Promise<void> {
+    await invoke("write_file_raw", data, { headers: { "x-va-path": encodeURIComponent(path) } });
+  },
+  /** Whether Shift is held right now; null where the OS cannot tell (non-Windows). */
+  async modifierShift(): Promise<boolean | null> {
+    return invoke<boolean | null>("modifier_shift");
+  },
+  /** Native save dialog; null when cancelled. */
+  async saveDialog(opts: SaveDialogOptions): Promise<string | null> {
+    return save(opts);
   },
   assetUrl(absPath: string): string {
     return convertFileSrc(absPath);
@@ -23,6 +40,7 @@ export const platform = {
       directory: false,
       filters: [
         { name: "Markdown", extensions: ["md", "markdown"] },
+        { name: "3D 모델", extensions: [...THREE_D_EXTENSIONS] },
         { name: "모든 파일", extensions: ["*"] },
       ],
     });
