@@ -135,7 +135,9 @@ interface Entry {
  * App-level hooks for the 파일 menu. `onCheckUpdate` is wired by the auto-update task; while it is
  * null, "업데이트 확인" stays disabled.
  */
-export const menuHooks: { onCheckUpdate: (() => void) | null } = { onCheckUpdate: null };
+export const menuHooks: { onCheckUpdate: (() => void) | null } = {
+  onCheckUpdate: () => window.dispatchEvent(new Event("va:check-update")),
+};
 
 /** Ctrl+Shift+E (KeyboardEvent.code, so a Korean IME layout still works). */
 export function isExportKey(e: Pick<KeyboardEvent, "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {

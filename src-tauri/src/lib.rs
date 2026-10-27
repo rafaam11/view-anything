@@ -1,4 +1,5 @@
 mod args;
+mod update;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -176,6 +177,9 @@ async fn open_window(app: AppHandle, path: Option<String>) -> Result<(), String>
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(update::Coordinator::default())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(p) = file_arg(&argv) {
                 let p = if p.is_absolute() { p } else { Path::new(&cwd).join(p) };
@@ -195,7 +199,10 @@ pub fn run() {
             write_file_raw,
             modifier_shift,
             path_exists,
-            open_window
+            open_window,
+            update::update_context,
+            update::update_status,
+            update::update_request
         ])
         .setup(|app| {
             let argv: Vec<String> = std::env::args().collect();

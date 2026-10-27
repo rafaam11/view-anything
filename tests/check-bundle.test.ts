@@ -80,6 +80,12 @@ test("fails when the entry or md chunk is missing", () => {
   expect(checkManifest(n).join("\n")).toMatch(/entry/);
 });
 
+test("rejects statically inlined updater and process plugin commands", () => {
+  for (const code of ['invoke("plugin:updater|check")', 'invoke("plugin:process|restart")']) {
+    expect(checkManifest(manifest(), () => code).length).toBeGreaterThan(0);
+  }
+});
+
 test("fails when three is inlined into the entry chunk itself", () => {
   const code: Record<string, string> = { "assets/index-AAA.js": 'const R="186";window.__THREE__=R;' };
   const read = (f: string) => code[f] ?? "export{}";

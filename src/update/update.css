@@ -1,0 +1,12 @@
+.va-update { position: fixed; right: 12px; bottom: 5px; z-index: 90; display: flex; gap: 4px; font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 2px 6px; color: var(--fg); }
+.va-update button { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; padding: 4px; }
+.va-update[data-state="idle"] { color: var(--muted); }
+.va-update-menu { position: absolute; bottom: 100%; right: 0; min-width: 220px; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 18px #0003; }
+.va-update-menu > * { display: block; padding: 6px; }
+.va-update-menu button { width: 100%; text-align: left; }
+.va-update-menu button:hover { background: color-mix(in srgb, var(--fg) 10%, var(--bg)); }
+.va-update-dialog { color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; max-width: 420px; }
+.va-update-dialog::backdrop { background: #0005; }
+.va-update-dialog button { margin: 8px 8px 0 0; padding: 6px 18px; }
+.va-update button:focus-visible, .va-update-dialog button:focus-visible { outline: 2px solid #5384df; }
+body:has(.va-update) .va3d-status { padding-right: 140px; }

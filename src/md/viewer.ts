@@ -1,6 +1,7 @@
 import "katex/dist/katex.min.css";
 import "./md.css";
 import { platform } from "../platform";
+import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { decodeText, encodeText } from "./text";
 import { renderMarkdown, resolveAsset } from "./render";
@@ -215,6 +216,7 @@ const viewer: Viewer = {
     };
     /** The user agreed to drop unsaved edits; the page may unload without asking again. */
     let discardApproved = false;
+    registerUpdateGuard(refreshDirty, (value) => { discardApproved = value; });
     const confirmLeave = async () => {
       refreshDirty();
       if (!shouldConfirmLeave({ mode, dirty })) return true;

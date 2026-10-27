@@ -56,6 +56,7 @@ async function show() {
 
 /** Settles once the current file is mounted (or failed to). */
 let ready = show();
+void ready.then(() => import("./update/main")).then((m) => m.startUpdater()).catch((e) => console.warn("updater initialization failed", e));
 
 function openWindows(paths: string[]) {
   for (const p of paths) void platform.openWindow(p).catch((e) => platform.alert(String(e)).catch(() => {}));

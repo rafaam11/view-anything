@@ -316,7 +316,7 @@ test("removing the file that holds the selection clears it (panel included)", as
   expect(root.querySelector(".va3d-dims")!.textContent).toBe("");
 });
 
-test("menubar: 파일 items dispatch the open event, update check is a disabled placeholder; no bottom 보기 button", async () => {
+test("menubar: file actions and update check dispatch app events; no bottom view button", async () => {
   const v = make();
   expect(root.querySelector(".va3d-view-button")).toBeNull();
   expect(root.querySelector(".va3d-bottom .va3d-view-controls")).toBeNull();
@@ -329,8 +329,12 @@ test("menubar: 파일 items dispatch the open event, update check is a disabled 
   const items = () => [...root.querySelectorAll<HTMLButtonElement>(".va3d-menu:not([hidden]) .va3d-menu-item")];
   expect(items().map((b) => b.querySelector(".va3d-menu-label")!.textContent)).toEqual(["열기…", "장면에 추가…", "HTML로 내보내기…", "업데이트 확인"]);
   const update = items()[3];
-  expect(update.getAttribute("aria-disabled")).toBe("true");
-  expect(update.title).toBe("다음 작업에서 연결");
+  expect(update.getAttribute("aria-disabled")).not.toBe("true");
+  const check = vi.fn();
+  window.addEventListener("va:check-update", check, { once: true });
+  update.click();
+  expect(check).toHaveBeenCalledOnce();
+  titles[0].click();
   items()[0].click();
   titles[0].click();
   items()[1].click();
