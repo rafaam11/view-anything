@@ -2,11 +2,14 @@ import "./styles.css";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { resolveViewer, type Viewer } from "./registry";
 import { platform } from "./platform";
-import { applyTheme, currentMode, cycleTheme } from "./theme";
+import { initializeTheme, cycleTheme } from "./theme";
+import { mountTitlebar } from "./titlebar";
 import { isOpenKey, OPEN_EVENT, routeDrop, type OpenEventDetail, type WindowKind } from "./open-route";
 import { isThreeD } from "./three/formats";
 
 const app = document.getElementById("app")!;
+initializeTheme();
+mountTitlebar();
 let file = new URLSearchParams(location.search).get("file");
 /** What the window shows; decides where dropped and picked files go. */
 let kind: WindowKind = file ? kindOf(file) : "empty";
@@ -136,14 +139,14 @@ window.addEventListener(OPEN_EVENT, (e) => {
   void pickAndOpen(detail?.append === true);
 });
 
-applyTheme(currentMode());
 // Capture phase: the editor must not swallow app shortcuts.
 window.addEventListener(
   "keydown",
   (e) => {
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
       e.preventDefault();
-      cycleTheme();
+      e.stopPropagation();
+      if (!e.repeat) cycleTheme();
     } else if (isOpenKey(e)) {
       e.preventDefault();
       e.stopPropagation();

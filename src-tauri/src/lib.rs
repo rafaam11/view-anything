@@ -138,6 +138,7 @@ fn create_window(app: &AppHandle, file: Option<PathBuf>) -> Result<(), String> {
         .unwrap_or_else(|| "view-anything".to_string());
     WebviewWindowBuilder::new(app, label, WebviewUrl::App(window_url(file.as_deref()).into()))
         .title(title)
+        .decorations(false)
         .inner_size(1000.0, 800.0)
         .build()
         .map(|_| ())

@@ -14,7 +14,7 @@ function loadCollapsed(): boolean {
  * Collapsible sidebar listing headings; highlights the heading at the current scroll position.
  * Call `dispose` before replacing the toc so scroll listeners do not pile up across re-renders.
  */
-export function buildToc(headings: Heading[], article: HTMLElement): { nav: HTMLElement; dispose: () => void } {
+export function buildToc(headings: Heading[], article: HTMLElement, scroller?: HTMLElement): { nav: HTMLElement; dispose: () => void } {
   const nav = document.createElement("nav");
   nav.className = "toc";
   nav.classList.toggle("collapsed", loadCollapsed());
@@ -53,8 +53,9 @@ export function buildToc(headings: Heading[], article: HTMLElement): { nav: HTML
   let active: HTMLAnchorElement | undefined;
   const update = () => {
     let cur = targets[0];
+    const top = (scroller?.getBoundingClientRect().top ?? 0) + 80;
     for (const t of targets) {
-      if (t.getBoundingClientRect().top <= 80) cur = t;
+      if (t.getBoundingClientRect().top <= top) cur = t;
       else break;
     }
     const next = cur ? links.get(cur.id) : undefined;
@@ -64,8 +65,8 @@ export function buildToc(headings: Heading[], article: HTMLElement): { nav: HTML
     next?.scrollIntoView({ block: "nearest" });
     active = next;
   };
-  const win = article.ownerDocument.defaultView;
-  win?.addEventListener("scroll", update, { passive: true });
+  const scrollTarget = scroller ?? article.ownerDocument.defaultView;
+  scrollTarget?.addEventListener("scroll", update, { passive: true });
   queueMicrotask(update);
-  return { nav, dispose: () => win?.removeEventListener("scroll", update) };
+  return { nav, dispose: () => scrollTarget?.removeEventListener("scroll", update) };
 }

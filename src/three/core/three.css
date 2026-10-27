@@ -1,6 +1,6 @@
 .va3d {
   position: fixed;
-  inset: 0;
+  inset: var(--va-titlebar-height, 0px) 0 0;
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);

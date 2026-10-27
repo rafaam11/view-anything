@@ -1,0 +1,39 @@
+.va-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--va-titlebar-height);
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  z-index: 100;
+  user-select: none;
+}
+.va-titlebar-drag {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+.va-titlebar-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.va-titlebar-controls { display: flex; flex-shrink: 0; }
+.va-titlebar button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+.va-titlebar button svg { width: 18px; height: 18px; pointer-events: none; }
+.va-titlebar button:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+.va-titlebar button:active { background: color-mix(in srgb, var(--fg) 20%, transparent); }
+.va-titlebar button:focus-visible { outline: 2px solid var(--fg); outline-offset: -3px; }
+.va-titlebar button[data-action="close"]:hover { background: #c42b1c; color: #fff; }
+.va-titlebar button[data-action="close"]:active { background: #a92317; color: #fff; }

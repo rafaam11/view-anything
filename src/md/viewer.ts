@@ -158,9 +158,9 @@ const viewer: Viewer = {
     let disposeToc = () => {};
     /** `keepScroll`: a reload of changed content keeps the reader where they were (best effort). */
     const render = async (keepScroll = false) => {
-      const scrollY = window.scrollY;
+      const scrollY = el.scrollTop;
       const restore = () => {
-        if (keepScroll) window.scrollTo(0, scrollY);
+        if (keepScroll) el.scrollTo(0, scrollY);
         else if (location.hash) scrollToId(location.hash);
       };
       try {
@@ -173,7 +173,7 @@ const viewer: Viewer = {
         disposeToc = () => {};
         body.querySelector("nav.toc")?.remove();
         if (headings.length > 0) {
-          const toc = buildToc(headings, article);
+          const toc = buildToc(headings, article, el);
           disposeToc = toc.dispose;
           body.prepend(toc.nav);
         }

@@ -12,6 +12,11 @@ Markdown(읽기 + Typora식 WYSIWYG 편집)과 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB
 - 뷰어는 확장자 → 모듈 레지스트리로 연결하고 lazy import한다. md를 열 때 three.js를 로드하지 않는다.
 - 대상 OS: Windows(NSIS), Linux(deb, AppImage). macOS는 비목표.
 
+## 창과 테마
+- `src/titlebar.ts`와 `titlebar.css`가 앱 전용 커스텀 제목 표시줄을 만든다. Rust `create_window`는 `decorations(false)`로 연다. 닫기는 `close()` 요청을 사용해 미저장 작업 확인을 거치며, 강제 `destroy()`로 바꾸지 않는다.
+- 최소화 왼쪽 테마 버튼과 `Ctrl+Shift+T`는 다크 → 라이트 → 시스템 순으로 순환한다. `va.theme`에 저장하고 열린 창에도 동기화한다.
+- `--va-titlebar-height` 아래의 `#app`이 스크롤 컨테이너다. Markdown 목차·스크롤 복원도 이 컨테이너를 따른다. 공용 3D CSS는 높이 변수의 기본값을 0으로 두어 내보낸 HTML에는 앱 제목 표시줄 공간이 생기지 않게 한다.
+
 ## 개발
 - `npm install` → `npm run tauri dev`
 - 빌드: `npm run tauri build`

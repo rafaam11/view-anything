@@ -20,7 +20,9 @@ const platform = {
   setWindowTitle: vi.fn(async () => {}),
 };
 vi.mock("../src/platform", () => ({ platform }));
-vi.mock("../src/theme", () => ({ applyTheme: () => {}, currentMode: () => "system", cycleTheme: () => {} }));
+const cycleTheme = vi.fn();
+vi.mock("../src/theme", () => ({ initializeTheme: () => {}, cycleTheme }));
+vi.mock("../src/titlebar", () => ({ mountTitlebar: () => {} }));
 
 const mdViewer = { mount: vi.fn(async () => {}) };
 const threeViewer = {
@@ -67,6 +69,13 @@ const fileParam = () => new URLSearchParams(location.search).get("file");
 beforeEach(() => {
   vi.clearAllMocks();
   platform.modifierShift.mockImplementation(async () => false);
+});
+
+test("theme shortcut cycles once and ignores auto-repeat", async () => {
+  await start(null);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true }));
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true, repeat: true }));
+  expect(cycleTheme).toHaveBeenCalledTimes(1);
 });
 
 test("md window: every dropped file opens a new window (v0.1), shift or not", async () => {

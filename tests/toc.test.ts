@@ -23,3 +23,24 @@ test("dispose removes the scroll listener so re-renders do not accumulate them",
   expect(removed).toHaveLength(1);
   expect(removed[0][1]).toBe(added[0][1]);
 });
+
+test("tracks the app scroll container below the custom titlebar", async () => {
+  const scroller = document.createElement("main");
+  const article = document.createElement("article");
+  article.innerHTML = '<h1 id="c">C</h1><h2 id="d">D</h2>';
+  scroller.append(article);
+  document.body.append(scroller);
+  vi.spyOn(scroller, "getBoundingClientRect").mockReturnValue({ top: 32 } as DOMRect);
+  vi.spyOn(article.querySelector("h1")!, "getBoundingClientRect").mockReturnValue({ top: 68 } as DOMRect);
+  const heading = vi.spyOn(article.querySelector("h2")!, "getBoundingClientRect").mockReturnValue({ top: 200 } as DOMRect);
+  const remove = vi.spyOn(scroller, "removeEventListener");
+  const { nav, dispose } = buildToc([{ depth: 1, id: "c", text: "C" }, { depth: 2, id: "d", text: "D" }], article, scroller);
+  await Promise.resolve();
+  expect(nav.querySelector("a.active")?.textContent).toBe("C");
+  heading.mockReturnValue({ top: 100 } as DOMRect);
+  scroller.dispatchEvent(new Event("scroll"));
+  expect(nav.querySelector("a.active")?.textContent).toBe("D");
+  dispose();
+  expect(remove).toHaveBeenCalledWith("scroll", expect.any(Function));
+  scroller.remove();
+});

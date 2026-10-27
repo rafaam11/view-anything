@@ -1,4 +1,5 @@
 :root {
+  --va-titlebar-height: 32px;
   --bg: #ffffff;
   --fg: #1f2328;
   --muted: #6e7781;
@@ -21,19 +22,24 @@
   --border: #30363d;
   color-scheme: dark;
 }
-html, body { margin: 0; height: 100%; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
 body {
   background: var(--bg);
   color: var(--fg);
   font-family: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
 }
-#app { min-height: 100%; }
+#app {
+  position: fixed;
+  inset: var(--va-titlebar-height) 0 0;
+  overflow: auto;
+  scroll-padding-top: 48px; /* Markdown toolbar + breathing room for anchor links. */
+}
 .empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  height: 100%;
   color: var(--muted);
   font-size: 1.1rem;
 }
