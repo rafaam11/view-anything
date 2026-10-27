@@ -1,0 +1,75 @@
+.va3d {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.85rem;
+}
+.va3d [hidden] { display: none !important; }
+.va3d-canvas { position: absolute; inset: 0; }
+.va3d-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+
+.va3d-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.va3d-toolbar button {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.va3d-toolbar button:hover { background: var(--border); }
+
+.va3d-progress {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  min-width: 280px;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.va3d-progress .va3d-progress-text { display: flex; gap: 12px; justify-content: space-between; }
+.va3d-progress .va3d-progress-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.va3d-progress .va3d-progress-phase { color: var(--muted); white-space: nowrap; }
+.va3d-progress .va3d-bar { position: relative; height: 4px; margin-top: 6px; overflow: hidden; background: var(--border); border-radius: 2px; }
+.va3d-progress .va3d-bar > div { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--fg); transition: width 0.1s linear; }
+.va3d-progress .va3d-bar.indeterminate > div { width: 30%; animation: va3d-slide 1.2s ease-in-out infinite; }
+@keyframes va3d-slide {
+  from { left: -30%; }
+  to { left: 100%; }
+}
+
+.va3d-banner {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: min(640px, calc(100% - 340px));
+  min-width: 240px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  color: var(--fg);
+  background: color-mix(in srgb, #d1242f 12%, var(--bg));
+  border: 1px solid #d1242f;
+  border-radius: 6px;
+}
+.va3d-banner span { flex: 1; word-break: break-word; }
+.va3d-banner button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 0 4px; }
