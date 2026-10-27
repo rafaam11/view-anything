@@ -1,6 +1,6 @@
 [package]
 name = "view-anything"
-version = "0.2.0"
+version = "0.3.0"
 description = "Lightweight double-click viewer for Markdown and more"
 authors = ["rafaam11"]
 edition = "2024"
