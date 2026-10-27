@@ -36,7 +36,8 @@ export function isThreeD(path: string): boolean {
 const SOLID = [0x73, 0x6f, 0x6c, 0x69, 0x64]; // "solid"
 
 function startsWithSolid(bytes: Uint8Array): boolean {
-  let i = 0;
+  // A UTF-8 BOM before "solid" (some ASCII exporters write one).
+  let i = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
   while (i < bytes.length && i < 80 && (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0a || bytes[i] === 0x0d)) i++;
   return SOLID.every((c, k) => bytes[i + k] === c);
 }

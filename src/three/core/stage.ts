@@ -24,7 +24,7 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { displayRootMatrix, objectMatrix, type FramePreset, type ObjectFrame, type Unit } from "./frames";
 import { fitDistance, standardViewDirection, standardViewUp, type StandardView } from "./views";
-import { batchByBudget, clipPlanes, gridSpec, orbitDirection } from "./stage-math";
+import { batchByBudget, clipPlanes, gridSpec, minOrbitDistance, orbitDirection } from "./stage-math";
 
 export class WebGLUnavailableError extends Error {
   constructor() {
@@ -322,6 +322,7 @@ export class Stage {
     if (box.isEmpty()) this.bounds.set(new Vector3(), 1);
     else box.getBoundingSphere(this.bounds);
     if (!(this.bounds.radius > 0)) this.bounds.radius = 1e-3;
+    this.controls.minDistance = minOrbitDistance(this.bounds.radius);
     this.rebuildHelpers();
     for (const fn of this.changeListeners) fn();
   }

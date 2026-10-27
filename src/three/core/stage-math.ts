@@ -1,5 +1,5 @@
 // Pure helpers for the 3D stage: camera clipping, grid sizing, polar standard views and glTF
-// sibling-path resolution. No three.js, no Tauri.
+// sibling-path resolution (inside the model's folder). No three.js, no Tauri.
 
 type V3 = readonly number[];
 
@@ -34,6 +34,15 @@ export function clipPlanes(distance: number, radius: number, targetDistance = di
   return { near, far };
 }
 
+/**
+ * Closest the orbit camera may get to its target: a tiny fraction of the scene radius, so extreme
+ * zoom-in stops before the depth buffer runs out of precision (z-fighting, faces vanishing).
+ */
+export function minOrbitDistance(radius: number): number {
+  const r = radius > 0 && Number.isFinite(radius) ? radius : 1;
+  return r * 1e-4;
+}
+
 /** Grid with power-of-ten cells sized to cover a model of `radius` (about 4x its radius). */
 export function gridSpec(radius: number): { cell: number; divisions: number; size: number } {
   const r = radius > 0 && Number.isFinite(radius) ? radius : 1;
@@ -45,7 +54,8 @@ export function gridSpec(radius: number): { cell: number; divisions: number; siz
 /**
  * Resolve a glTF-relative URI (external .bin, textures) against the model file's folder. Only
  * relative paths are accepted: absolute paths, UNC, drive letters and other schemes return null,
- * so a model cannot make the viewer read arbitrary files. `..` cannot climb above the root.
+ * so a model cannot make the viewer read arbitrary files. `..` may not leave the model's folder
+ * (null), so only files in that folder and its subfolders are reachable.
  */
 export function resolveSibling(modelPath: string, uri: string): string | null {
   if (/^[a-z][a-z0-9+.-]*:/i.test(uri)) return null;

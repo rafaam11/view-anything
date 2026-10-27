@@ -57,6 +57,16 @@ test("ASCII STL is not binary", () => {
   expect(isBinaryStl(new TextEncoder().encode("  solid x\nendsolid x\n" + " ".repeat(100)))).toBe(false);
 });
 
+test("ASCII STL with a UTF-8 BOM before 'solid' is not binary", () => {
+  const text = new TextEncoder().encode(
+    "solid x\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 0\n   vertex 1 0 0\n   vertex 0 1 0\n  endloop\n endfacet\nendsolid x\n",
+  );
+  const bom = new Uint8Array(text.length + 3);
+  bom.set([0xef, 0xbb, 0xbf]);
+  bom.set(text, 3);
+  expect(isBinaryStl(bom)).toBe(false);
+});
+
 test("non-'solid' data whose size does not match is treated as binary", () => {
   const b = binaryStl(2, "binary");
   const padded = new Uint8Array(b.length + 7);

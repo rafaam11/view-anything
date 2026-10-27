@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { batchByBudget, clipPlanes, gridSpec, orbitDirection, resolveSibling } from "../src/three/core/stage-math";
+import { batchByBudget, clipPlanes, gridSpec, minOrbitDistance, orbitDirection, resolveSibling } from "../src/three/core/stage-math";
 
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
@@ -78,4 +78,11 @@ test("batchByBudget: consecutive groups up to the budget, oversize items alone",
   expect(batchByBudget([], 10)).toEqual([]);
   expect(batchByBudget([4, 4, 4, 15, 1, 9, 1], 10)).toEqual([[0, 1], [2], [3], [4, 5], [6]]);
   expect(batchByBudget([0, 0, 0], 10)).toEqual([[0, 1, 2]]);
+});
+
+test("minOrbitDistance follows the scene radius (no z-fighting at extreme zoom)", () => {
+  expect(minOrbitDistance(1000)).toBeCloseTo(0.1);
+  expect(minOrbitDistance(0.5)).toBeCloseTo(5e-5);
+  expect(minOrbitDistance(0)).toBeCloseTo(1e-4);
+  expect(minOrbitDistance(NaN)).toBeCloseTo(1e-4);
 });
