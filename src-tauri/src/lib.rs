@@ -1,4 +1,5 @@
 mod args;
+mod cloud;
 mod update;
 
 use std::path::{Path, PathBuf};
@@ -178,6 +179,14 @@ async fn open_window(app: AppHandle, path: Option<String>) -> Result<(), String>
 pub fn run() {
     tauri::Builder::default()
         .manage(update::Coordinator::default())
+        .manage(cloud::Clouds::default())
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                let app = window.app_handle().clone();
+                let owner = window.label().to_owned();
+                tauri::async_runtime::spawn_blocking(move || app.state::<cloud::Clouds>().close_window(&owner));
+            }
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
@@ -203,6 +212,7 @@ pub fn run() {
             update::update_context,
             update::update_status,
             update::update_request
+            ,cloud::cloud_request, cloud::cloud_cancel, cloud::cloud_close, cloud::cloud_chunk, cloud::cloud_point
         ])
         .setup(|app| {
             let argv: Vec<String> = std::env::args().collect();
