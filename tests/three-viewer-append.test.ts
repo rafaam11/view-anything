@@ -42,6 +42,8 @@ function fakeStage() {
     remove: vi.fn(),
     fitAll: vi.fn(),
     setView: vi.fn(),
+    setDisplay: vi.fn(),
+    setObjectFrame: vi.fn(),
     setObjectVisible: vi.fn((o: Object3D, v: boolean) => void (o.visible = v)),
     reveal: vi.fn(async (_o: unknown, _s: unknown, _step: unknown, signal?: AbortSignal) => {
       revealSignals.push(signal);
@@ -221,4 +223,41 @@ test("banner text is capped", () => {
   const text = b.root.querySelector("span")!.textContent!;
   expect(text.length).toBeLessThanOrEqual(301);
   expect(text.endsWith("…")).toBe(true);
+});
+
+test("toolbar coordinate dropdowns set the display preset and unit (default Z-up RH, mm)", () => {
+  make();
+  const frame = root.querySelector<HTMLSelectElement>(".va3d-toolbar select.va3d-display-frame")!;
+  const unit = root.querySelector<HTMLSelectElement>(".va3d-toolbar select.va3d-display-unit")!;
+  expect(frame.value).toBe("zup-rh");
+  expect(unit.value).toBe("mm");
+  expect(frame.options[0].textContent).toBe("Z-up 오른손 (CATIA/NX/Creo/STEP)");
+  expect([...unit.options].map((o) => o.textContent)).toEqual(["mm", "cm", "m", "inch"]);
+  frame.value = "yup-lh";
+  frame.dispatchEvent(new Event("change"));
+  expect(stage.setDisplay).toHaveBeenLastCalledWith("yup-lh", "mm");
+  unit.value = "m";
+  unit.dispatchEvent(new Event("change"));
+  expect(stage.setDisplay).toHaveBeenLastCalledWith("yup-lh", "m");
+});
+
+test("files are added with their source frame; STEP/IGES are fixed to mm, others as-is", async () => {
+  const v = make();
+  await v.load(P("a.stl"));
+  await v.load(P("b.igs"));
+  expect(v.model.files.map((f) => [f.sourceFrame, f.sourceUnit])).toEqual([["as-is", "as-is"], ["as-is", "mm"]]);
+  expect(stage.add.mock.calls.map((c) => c[2])).toEqual([{ frame: "as-is", unit: "as-is" }, { frame: "as-is", unit: "mm" }]);
+});
+
+test("the ⋯ menu changes a file's source frame through the stage and fits", async () => {
+  const v = make();
+  const id = (await v.load(P("a.stl")))!;
+  stage.fitAll.mockClear();
+  v.setFileFrame(id, { frame: "yup-rh", unit: "in" });
+  expect(v.model.files[0]).toMatchObject({ sourceFrame: "yup-rh", sourceUnit: "in" });
+  expect(stage.setObjectFrame).toHaveBeenCalledWith(v.objects.get(id)!.group, { frame: "yup-rh", unit: "in" });
+  // STEP keeps mm whatever is asked.
+  const sid = (await v.load(P("b.step")))!;
+  v.setFileFrame(sid, { frame: "zup-lh", unit: "m" });
+  expect(v.model.files[1]).toMatchObject({ sourceFrame: "zup-lh", sourceUnit: "mm" });
 });

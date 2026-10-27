@@ -36,6 +36,24 @@ export type Vec3 = readonly number[];
 
 export const FRAME_PRESETS: readonly FramePreset[] = ["zup-rh", "yup-rh", "ros", "yup-lh", "zup-lh"];
 
+export const UNITS: readonly Unit[] = ["mm", "cm", "m", "in"];
+
+/** UI labels (Korean, with the tools that use each convention). */
+export const FRAME_LABELS: Readonly<Record<FramePreset, string>> = {
+  "zup-rh": "Z-up 오른손 (CATIA/NX/Creo/STEP)",
+  "yup-rh": "Y-up 오른손 (glTF/Maya/SolidWorks)",
+  ros: "ROS REP-103",
+  "yup-lh": "Y-up 왼손 (Unity)",
+  "zup-lh": "Z-up 왼손 (Unreal)",
+};
+export const UNIT_LABELS: Readonly<Record<Unit, string>> = { mm: "mm", cm: "cm", m: "m", in: "inch" };
+
+/** A file's source frame and unit ("as-is": take the file values as display-frame values). */
+export interface ObjectFrame {
+  frame: FramePreset | "as-is";
+  unit: Unit | "as-is";
+}
+
 /** Millimetres per unit. */
 export const UNIT_MM: Readonly<Record<Unit, number>> = { mm: 1, cm: 10, m: 1000, in: 25.4 };
 

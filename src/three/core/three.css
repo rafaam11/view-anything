@@ -31,6 +31,36 @@
   cursor: pointer;
 }
 .va3d-toolbar button:hover { background: var(--border); }
+/* Display frame ("좌표계") and unit: compact; the open list shows the full preset labels. */
+.va3d-display { display: flex; gap: 2px; align-items: center; margin-left: 4px; padding-left: 4px; border-left: 1px solid var(--border); }
+.va3d-toolbar select, .va3d-frame-menu select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  min-width: 0;
+}
+.va3d-display-frame { width: 9em; text-overflow: ellipsis; }
+.va3d-display-unit { width: 4.6em; }
+
+/* X/Y/Z labels at the axis tips (stage.ts places them each frame). The halo uses the theme
+   background so they read on both light and dark. */
+.va3d-axis-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.va3d-axis-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: -0.65em 0 0 -0.3em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
+}
+.va3d-axis-label.x { color: #e5484d; }
+.va3d-axis-label.y { color: #30a46c; }
+.va3d-axis-label.z { color: #3e7bfa; }
 
 .va3d-progress {
   position: absolute;
@@ -74,7 +104,7 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  max-width: min(640px, calc(100% - 340px));
+  max-width: min(640px, calc(100% - 530px));
   min-width: 240px;
   display: flex;
   gap: 8px;
@@ -127,6 +157,13 @@
 .va3d-eye { flex: none; width: 20px; padding: 0 !important; font-size: 0.7rem; }
 .va3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .va3d-node[data-depth="0"] > .va3d-row > .va3d-name { font-weight: 600; }
+.va3d-more { flex: none; padding: 0 5px !important; color: var(--muted) !important; }
+.va3d-more:hover { color: var(--fg) !important; }
+/* File ⋯ menu: source frame and unit, inline under the file row. */
+.va3d-frame-menu { display: grid; gap: 4px; margin: 2px 6px 4px 26px; padding: 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+.va3d-frame-field { display: grid; grid-template-columns: 5.5em 1fr; gap: 6px; align-items: center; color: var(--muted); font-size: 0.75rem; }
+.va3d-frame-field select { width: 100%; font-size: 0.8rem; }
+.va3d-frame-field select:disabled { opacity: 0.6; }
 .va3d-remove { flex: none; padding: 0 5px !important; color: var(--muted) !important; }
 .va3d-remove:hover { color: #d1242f !important; }
 .va3d-loading { flex: none; color: var(--muted); font-size: 0.75rem; }
@@ -136,8 +173,8 @@
 .va3d-node.off .va3d-eye { color: var(--muted); }
 
 /* The banner starts right of the panel. */
-.va3d-panel ~ .va3d-banner { left: 276px; max-width: min(640px, calc(100% - 620px)); }
-.va3d-panel.collapsed ~ .va3d-banner { left: 56px; max-width: min(640px, calc(100% - 400px)); }
+.va3d-panel ~ .va3d-banner { left: 276px; max-width: min(640px, calc(100% - 810px)); }
+.va3d-panel.collapsed ~ .va3d-banner { left: 56px; max-width: min(640px, calc(100% - 590px)); }
 
 /* Narrow windows (panel auto-collapses, see panel.ts NARROW): the toolbar may wrap, and the
    banner moves to the bottom, above the progress overlay, spanning the width. */

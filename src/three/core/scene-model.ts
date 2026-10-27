@@ -157,3 +157,8 @@ export function visibleMeshIds(node: TreeNode): number[] {
   walk(node);
   return out.sort((a, b) => a - b);
 }
+
+/** The unit a format is always opened in (STEP/IGES: occt converts to mm), or null if the file decides. */
+export function fixedSourceUnit(format: string): Unit | null {
+  return format === "step" || format === "iges" ? "mm" : null;
+}

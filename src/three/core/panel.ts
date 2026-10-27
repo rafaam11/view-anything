@@ -2,13 +2,16 @@
 // no three.js. Names go in through textContent only. Only the file nodes and their direct
 // children are rendered up front; deeper rows are built the first time their parent is expanded,
 // so a STEP file with thousands of parts opens without building thousands of hidden rows.
-import type { SceneFile, TreeNode } from "./scene-model";
+import { FRAME_LABELS, FRAME_PRESETS, UNIT_LABELS, UNITS, type ObjectFrame } from "./frames";
+import { fixedSourceUnit, type SceneFile, type TreeNode } from "./scene-model";
 
 export interface PanelHandlers {
   /** Eye button: the handler applies the change (model + objects); the panel then re-reads `node.visible`. */
   toggle(nodeId: string, visible: boolean): void;
   /** File × button: remove the file (abort it if still loading). */
   remove(fileId: string): void;
+  /** File ⋯ menu: set the file's source frame and unit (the handler updates the SceneFile). */
+  frame?(fileId: string, frame: ObjectFrame): void;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
@@ -40,6 +43,8 @@ export class ScenePanel {
   private readonly rows = new Map<string, { item: HTMLElement; node: TreeNode | null }>();
   /** Display names of the top-level entries (loading or loaded), in panel order. */
   private readonly fileNames = new Map<string, string>();
+  /** Loaded files by id (the ⋯ menu reads and shows their source frame and unit). */
+  private readonly files = new Map<string, SceneFile>();
 
   constructor(private readonly handlers: PanelHandlers) {
     const head = el("div", "va3d-panel-head");
@@ -50,6 +55,14 @@ export class ScenePanel {
     this.tree.setAttribute("aria-label", "장면");
     this.root.append(head, this.tree);
     this.root.addEventListener("click", (e) => this.onClick(e));
+    this.root.addEventListener("change", (e) => this.onFrameChange(e));
+    this.root.addEventListener("keydown", (e) => {
+      const menu = (e.target as HTMLElement | null)?.closest<HTMLElement>(".va3d-frame-menu");
+      if (e.key === "Escape" && menu) {
+        menu.hidden = true;
+        menu.parentElement?.querySelector<HTMLButtonElement>(":scope > .va3d-row > .va3d-more")?.focus();
+      }
+    });
     // A narrow window has no room for the panel next to the toolbar: start collapsed there, and
     // follow resizes across the breakpoint (the user can still open it by hand).
     const narrow = window.matchMedia?.(NARROW);
@@ -74,6 +87,7 @@ export class ScenePanel {
   addFile(file: SceneFile): void {
     this.placeTop(file.id, () => this.fileItem(file.id, file.name, file.root));
     this.fileNames.set(file.id, file.name);
+    this.files.set(file.id, file);
     this.expand(file.root.id);
   }
 
@@ -84,6 +98,7 @@ export class ScenePanel {
       for (const id of [...this.rows.keys()]) if (id === fileId || id.startsWith(fileId + "/")) this.rows.delete(id);
     }
     this.fileNames.delete(fileId);
+    this.files.delete(fileId);
   }
 
   /** Re-read a rendered node's visibility (after the model changed). */
@@ -134,12 +149,66 @@ export class ScenePanel {
     label.textContent = node.name;
     label.title = node.name;
     row.append(eye, label);
-    if (node.kind === "file") row.append(button("va3d-remove", "×", "제거", "remove"));
+    if (node.kind === "file") {
+      if (this.handlers.frame) row.append(button("va3d-more", "⋯", "원본 좌표계·단위", "frame"));
+      row.append(button("va3d-remove", "×", "제거", "remove"));
+    }
     item.append(row);
     this.rows.set(node.id, { item, node });
     this.paintVisible(item, node);
     item.dataset.depth = String(depth);
     return item;
+  }
+
+  /** Open or close a file's ⋯ menu (built on first open), showing the file's current values. */
+  private toggleFrameMenu(item: HTMLElement, fileId: string): void {
+    const file = this.files.get(fileId);
+    if (!file) return;
+    let menu = item.querySelector<HTMLElement>(":scope > .va3d-frame-menu");
+    if (menu && !menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    if (!menu) {
+      menu = el("div", "va3d-frame-menu");
+      const frame = this.select("frame", "원본 좌표계", [["as-is", "그대로"], ...FRAME_PRESETS.map((p): [string, string] => [p, FRAME_LABELS[p]])]);
+      const unit = this.select("unit", "원본 단위", [["as-is", "그대로"], ...UNITS.map((u): [string, string] => [u, UNIT_LABELS[u]])]);
+      menu.append(frame.label, unit.label);
+      item.querySelector(":scope > .va3d-row")!.after(menu);
+    }
+    const [frameSel, unitSel] = [...menu.querySelectorAll("select")];
+    frameSel.value = file.sourceFrame;
+    const fixed = fixedSourceUnit(file.format);
+    unitSel.value = fixed ?? file.sourceUnit;
+    unitSel.disabled = fixed !== null;
+    unitSel.title = fixed ? "STEP/IGES는 mm로 변환되어 열립니다" : "";
+    menu.hidden = false;
+    frameSel.focus();
+  }
+
+  private select(key: string, caption: string, options: [string, string][]): { label: HTMLLabelElement } {
+    const label = el("label", "va3d-frame-field");
+    const text = el("span");
+    text.textContent = caption;
+    const sel = el("select");
+    sel.dataset.frame = key;
+    for (const [value, name] of options) {
+      const o = el("option");
+      o.value = value;
+      o.textContent = name;
+      sel.append(o);
+    }
+    label.append(text, sel);
+    return { label };
+  }
+
+  private onFrameChange(e: Event): void {
+    const sel = e.target as HTMLSelectElement | null;
+    const menu = sel?.closest<HTMLElement>(".va3d-frame-menu");
+    const fileId = menu?.parentElement?.dataset.id;
+    if (!menu || !fileId || !this.files.has(fileId)) return;
+    const [frameSel, unitSel] = [...menu.querySelectorAll("select")];
+    this.handlers.frame?.(fileId, { frame: frameSel.value as ObjectFrame["frame"], unit: unitSel.value as ObjectFrame["unit"] });
   }
 
   private paintVisible(item: HTMLElement, node: TreeNode): void {
@@ -215,6 +284,9 @@ export class ScenePanel {
       }
       case "remove":
         this.handlers.remove(id);
+        break;
+      case "frame":
+        this.toggleFrameMenu(item, id);
         break;
     }
   }

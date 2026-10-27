@@ -139,3 +139,61 @@ test("the panel collapses and expands", () => {
   expect(panel.root.classList.contains("collapsed")).toBe(false);
   expect(panel.root.querySelector<HTMLElement>(".va3d-tree")!.hidden).toBe(false);
 });
+
+function setupFrames(files: SceneFile[]) {
+  const frame = vi.fn((fileId: string, f: { frame: string; unit: string }) => {
+    const file = files.find((x) => x.id === fileId)!;
+    file.sourceFrame = f.frame as SceneFile["sourceFrame"];
+    file.sourceUnit = f.unit as SceneFile["sourceUnit"];
+  });
+  const panel = new ScenePanel({ toggle: vi.fn(), remove: vi.fn(), frame });
+  document.body.append(panel.root);
+  for (const f of files) panel.addFile(f);
+  return { panel, frame };
+}
+const menuOf = (panel: ScenePanel, id: string) => node(panel, id)!.querySelector<HTMLElement>(":scope > .va3d-frame-menu");
+
+test("the file row's ⋯ menu picks the source frame and unit (default 그대로)", () => {
+  const f = { ...sceneFile("f1", nested, "a.stl"), format: "stl" };
+  const { panel, frame } = setupFrames([f]);
+  expect(menuOf(panel, "f1")).toBeNull();
+  expect(node(panel, "f1/0")!.querySelector(".va3d-more")).toBeNull(); // file rows only
+  btn(panel, "f1", "va3d-more").click();
+  const menu = menuOf(panel, "f1")!;
+  expect(menu.hidden).toBe(false);
+  const [frameSel, unitSel] = [...menu.querySelectorAll("select")];
+  expect(menu.textContent).toContain("원본 좌표계");
+  expect(menu.textContent).toContain("원본 단위");
+  expect(frameSel.value).toBe("as-is");
+  expect(unitSel.value).toBe("as-is");
+  expect([...frameSel.options].map((o) => o.value)).toEqual(["as-is", "zup-rh", "yup-rh", "ros", "yup-lh", "zup-lh"]);
+  expect([...unitSel.options].map((o) => o.value)).toEqual(["as-is", "mm", "cm", "m", "in"]);
+  expect(frameSel.options[0].textContent).toBe("그대로");
+  frameSel.value = "yup-rh";
+  frameSel.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(frame).toHaveBeenLastCalledWith("f1", { frame: "yup-rh", unit: "as-is" });
+  unitSel.value = "in";
+  unitSel.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(frame).toHaveBeenLastCalledWith("f1", { frame: "yup-rh", unit: "in" });
+  btn(panel, "f1", "va3d-more").click();
+  expect(menu.hidden).toBe(true);
+  btn(panel, "f1", "va3d-more").click(); // reopens with the current values
+  expect(menu.querySelector("select")!.value).toBe("yup-rh");
+});
+
+test("STEP/IGES files show their unit fixed as mm", () => {
+  const f = { ...sceneFile("f2", nested, "a.step"), sourceUnit: "mm" as const };
+  const { panel } = setupFrames([f]);
+  btn(panel, "f2", "va3d-more").click();
+  const unitSel = menuOf(panel, "f2")!.querySelectorAll("select")[1];
+  expect(unitSel.disabled).toBe(true);
+  expect(unitSel.value).toBe("mm");
+  expect(unitSel.title).toBe("STEP/IGES는 mm로 변환되어 열립니다");
+});
+
+test("Escape closes an open ⋯ menu", () => {
+  const { panel } = setupFrames([{ ...sceneFile("f3", nested, "a.obj"), format: "obj" }]);
+  btn(panel, "f3", "va3d-more").click();
+  menuOf(panel, "f3")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  expect(menuOf(panel, "f3")!.hidden).toBe(true);
+});

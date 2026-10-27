@@ -7,7 +7,8 @@ import { platform } from "../platform";
 import { windowTitle } from "../open-route";
 import { Stage, WebGLUnavailableError } from "./core/stage";
 import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
-import { buildTree, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
+import { buildTree, fixedSourceUnit, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
+import { FRAME_LABELS, FRAME_PRESETS, UNIT_LABELS, UNITS, type FramePreset, type ObjectFrame, type Unit } from "./core/frames";
 import { ScenePanel } from "./core/panel";
 import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
@@ -139,6 +140,9 @@ export class ThreeViewer {
   private readonly entries = new Map<string, Entry>();
   /** Files load one at a time (one parse worker, one upload), in the order they were added. */
   private queue: Promise<unknown> = Promise.resolve();
+  /** Display frame and unit: per window session only (not persisted). */
+  private display: FramePreset = "zup-rh";
+  private displayUnit: Unit = "mm";
 
   constructor(readonly stage: Stage, root: HTMLElement) {
     const toolbar = el("div", "va3d-toolbar");
@@ -151,7 +155,12 @@ export class ThreeViewer {
       b.addEventListener("click", () => this.run(action));
       toolbar.append(b);
     }
-    this.panel = new ScenePanel({ toggle: (id, v) => this.setVisible(id, v), remove: (id) => this.remove(id) });
+    toolbar.append(this.displaySelects());
+    this.panel = new ScenePanel({
+      toggle: (id, v) => this.setVisible(id, v),
+      remove: (id) => this.remove(id),
+      frame: (id, f) => this.setFileFrame(id, f),
+    });
     this.status.setAttribute("role", "status");
     root.append(this.panel.root, toolbar, this.progress.root, this.banner.root, this.status);
     window.addEventListener("keydown", (e) => {
@@ -162,6 +171,47 @@ export class ThreeViewer {
       e.preventDefault();
       this.run(action);
     });
+  }
+
+  /** Toolbar "좌표계" + unit dropdowns (display frame). */
+  private displaySelects(): HTMLElement {
+    const box = el("span", "va3d-display");
+    const make = (cls: string, title: string, options: [string, string][], value: string) => {
+      const sel = el("select", cls);
+      sel.title = title;
+      sel.setAttribute("aria-label", title);
+      for (const [v, text] of options) {
+        const o = el("option");
+        o.value = v;
+        o.textContent = text;
+        sel.append(o);
+      }
+      sel.value = value;
+      return sel;
+    };
+    const frame = make("va3d-display-frame", "좌표계 (화면 기준)", FRAME_PRESETS.map((p) => [p, FRAME_LABELS[p]]), this.display);
+    const unit = make("va3d-display-unit", "단위 (화면 기준)", UNITS.map((u) => [u, UNIT_LABELS[u]]), this.displayUnit);
+    const apply = () => this.setDisplay(frame.value as FramePreset, unit.value as Unit);
+    frame.addEventListener("change", apply);
+    unit.addEventListener("change", apply);
+    box.append(frame, unit);
+    return box;
+  }
+
+  setDisplay(display: FramePreset, unit: Unit): void {
+    this.display = display;
+    this.displayUnit = unit;
+    this.stage.setDisplay(display, unit);
+  }
+
+  /** Set a file's source frame and unit (STEP/IGES keep their fixed mm), then fit all. */
+  setFileFrame(fileId: string, frame: ObjectFrame): void {
+    const file = this.model.files.find((f) => f.id === fileId);
+    const built = this.objects.get(fileId);
+    if (!file || !built) return;
+    file.sourceFrame = frame.frame;
+    file.sourceUnit = fixedSourceUnit(file.format) ?? frame.unit;
+    this.stage.setObjectFrame(built.group, { frame: file.sourceFrame, unit: file.sourceUnit });
   }
 
   run(action: KeyAction): void {
@@ -263,12 +313,12 @@ export class ThreeViewer {
         disposeObject(built.group);
         return null;
       }
-      const file: SceneFile = { id, path, name, format, sourceFrame: "as-is", sourceUnit: "as-is", root };
+      const file: SceneFile = { id, path, name, format, sourceFrame: "as-is", sourceUnit: fixedSourceUnit(format) ?? "as-is", root };
       this.model.files.push(file);
       this.objects.set(id, built);
       this.panel.addFile(file);
       // Hidden until uploaded batch by batch; fit first so every batch lands in view.
-      this.stage.add(built.group, built.renderables);
+      this.stage.add(built.group, built.renderables, { frame: file.sourceFrame, unit: file.sourceUnit });
       if (this.model.files.length === 1) this.stage.fitAll("iso");
       else this.stage.fitAll();
       await this.stage.reveal(built.renderables, renderableSizes(built.renderables), (k, n) => onProgress("upload", k, n), signal);

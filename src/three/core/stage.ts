@@ -11,6 +11,8 @@ import {
   Matrix4,
   MOUSE,
   PerspectiveCamera,
+  Quaternion,
+  type Camera,
   Scene,
   Sphere,
   Vector3,
@@ -20,7 +22,7 @@ import {
   type Object3D,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { displayRootMatrix, type FramePreset } from "./frames";
+import { displayRootMatrix, objectMatrix, type FramePreset, type ObjectFrame, type Unit } from "./frames";
 import { fitDistance, standardViewDirection, standardViewUp, type StandardView } from "./views";
 import { batchByBudget, clipPlanes, gridSpec, orbitDirection } from "./stage-math";
 
@@ -49,8 +51,13 @@ export class Stage {
   /** File objects go here (display-frame coordinates). */
   readonly content = new Group();
 
-  private readonly display: FramePreset = "zup-rh";
+  private display: FramePreset = "zup-rh";
+  private displayUnit: Unit = "mm";
   private readonly displayMatrix = new Matrix4();
+  private readonly hemi = new HemisphereLight(0xffffff, 0x5a5a66, 1.1);
+  /** X/Y/Z labels at the axis tips (DOM overlay, coloured by CSS so they follow the theme). */
+  private readonly axisLabels: HTMLElement[] = [];
+  private axisLength = 1;
   private readonly helpers = new Group();
   private readonly bounds = new Sphere(new Vector3(), 1);
   private clipRadius = 1;
@@ -68,25 +75,18 @@ export class Stage {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     host.append(this.renderer.domElement);
 
-    this.displayMatrix.fromArray(displayRootMatrix(this.display));
-    this.displayRoot.matrixAutoUpdate = false;
-    this.displayRoot.matrix.copy(this.displayMatrix);
     this.displayRoot.add(this.helpers, this.content);
     this.scene.add(this.displayRoot);
-
-    // Orbit axis = the display frame's up, mapped to world. Must be set before OrbitControls
-    // is built (it caches the up-axis rotation).
-    const up = this.worldVector(standardViewUp("front", this.display));
-    this.camera.up.copy(up);
     this.scene.add(this.camera);
+    // Display root matrix, camera up (= orbit axis: set before OrbitControls is built, it caches
+    // the up-axis rotation) and the hemisphere sky direction.
+    this.applyDisplay();
 
     // Lighting follows the camera: a key light attached to it, plus a hemisphere fill. Three's
     // hemisphere light takes its sky direction from its world position, so it stays in the
     // scene, pointing along the display up axis (attaching it to the camera would aim it from
     // the origin to the camera).
-    const hemi = new HemisphereLight(0xffffff, 0x5a5a66, 1.1);
-    hemi.position.copy(up);
-    this.scene.add(hemi);
+    this.scene.add(this.hemi);
     const key = new DirectionalLight(0xffffff, 1.9);
     key.position.set(0, 0.35, 1); // headlight, slightly from above: every face the camera sees gets light
     key.target.position.set(0, 0, 0);
@@ -98,10 +98,80 @@ export class Stage {
     this.controls.screenSpacePanning = true;
     this.controls.addEventListener("change", () => this.requestRender());
 
+    const labels = document.createElement("div");
+    labels.className = "va3d-axis-labels";
+    labels.setAttribute("aria-hidden", "true");
+    for (const axis of ["x", "y", "z"]) {
+      const span = document.createElement("span");
+      span.className = `va3d-axis-label ${axis}`;
+      span.textContent = axis.toUpperCase();
+      labels.append(span);
+      this.axisLabels.push(span);
+    }
+    host.append(labels);
+    this.cleanups.push(() => labels.remove());
+
     this.trackTheme();
     this.trackSize();
     this.rebuildHelpers();
     this.setView("iso");
+  }
+
+  /**
+   * Change the display frame and unit: re-maps the display root, every file's frame matrix,
+   * camera up, grid and axes, then frames the content again. Standard views follow (they are
+   * computed from the display frame on demand).
+   */
+  setDisplay(display: FramePreset, unit: Unit): void {
+    this.display = display;
+    this.displayUnit = unit;
+    this.applyDisplay();
+    for (const o of this.content.children) this.applyFrame(o);
+    this.updateBounds();
+    this.fitAll();
+  }
+
+  /** Set a file group's source frame and unit (matrix from `objectMatrix`), then fit all. */
+  setObjectFrame(object: Object3D, frame: ObjectFrame): void {
+    object.userData.vaFrame = { ...frame };
+    this.applyFrame(object);
+    this.updateBounds();
+    this.fitAll();
+  }
+
+  private applyDisplay(): void {
+    this.displayMatrix.fromArray(displayRootMatrix(this.display));
+    this.displayRoot.matrixAutoUpdate = false;
+    this.displayRoot.matrix.copy(this.displayMatrix);
+    this.displayRoot.matrixWorldNeedsUpdate = true;
+    // Lights and orbit follow the display up. (The display root sends display up to world +Y for
+    // every preset today, so this is a no-op after construction, but keep it general.)
+    const up = this.worldVector(standardViewUp("front", this.display));
+    this.hemi.position.copy(up);
+    if (this.camera.up.equals(up)) return;
+    this.camera.up.copy(up);
+    const c = this.controls as unknown as { _quat?: Quaternion; _quatInverse?: Quaternion } | undefined;
+    if (c?._quat && c._quatInverse) {
+      c._quat.setFromUnitVectors(up, new Vector3(0, 1, 0));
+      c._quatInverse.copy(c._quat).invert();
+    }
+  }
+
+  /**
+   * File group matrix = objectMatrix(display, source) · the group's own transform (captured the
+   * first time, e.g. a glTF scene root's). "as-is" frame and unit leave the own transform alone.
+   */
+  private applyFrame(o: Object3D): void {
+    const frame: ObjectFrame = o.userData.vaFrame ?? { frame: "as-is", unit: "as-is" };
+    if (!o.userData.vaBase) {
+      if (o.matrixAutoUpdate) o.updateMatrix();
+      o.userData.vaBase = o.matrix.toArray();
+    }
+    o.matrixAutoUpdate = false;
+    o.matrix
+      .fromArray(objectMatrix(this.display, this.displayUnit, frame.frame, frame.unit))
+      .multiply(new Matrix4().fromArray(o.userData.vaBase as number[]));
+    o.matrixWorldNeedsUpdate = true;
   }
 
   /** Display-frame direction -> world direction. */
@@ -130,17 +200,29 @@ export class Stage {
       this.camera.updateProjectionMatrix();
     }
     this.renderer.render(this.scene, this.camera);
+    this.placeAxisLabels();
+  }
+
+  private placeAxisLabels(): void {
+    const spots = axisLabelPositions(this.camera, this.displayMatrix, this.axisLength, this.host.clientWidth, this.host.clientHeight);
+    spots.forEach((p, i) => {
+      const label = this.axisLabels[i];
+      label.hidden = !p.visible;
+      if (p.visible) label.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
+    });
   }
 
   /**
    * Add a file object. `pending` draw objects stay hidden (but count for bounds and fitting)
    * until `reveal` uploads them, so adding a huge mesh never uploads it in one frame.
    */
-  add(object: Object3D, pending: readonly Object3D[] = []): void {
+  add(object: Object3D, pending: readonly Object3D[] = [], frame?: ObjectFrame): void {
     for (const o of pending) {
       o.visible = false;
       o.userData.vaPending = true;
     }
+    if (frame) object.userData.vaFrame = { ...frame };
+    this.applyFrame(object);
     this.content.add(object);
     this.updateBounds();
     this.requestRender();
@@ -298,7 +380,8 @@ export class Stage {
     material.opacity = 0.8;
     material.depthWrite = false;
     grid.renderOrder = -1;
-    const axes = new AxesHelper(spec.size / 4);
+    this.axisLength = spec.size / 4;
+    const axes = new AxesHelper(this.axisLength);
     (axes.material as Material).depthTest = false;
     axes.renderOrder = 1;
     this.helpers.add(grid, axes);
@@ -316,6 +399,21 @@ export class Stage {
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
+}
+
+/**
+ * Screen positions (CSS px, origin top-left) of the X/Y/Z axis tips: display-frame points
+ * `length`·e_i, mapped to world by `displayMatrix`, projected by `camera`. Tips behind the camera
+ * or beyond the far plane are not visible.
+ */
+export function axisLabelPositions(camera: Camera, displayMatrix: Matrix4, length: number, width: number, height: number): { x: number; y: number; visible: boolean }[] {
+  camera.updateMatrixWorld();
+  return [0, 1, 2].map((i) => {
+    const p = new Vector3().setComponent(i, length).applyMatrix4(displayMatrix);
+    const inFront = p.clone().applyMatrix4(camera.matrixWorldInverse).z < 0;
+    p.project(camera);
+    return { x: ((p.x + 1) / 2) * width, y: ((1 - p.y) / 2) * height, visible: inFront && p.z <= 1 };
+  });
 }
 
 function disposeHelper(o: Object3D): void {
