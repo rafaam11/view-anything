@@ -75,6 +75,7 @@ export class ScenePanel {
     const narrow = window.matchMedia?.(NARROW);
     if (narrow) {
       this.setCollapsed(narrow.matches);
+      // Kept for the panel's lifetime (= the window's; panels are never torn down).
       narrow.addEventListener("change", (e) => this.setCollapsed(e.matches));
     }
   }

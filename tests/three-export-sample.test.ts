@@ -16,6 +16,7 @@ import { buildExportScene, exportGlb, exportTree } from "../src/three/export/sce
 import { compressGlb } from "../src/three/export/compress";
 import { renderHtml } from "../src/three/export/template";
 import { STATE_VERSION, type ExportState } from "../src/three/export/state";
+import { texturedGlb } from "./textured-glb";
 
 const OUT = process.env.VA_SAMPLE_OUT;
 const RUNTIME = join(__dirname, "..", "build", "runtime", "va-runtime.js");
@@ -92,3 +93,30 @@ test.skipIf(!OUT || !existsSync(RUNTIME))(
   },
   120_000,
 );
+
+test.skipIf(!OUT || !existsSync(RUNTIME))("sample exported HTML with an embedded texture", async () => {
+  const packed = await compressGlb(await texturedGlb());
+  const state: ExportState = {
+    version: STATE_VERSION,
+    title: "textured.glb",
+    display: "zup-rh",
+    unit: "mm",
+    mode: "solid",
+    sections: [0, 1, 2].map(() => ({ enabled: false, value: null })),
+    // Looking at the quad (display XY plane at z = 0, world y = 0) from above.
+    camera: { position: [0, 160, 0.001], target: [0, 0, 0] },
+    panelCollapsed: false,
+    files: [
+      {
+        id: "f1",
+        name: "textured.glb",
+        format: "glb",
+        sourceUnit: "as-is",
+        tree: { id: "f1", name: "textured.glb", kind: "file", visible: true, children: [{ id: "f1/0", name: "quad", kind: "mesh", visible: true, children: [] }] },
+      },
+    ],
+  };
+  const html = renderHtml({ title: state.title, glb: packed, state, runtime: readFileSync(RUNTIME, "utf8") });
+  mkdirSync(OUT!, { recursive: true });
+  writeFileSync(join(OUT!, "sample-textured.html"), html);
+});

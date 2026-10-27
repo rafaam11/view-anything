@@ -27,7 +27,7 @@ export function viewMenuItems(ctx: ViewMenuContext): MenuItem[] {
     { separator: true },
     { label: "장면 패널 표시", checked: () => ctx.panelShown(), run: () => ctx.setPanelShown(!ctx.panelShown()) },
     { separator: true },
-    { element: ctx.controls },
+    { element: ctx.controls, label: "표시 모드와 단면" },
   ];
 }
 
@@ -45,4 +45,10 @@ export function buildToolbar(run: (action: KeyAction) => void): HTMLElement {
     toolbar.append(b);
   }
   return toolbar;
+}
+
+/** Give the keyboard to the 3D canvas (after a menu command), so F and 1-7 work right away. */
+export function focusCanvas(canvas: HTMLElement): void {
+  if (!canvas.hasAttribute("tabindex")) canvas.tabIndex = -1;
+  canvas.focus({ preventScroll: true });
 }

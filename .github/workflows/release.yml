@@ -39,6 +39,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npx tauri build --bundles nsis
+      - run: npm run check:bundle
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows
@@ -63,6 +64,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npx tauri build --bundles deb,appimage
+      - run: npm run check:bundle
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux-x64

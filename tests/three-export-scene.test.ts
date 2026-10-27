@@ -6,8 +6,13 @@ import { expect, test } from "vitest";
 import { BoxGeometry, Group, Matrix4, Mesh, MeshStandardMaterial, type Object3D } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
-import { buildExportScene, exportTree, exportGlb } from "../src/three/export/scene";
+import { buildExportScene, exportTree, exportGlb, visibleFiles } from "../src/three/export/scene";
+import { defaultHtmlPath, exportTitle } from "../src/three/export/template";
 import { compressGlb } from "../src/three/export/compress";
+import { WebIO } from "@gltf-transform/core";
+import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
+import { MeshoptDecoder as MeshoptDecoderRaw } from "meshoptimizer";
+import { CHECKER, texturedGlb } from "./textured-glb";
 import { DisplayModes } from "../src/three/core/display-modes";
 import { objectMatrix } from "../src/three/core/frames";
 import type { TreeNode } from "../src/three/core/scene-model";
@@ -126,4 +131,29 @@ test("GLB -> meshopt -> GLTFLoader keeps ids, names, matrices and geometry", asy
   const box = mesh.geometry.boundingBox!.clone().applyMatrix4(mesh.matrix);
   expect(box.max.x).toBeCloseTo(1, 2);
   expect(box.min.y).toBeCloseTo(-1, 2);
+});
+
+test("hidden files never reach the export (first file hidden: title and name come from the rest)", () => {
+  const files = [
+    { file: { name: "secret.step", path: "D:/m/secret.step", root: { visible: false } } },
+    { file: { name: "b.stl", path: "D:/m/b.stl", root: { visible: true } } },
+    { file: { name: "c.obj", path: "D:/m/c.obj", root: { visible: true } } },
+  ];
+  const shown = visibleFiles(files);
+  expect(shown.map((f) => f.file.name)).toEqual(["b.stl", "c.obj"]);
+  expect(exportTitle(shown.map((f) => f.file.name))).toBe("b.stl 외 1개");
+  expect(defaultHtmlPath(shown[0].file.path)).toBe("D:/m/b.html");
+});
+
+test("textures survive compression: the PNG, its material slot, UVs and the node ids", async () => {
+  const packed = await compressGlb(await texturedGlb());
+  const doc = await new WebIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.decoder": MeshoptDecoderRaw }).readBinary(packed);
+  const [texture] = doc.getRoot().listTextures();
+  expect(texture.getMimeType()).toBe("image/png");
+  expect(texture.getImage()).toEqual(CHECKER);
+  const [material] = doc.getRoot().listMaterials();
+  expect(material.getBaseColorTexture()).toBe(texture);
+  const prim = doc.getRoot().listMeshes()[0].listPrimitives()[0];
+  expect(prim.getAttribute("TEXCOORD_0")).not.toBeNull();
+  expect(doc.getRoot().listNodes().map((n) => n.getExtras().vaId).sort()).toEqual(["f1", "f1/0"]);
 });

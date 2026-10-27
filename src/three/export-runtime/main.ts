@@ -11,7 +11,7 @@ import { Stage, WebGLUnavailableError } from "../core/stage";
 import { ScenePanel } from "../core/panel";
 import { ViewTools } from "../core/view-tools";
 import { Menubar } from "../core/menubar";
-import { buildToolbar, viewMenuItems } from "../core/view-menu";
+import { buildToolbar, focusCanvas, viewMenuItems } from "../core/view-menu";
 import { keyAction, type KeyAction } from "../core/keys";
 import { FRAME_LABELS, FRAME_SHORT_LABELS, UNIT_LABELS } from "../core/frames";
 import { meshTriangles } from "../core/info";
@@ -120,13 +120,14 @@ class ExportedViewer {
           controls: this.tools.controls,
         }),
       },
-    ]);
+    ], { focusAfter: () => focusCanvas(stage.canvas) });
     const status = el("div", "va3d-status");
     status.setAttribute("role", "status");
     status.append(this.tools.dims, this.tools.cursor);
     const bottom = el("div", "va3d-bottom");
     bottom.append(status);
     root.append(this.menubar.root, this.panel.root, toolbar, bottom);
+    // Lives as long as the exported page: no dispose path.
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !e.defaultPrevented) {
         if (!this.menubar.close()) this.tools.escape();

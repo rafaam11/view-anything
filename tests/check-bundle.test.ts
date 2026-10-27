@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
 // @ts-expect-error plain .mjs script without type declarations
-import { checkManifest } from "../scripts/check-bundle.mjs";
+import { checkManifest, checkRuntime } from "../scripts/check-bundle.mjs";
 
 /** Shape of a Vite 8 (rolldown) `dist/.vite/manifest.json`. */
 function manifest(extra: Record<string, unknown> = {}, entryImports: string[] = ["_preload-helper.js"], mdImports: string[] = ["_preload-helper.js"]) {
@@ -107,9 +107,13 @@ afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 
-function runCli(m: Record<string, { file: string }>, code: Record<string, string> = {}) {
+function runCli(m: Record<string, { file: string }>, code: Record<string, string> = {}, runtime: string | null = "(function(){})();") {
   const root = mkdtempSync(join(tmpdir(), "va-bundle-"));
   dirs.push(root);
+  if (runtime !== null) {
+    mkdirSync(join(root, "build", "runtime"), { recursive: true });
+    writeFileSync(join(root, "build", "runtime", "va-runtime.js"), runtime);
+  }
   mkdirSync(join(root, "dist", ".vite"), { recursive: true });
   mkdirSync(join(root, "dist", "assets"), { recursive: true });
   writeFileSync(join(root, "dist", ".vite", "manifest.json"), JSON.stringify(m));
@@ -138,4 +142,21 @@ test("cli exits 1 when the manifest is missing", () => {
     encoding: "utf8",
   });
   expect(r.status).toBe(1);
+});
+
+test("exported-HTML runtime: Tauri markers and module syntax are reported", () => {
+  expect(checkRuntime("(function(){var a=1;})();")).toEqual([]);
+  expect(checkRuntime('(function(){require("@tauri-apps/api")})();').join(" ")).toMatch(/Tauri/);
+  expect(checkRuntime("(function(){window.__TAURI_INTERNALS__})();").join(" ")).toMatch(/Tauri/);
+  expect(checkRuntime("import x from 'y';").join(" ")).toMatch(/module/);
+  expect(checkRuntime("(function(){import.meta.url})();").join(" ")).toMatch(/module/);
+});
+
+test("cli fails when the runtime bundle is missing or uses Tauri", () => {
+  const missing = runCli(manifest(), {}, null);
+  expect(missing.status).toBe(1);
+  expect(missing.stderr).toMatch(/va-runtime.js/);
+  const tauri = runCli(manifest(), {}, "(function(){window.__TAURI__})();");
+  expect(tauri.status).toBe(1);
+  expect(tauri.stderr).toMatch(/Tauri/);
 });

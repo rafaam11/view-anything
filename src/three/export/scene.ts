@@ -117,3 +117,11 @@ export async function exportGlb(scene: Object3D): Promise<Uint8Array> {
   if (!(result instanceof ArrayBuffer)) throw new Error("GLTFExporter did not return a GLB");
   return new Uint8Array(result);
 }
+
+/**
+ * Files that go into an export: those whose file node is shown. Everything about the export
+ * (title, default file name, state) is computed from these, so a hidden file never leaks out.
+ */
+export function visibleFiles<T extends { file: { root: { visible: boolean } } }>(files: readonly T[]): T[] {
+  return files.filter((f) => f.file.root.visible);
+}

@@ -1,8 +1,8 @@
 // HTML export: single-file template (escaping, CSP), base64 codec, the 50 MB warning and the state
 // JSON schema.
 import { expect, test } from "vitest";
-import { defaultHtmlPath, EXPORT_CSP, escapeScript, jsonForScript, renderHtml } from "../src/three/export/template";
-import { fromBase64, toBase64 } from "../src/three/export/codec";
+import { assembleHtml, defaultHtmlPath, EXPORT_CSP, escapeScript, exportTitle, jsonForScript, prepareHtml, renderHtml, renderHtmlBytes } from "../src/three/export/template";
+import { base64Length, encodeBase64Into, fromBase64, toBase64 } from "../src/three/export/codec";
 import { exceedsSizeWarning, SIZE_WARN_BYTES } from "../src/three/export/size";
 import { parseState, STATE_VERSION, type ExportState } from "../src/three/export/state";
 
@@ -78,7 +78,10 @@ test("renderHtml: one offline file with CSP, the GLB, the state and the runtime;
   const html = renderHtml({ title: evil, glb, state, runtime });
   expect(html.startsWith("<!doctype html>")).toBe(true);
   expect(html).toContain(`<meta http-equiv="Content-Security-Policy" content="${EXPORT_CSP}">`);
-  expect(EXPORT_CSP).toBe("default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:");
+  // Embedded textures: GLTFLoader's ImageBitmapLoader fetch()es blob: URLs; still nothing external.
+  expect(EXPORT_CSP).toBe("default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; connect-src blob: data:");
+  expect(EXPORT_CSP).not.toMatch(/https?:/);
+  expect(EXPORT_CSP).not.toContain("*");
   // Exactly the three script elements we wrote, each closed once.
   expect(html.match(/<script\b/gi)).toHaveLength(3);
   expect(html.match(/<\/script/gi)).toHaveLength(3);
@@ -131,4 +134,31 @@ test("save dialog default: first file's folder and stem with .html", () => {
   expect(defaultHtmlPath("D:/m/v1.2/part.final.stl")).toBe("D:/m/v1.2/part.final.html");
   expect(defaultHtmlPath("noext")).toBe("noext.html");
   expect(defaultHtmlPath(".hidden")).toBe(".hidden.html");
+});
+
+test("title from the visible files only", () => {
+  expect(exportTitle(["a.step"])).toBe("a.step");
+  expect(exportTitle(["a.step", "b.stl", "c.obj"])).toBe("a.step 외 2개");
+  expect(exportTitle([])).toBe("view-anything");
+});
+
+test("byte assembly: exact size known before assembling; base64 written in place matches btoa", () => {
+  const glb = new Uint8Array(100_003);
+  for (let i = 0; i < glb.length; i++) glb[i] = (i * 131) & 0xff;
+  const parts = { title: "t", glb, state: sampleState(), runtime: "void 0;" };
+  const prepared = prepareHtml(parts);
+  const bytes = assembleHtml(prepared, glb);
+  expect(bytes.length).toBe(prepared.byteLength(glb.length));
+  expect(bytes).toEqual(renderHtmlBytes(parts));
+  const text = new TextDecoder().decode(bytes);
+  const b64 = /id="va-glb">([^<]*)<\/script>/.exec(text)![1];
+  let binary = "";
+  for (const b of glb) binary += String.fromCharCode(b);
+  expect(b64).toBe(btoa(binary));
+  for (const n of [0, 1, 2, 3, 5]) {
+    const out = new Uint8Array(base64Length(n) + 2);
+    const end = encodeBase64Into(glb.subarray(0, n), out, 1);
+    expect(end).toBe(1 + base64Length(n));
+    expect(new TextDecoder().decode(out.subarray(1, end))).toBe(toBase64(glb.subarray(0, n)));
+  }
 });

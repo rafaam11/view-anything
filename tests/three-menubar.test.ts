@@ -134,3 +134,45 @@ test("keyboard: Alt+F / Alt+V open, arrows move between items and menus, disable
   expect(bar.handleKey(new KeyboardEvent("keydown", { key: "x", code: "KeyX", altKey: true }))).toBe(false);
   expect(bar.handleKey(new KeyboardEvent("keydown", { key: "f", code: "KeyF" }))).toBe(false);
 });
+
+test("control blocks are role=group outside the role=menu lists", () => {
+  const { dropdowns, custom } = setup();
+  const block = custom.parentElement!;
+  expect(block.getAttribute("role")).toBe("group");
+  expect(block.closest('[role="menu"]')).toBeNull();
+  expect(dropdowns[1].getAttribute("role")).toBeNull();
+  const check = dropdowns[1].querySelector('[role="menuitemcheckbox"]')!;
+  expect(check.closest('[role="menu"]')).not.toBeNull();
+});
+
+test("Home / End jump to the first / last enabled item", () => {
+  const { bar, dropdowns } = setup();
+  bar.handleKey(new KeyboardEvent("keydown", { key: "f", code: "KeyF", altKey: true }));
+  const items = [...dropdowns[0].querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  const key = (k: string) => (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+  key("End");
+  expect(document.activeElement).toBe(items[1]); // the last item is disabled
+  key("Home");
+  expect(document.activeElement).toBe(items[0]);
+});
+
+test("after a command the keyboard goes to focusAfter (the canvas); dispose drops the document listener", () => {
+  const canvas = document.createElement("canvas");
+  canvas.tabIndex = -1;
+  document.body.append(canvas);
+  const run = vi.fn();
+  const bar = new Menubar([{ label: "파일", items: [{ label: "A", run }] }], { focusAfter: () => canvas.focus() });
+  document.body.append(bar.root);
+  const title = bar.root.querySelector<HTMLButtonElement>(".va3d-menu-title")!;
+  title.focus();
+  title.click();
+  bar.root.querySelector<HTMLButtonElement>(".va3d-menu-item")!.click();
+  expect(run).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(canvas);
+  title.click();
+  bar.dispose();
+  expect(bar.isOpen).toBe(false);
+  title.click();
+  document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  expect(bar.isOpen).toBe(true); // no document listener any more
+});

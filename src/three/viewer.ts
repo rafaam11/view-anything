@@ -13,7 +13,7 @@ import { ScenePanel } from "./core/panel";
 import { ViewTools } from "./core/view-tools";
 import { keyAction, type KeyAction } from "./core/keys";
 import { Menubar } from "./core/menubar";
-import { buildToolbar, viewMenuItems } from "./core/view-menu";
+import { buildToolbar, focusCanvas, viewMenuItems } from "./core/view-menu";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
 import { canCoarsen } from "./worker/cad-params";
 import { loadGltfFile, loadMeshFile } from "./load";
@@ -222,8 +222,10 @@ export class ThreeViewer {
           controls: this.tools.controls,
         }),
       },
-    ]);
+    ], { focusAfter: () => focusCanvas(stage.canvas) });
     root.append(this.menubar.root, this.panel.root, toolbar, this.progress.root, this.banner.root, bottom);
+    // Window-level for the viewer's lifetime: a window shows one 3D viewer and never unmounts it
+    // (no dispose path); the menubar's document listener is likewise kept (Menubar.dispose exists).
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !e.defaultPrevented) {
         if (!this.menubar.close()) this.tools.escape();
