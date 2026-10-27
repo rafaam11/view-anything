@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2E2A7A"/><stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.6">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".18"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E0E7FF"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C7D2FE"/><stop offset="1" stop-color="#A5B4FC"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#818CF8"/><stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0B0A2E" stop-opacity=".55"/><stop offset="1" stop-color="#0B0A2E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#glow)"/>
+  <ellipse cx="512" cy="868" rx="300" ry="56" fill="url(#shadow)"/>
+  <polygon points="252,400 512,550 512,850 252,700" fill="url(#left)"/>
+  <polygon points="512,550 772,400 772,700 512,850" fill="url(#right)"/>
+  <polygon points="512,250 772,400 512,550 252,400" fill="url(#top)"/>
+  <g stroke="#4338CA" stroke-linecap="round" fill="none">
+    <line x1="493.8" y1="314.5" x2="649.8" y2="404.5" stroke-width="36"/>
+    <line x1="441.8" y1="344.5" x2="584.8" y2="427" stroke-width="22" stroke-opacity=".75"/>
+    <line x1="389.8" y1="374.5" x2="519.8" y2="449.5" stroke-width="22" stroke-opacity=".75"/>
+  </g>
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="252,400 512,550 772,400" stroke="#FFFFFF" stroke-opacity=".9" stroke-width="8"/>
+    <line x1="512" y1="550" x2="512" y2="850" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="6"/>
+  </g>
+</svg>
