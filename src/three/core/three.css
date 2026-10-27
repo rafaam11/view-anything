@@ -144,5 +144,7 @@
 @media (max-width: 700px) {
   .va3d-toolbar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 100px); }
   .va3d-panel:not(.collapsed) { bottom: 28px; width: min(260px, calc(100% - 16px)); z-index: 1; }
-  .va3d .va3d-banner { top: auto; bottom: 84px; left: 8px; right: 8px; min-width: 0; max-width: none; }
+  /* Must out-rank `.va3d-panel.collapsed ~ .va3d-banner` above: the panel is collapsed here. */
+  .va3d .va3d-panel ~ .va3d-banner,
+  .va3d .va3d-panel.collapsed ~ .va3d-banner { top: auto; bottom: 84px; left: 8px; right: 8px; min-width: 0; max-width: none; }
 }
