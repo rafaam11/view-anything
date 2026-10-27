@@ -19,7 +19,7 @@ import {
   type Texture,
 } from "three";
 import { buildTree, type ParsedTree, type TreeNode } from "./scene-model";
-import type { MeshData, ParsedFile } from "../worker/protocol";
+import { meshPieces, type MeshData, type ParsedFile } from "../worker/protocol";
 
 export interface BuiltFile {
   /** The file's root object; its matrix carries the per-file source-frame transform. */
@@ -28,6 +28,8 @@ export interface BuiltFile {
   nodes: Map<string, Object3D>;
   /** Triangle count over all triangle meshes. */
   triangles: number;
+  /** Every draw object, in scene order (the stage uploads them in batches). */
+  renderables: Object3D[];
 }
 
 const DEFAULT_COLOR = 0xb4bcc6;
@@ -37,6 +39,15 @@ type Renderable = Mesh | Points | LineSegments;
 function isRenderable(o: Object3D): o is Renderable {
   const r = o as Partial<Mesh & Points & LineSegments>;
   return r.isMesh === true || r.isPoints === true || r.isLine === true;
+}
+
+/** Upload weight per object: triangles, or vertices/3 for points and lines. */
+export function renderableSizes(objects: readonly Object3D[]): number[] {
+  return objects.map((o) => {
+    const m = o as Mesh;
+    if (m.isMesh) return triangleCount(o);
+    return (m.geometry?.getAttribute("position")?.count ?? 0) / 3;
+  });
 }
 
 function triangleCount(o: Object3D): number {
@@ -49,15 +60,16 @@ function triangleCount(o: Object3D): number {
 /** Materials are shared per file and created on first use. */
 class MaterialSet {
   private cache = new Map<string, Material>();
-  get(primitive: string, vertexColors: boolean): Material {
-    const key = `${primitive}:${vertexColors}`;
+  get(primitive: string, vertexColors: boolean, flatShading: boolean): Material {
+    const key = `${primitive}:${vertexColors}:${flatShading}`;
     let m = this.cache.get(key);
     if (!m) {
       const color = vertexColors ? 0xffffff : DEFAULT_COLOR;
       if (primitive === "points") m = new PointsMaterial({ color, vertexColors, size: 2, sizeAttenuation: false });
       else if (primitive === "lines") m = new LineBasicMaterial({ color, vertexColors });
       // DoubleSide: STL/OBJ exports often have inconsistent winding.
-      else m = new MeshStandardMaterial({ color, vertexColors, metalness: 0.05, roughness: 0.6, side: DoubleSide });
+      // flatShading: meshes sent without normals (STL, OBJ without vn) are lit per face.
+      else m = new MeshStandardMaterial({ color, vertexColors, flatShading, metalness: 0.05, roughness: 0.6, side: DoubleSide });
       this.cache.set(key, m);
     }
     return m;
@@ -85,7 +97,7 @@ function geometryOf(data: MeshData): BufferGeometry {
 function objectOf(data: MeshData, materials: MaterialSet): Renderable {
   const geometry = geometryOf(data);
   const primitive = data.primitive ?? "triangles";
-  const material = materials.get(primitive, data.colors !== undefined);
+  const material = materials.get(primitive, data.colors !== undefined, primitive === "triangles" && !data.normals);
   const o = primitive === "points" ? new Points(geometry, material) : primitive === "lines" ? new LineSegments(geometry, material) : new Mesh(geometry, material);
   o.name = data.name;
   return o;
@@ -95,21 +107,26 @@ function objectOf(data: MeshData, materials: MaterialSet): Renderable {
 export function buildParsedFile(parsed: ParsedFile, root: TreeNode): BuiltFile {
   const materials = new MaterialSet();
   const nodes = new Map<string, Object3D>();
+  const renderables: Object3D[] = [];
   let triangles = 0;
   const build = (node: TreeNode): Object3D => {
     const group = new Group();
     group.name = node.name;
     nodes.set(node.id, group);
     for (const i of node.meshIds) {
-      const o = objectOf(parsed.meshes[i], materials);
-      triangles += triangleCount(o);
-      group.add(o);
+      // A chunked mesh stays one tree node: its pieces are siblings under the node's group.
+      for (const piece of meshPieces(parsed.meshes[i])) {
+        const o = objectOf({ ...piece, name: parsed.meshes[i].name }, materials);
+        triangles += triangleCount(o);
+        renderables.push(o);
+        group.add(o);
+      }
     }
     for (const child of node.children) group.add(build(child));
     return group;
   };
   const group = build(root);
-  return { group, nodes, triangles };
+  return { group, nodes, triangles, renderables };
 }
 
 /**
@@ -176,7 +193,7 @@ export function adoptGltfScene(scene: Object3D, fileName: string, fileId: string
   };
   link(root, scene);
   const triangles = meshObjects.reduce((n, o) => n + triangleCount(o), 0);
-  return { root, built: { group: scene, nodes, triangles } };
+  return { root, built: { group: scene, nodes, triangles, renderables: meshObjects } };
 }
 
 /** Dispose every geometry, material and texture under `root` (each once). */
@@ -196,5 +213,10 @@ export function disposeObject(root: Object3D): void {
   }
   geometries.forEach((g) => g.dispose());
   materials.forEach((m) => m.dispose());
-  textures.forEach((t) => t.dispose());
+  textures.forEach((t) => {
+    t.dispose();
+    // three does not release decoded ImageBitmaps (GLTFLoader on Chromium) on dispose.
+    const image = t.image as { close?: () => void } | null;
+    if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) image.close?.();
+  });
 }

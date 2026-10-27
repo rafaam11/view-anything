@@ -6,6 +6,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { platform } from "../platform";
 import { fetchWithProgress } from "./io/source";
 import { resolveSibling } from "./core/stage-math";
+import { disposeObject } from "./core/build-objects";
 import type { FromWorker, MeshFormat, ParsedFile, Phase, ToWorker } from "./worker/protocol";
 
 export type ProgressFn = (phase: Phase, loaded: number, total: number) => void;
@@ -14,11 +15,34 @@ function abortError(): DOMException {
   return new DOMException("aborted", "AbortError");
 }
 
-/** Parse STL/OBJ/PLY in a fresh module worker, terminated afterwards (frees its memory). */
-export function loadMeshFile(path: string, format: MeshFormat, onProgress: ProgressFn, signal?: AbortSignal): Promise<ParsedFile> {
+/** Without a worker, files larger than this are refused instead of parsed on the UI thread. */
+export const MAIN_THREAD_PARSE_LIMIT = 32 << 20;
+
+/**
+ * Parse STL/OBJ/PLY in a fresh module worker, terminated afterwards (frees its memory). If the
+ * worker cannot start, `onFallback` is called and small files are parsed on this thread.
+ */
+export function loadMeshFile(
+  path: string,
+  format: MeshFormat,
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+  onFallback?: () => void,
+): Promise<ParsedFile> {
+  const fallback = (why: unknown) => {
+    console.warn("view-anything: parse worker unavailable, parsing on the UI thread:", why);
+    onFallback?.();
+    return parseHere(path, format, onProgress, signal);
+  };
   return new Promise<ParsedFile>((resolve, reject) => {
     if (signal?.aborted) return reject(abortError());
-    const worker = new Worker(new URL("./worker/parse.worker.ts", import.meta.url), { type: "module" });
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("./worker/parse.worker.ts", import.meta.url), { type: "module" });
+    } catch (e) {
+      fallback(e).then(resolve, reject);
+      return;
+    }
     const id = 1;
     let heard = false;
     let settled = false;
@@ -73,7 +97,7 @@ export function loadMeshFile(path: string, format: MeshFormat, onProgress: Progr
       if (heard) return fail(new Error(e.message || "worker failed"));
       // The worker never started (e.g. blocked by CSP): parse on this thread instead.
       finish();
-      parseHere(path, format, onProgress, signal).then(resolve, reject);
+      fallback(e.message || e).then(resolve, reject);
     };
     post({ type: "parse", id, url: platform.assetUrl(path), format });
   });
@@ -85,6 +109,9 @@ async function parseHere(path: string, format: MeshFormat, onProgress: ProgressF
     fetchWithProgress(platform.assetUrl(path), (l, t) => onProgress("read", l, t), signal, { fallback: () => platform.readFileRaw(path) }),
   ]);
   signal?.throwIfAborted();
+  if (buffer.byteLength > MAIN_THREAD_PARSE_LIMIT) {
+    throw new Error(`파싱 워커를 시작할 수 없어 32MB가 넘는 파일은 열지 않습니다 (UI 멈춤 방지, ${(buffer.byteLength / (1 << 20)).toFixed(0)} MB)`);
+  }
   onProgress("parse", 0, 0);
   return parseMesh(format, buffer);
 }
@@ -109,6 +136,9 @@ export async function loadGltfFile(path: string, onProgress: ProgressFn, signal?
   const loader = new GLTFLoader(manager);
   loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await loader.parseAsync(data, "");
-  signal?.throwIfAborted();
+  if (signal?.aborted) {
+    disposeObject(gltf.scene);
+    throw abortError();
+  }
   return gltf.scene;
 }

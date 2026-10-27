@@ -5,29 +5,49 @@ import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import type { ParsedTree } from "../core/scene-model";
-import type { MeshData, MeshFormat, ParsedFile, Primitive } from "./protocol";
+import { meshPieces, type MeshData, type MeshFormat, type ParsedFile, type Primitive } from "./protocol";
 
-export function parseMesh(format: MeshFormat, buffer: ArrayBuffer): ParsedFile {
+export { meshPieces };
+
+/** Triangles per draw chunk: ~36 MB of non-indexed positions, one chunk uploaded per frame. */
+export const CHUNK_TRIANGLES = 1_000_000;
+
+export function parseMesh(format: MeshFormat, buffer: ArrayBuffer, maxTriangles = CHUNK_TRIANGLES): ParsedFile {
+  let file: ParsedFile;
   switch (format) {
     case "stl":
-      return single(new STLLoader().parse(buffer), "triangles");
+      // STL normals are per face: drop them and flat-shade instead (half the transfer and upload).
+      file = single(new STLLoader().parse(buffer), "triangles", true);
+      break;
     case "ply": {
       const geometry = new PLYLoader().parse(buffer);
-      return single(geometry, geometry.index ? "triangles" : "points");
+      file = single(geometry, geometry.index ? "triangles" : "points", false);
+      break;
     }
     case "obj":
-      return parseObjText(new TextDecoder().decode(buffer));
+      file = parseObjText(new TextDecoder().decode(buffer));
+      break;
     default:
       throw new Error(`unsupported mesh format: ${String(format)}`);
   }
+  file.meshes = file.meshes.map((m) => {
+    const pieces = chunkMesh(m, maxTriangles);
+    return pieces.length === 1 ? m : { name: m.name, primitive: m.primitive, positions: new Float32Array(0), bounds: m.bounds, chunks: pieces };
+  });
+  return file;
 }
 
-function single(geometry: BufferGeometry, primitive: Primitive): ParsedFile {
+function single(geometry: BufferGeometry, primitive: Primitive, dropNormals: boolean): ParsedFile {
+  if (dropNormals) geometry.deleteAttribute("normal");
   return { tree: { meshes: [0], children: [] }, meshes: [toMeshData(geometry, "", primitive)] };
 }
 
+/**
+ * Non-indexed triangles without normals stay without (the UI flat-shades them, which is what
+ * computed per-face normals would give); indexed ones get smooth vertex normals.
+ */
 function toMeshData(geometry: BufferGeometry, name: string, primitive: Primitive): MeshData {
-  if (primitive === "triangles" && !geometry.getAttribute("normal")) geometry.computeVertexNormals();
+  if (primitive === "triangles" && geometry.index && !geometry.getAttribute("normal")) geometry.computeVertexNormals();
   const positions = floats(geometry.getAttribute("position"), 3)!;
   const mesh: MeshData = { name, positions, bounds: bounds(positions) };
   if (primitive !== "triangles") mesh.primitive = primitive;
@@ -103,6 +123,7 @@ export function parseObjText(text: string): ParsedFile {
   // A leading declaration claims faces that come before any o/g; otherwise OBJLoader renames that
   // default object after the first declaration and the loose faces would join it.
   const container = new OBJLoader().parse(`o ${TAG}root\n${tagged}`);
+  const hasNormals = /^[ \t]*vn[ \t]/m.test(tagged);
   const root: ParsedTree = { meshes: [], children: [] };
   const byKey = new Map<string, ParsedTree>();
   const keyOf = new Map<ParsedTree, string>([[root, ""]]);
@@ -129,6 +150,8 @@ export function parseObjText(text: string): ParsedFile {
     const decl = Number.isInteger(match) ? decls[match] : undefined;
     const obj = child as Object3D & { geometry: BufferGeometry; isLineSegments?: boolean; isPoints?: boolean };
     const primitive: Primitive = obj.isLineSegments ? "lines" : obj.isPoints ? "points" : "triangles";
+    // Without `vn` lines OBJLoader fills in per-face normals: drop them and flat-shade instead.
+    if (!hasNormals) obj.geometry.deleteAttribute("normal");
     meshes.push(toMeshData(obj.geometry, decl?.name ?? "", primitive));
     (decl ? nodeFor(match) : root).meshes.push(meshes.length - 1);
   });
@@ -141,4 +164,72 @@ export function parseObjText(text: string): ParsedFile {
 function prune(node: ParsedTree): boolean {
   node.children = node.children.filter(prune);
   return node.meshes.length > 0 || node.children.length > 0;
+}
+
+const VERTICES_PER_PRIMITIVE: Record<Primitive, number> = { triangles: 3, lines: 2, points: 1 };
+
+/**
+ * Split a mesh into draw pieces of at most `maxTriangles` triangles (points/lines: the same number
+ * of vertices as that many triangles). Non-indexed pieces are views into the original buffers (no
+ * copy); indexed pieces get their own compacted vertex arrays. A small mesh comes back as `[m]`.
+ */
+export function chunkMesh(m: MeshData, maxTriangles: number): MeshData[] {
+  const per = VERTICES_PER_PRIMITIVE[m.primitive ?? "triangles"];
+  const step = Math.max(per, Math.floor((maxTriangles * 3) / per) * per);
+  const base = (): MeshData => {
+    const p: MeshData = { name: m.name, positions: new Float32Array(0) };
+    if (m.primitive) p.primitive = m.primitive;
+    return p;
+  };
+
+  if (!m.indices) {
+    const n = m.positions.length / 3;
+    if (n <= step) return [m];
+    const out: MeshData[] = [];
+    for (let s = 0; s < n; s += step) {
+      const e = Math.min(n, s + step);
+      const piece = base();
+      piece.positions = m.positions.subarray(s * 3, e * 3);
+      if (m.normals) piece.normals = m.normals.subarray(s * 3, e * 3);
+      if (m.colors) piece.colors = m.colors.subarray(s * 3, e * 3);
+      piece.bounds = bounds(piece.positions);
+      out.push(piece);
+    }
+    return out;
+  }
+
+  const indices = m.indices;
+  if (indices.length <= step) return [m];
+  const remap = new Int32Array(m.positions.length / 3).fill(-1);
+  const out: MeshData[] = [];
+  for (let s = 0; s < indices.length; s += step) {
+    const e = Math.min(indices.length, s + step);
+    const local = new Uint32Array(e - s);
+    const order = new Uint32Array(e - s);
+    let count = 0;
+    for (let k = s; k < e; k++) {
+      const v = indices[k];
+      let l = remap[v];
+      if (l < 0) {
+        l = count++;
+        remap[v] = l;
+        order[l] = v;
+      }
+      local[k - s] = l;
+    }
+    const gather = (src: Float32Array): Float32Array => {
+      const dst = new Float32Array(count * 3);
+      for (let l = 0; l < count; l++) dst.set(src.subarray(order[l] * 3, order[l] * 3 + 3), l * 3);
+      return dst;
+    };
+    const piece = base();
+    piece.positions = gather(m.positions);
+    piece.indices = local;
+    if (m.normals) piece.normals = gather(m.normals);
+    if (m.colors) piece.colors = gather(m.colors);
+    piece.bounds = bounds(piece.positions);
+    out.push(piece);
+    for (let l = 0; l < count; l++) remap[order[l]] = -1;
+  }
+  return out;
 }

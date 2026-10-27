@@ -20,10 +20,16 @@ export function orbitDirection(dir: V3, viewUp: V3, orbitUp: V3, eps = 1e-3): nu
   return d.map((x) => x / l);
 }
 
-/** Near/far planes for a camera `distance` from the centre of a bounding sphere of `radius`. */
-export function clipPlanes(distance: number, radius: number): { near: number; far: number } {
-  const r = Math.max(radius, 1e-6);
-  const near = Math.max(distance - r, r * 1e-3);
+const MIN_NEAR = 1e-6;
+
+/**
+ * Near/far planes for a camera `distance` from the centre of a bounding sphere of `radius`.
+ * Inside the sphere the near floor follows the distance to the orbit target (zoomed in close
+ * to a surface), capped at radius/1000, so close-ups do not clip away.
+ */
+export function clipPlanes(distance: number, radius: number, targetDistance = distance): { near: number; far: number } {
+  const r = Math.max(radius, MIN_NEAR);
+  const near = Math.max(distance - r, Math.min(r * 1e-3, targetDistance * 1e-2), MIN_NEAR);
   const far = Math.max(distance + r, near + r);
   return { near, far };
 }
@@ -57,10 +63,34 @@ export function resolveSibling(modelPath: string, uri: string): string | null {
   const rootLength = parts[0] === "" && parts[1] === "" ? 4 : 1; // UNC \\srv\share, else "/" or "C:"
   const root = parts.slice(0, rootLength);
   const dirs = parts.slice(rootLength);
+  const inside: string[] = []; // segments below the model's folder
   for (const seg of rel.split(/[\\/]/)) {
     if (seg === "" || seg === ".") continue;
-    if (seg === "..") dirs.pop();
-    else dirs.push(seg);
+    if (seg === "..") {
+      if (inside.length === 0) return null; // would leave the model's folder
+      inside.pop();
+    } else inside.push(seg);
   }
-  return [...root, ...dirs].join(sep);
+  return [...root, ...dirs, ...inside].join(sep);
+}
+
+/**
+ * Split items (sizes, e.g. triangle counts) into consecutive batches whose total stays within
+ * `budget`; an item bigger than the budget forms its own batch. Returns item indices per batch.
+ */
+export function batchByBudget(sizes: readonly number[], budget: number): number[][] {
+  const batches: number[][] = [];
+  let current: number[] = [];
+  let sum = 0;
+  sizes.forEach((size, i) => {
+    if (current.length > 0 && sum + size > budget) {
+      batches.push(current);
+      current = [];
+      sum = 0;
+    }
+    current.push(i);
+    sum += size;
+  });
+  if (current.length > 0) batches.push(current);
+  return batches;
 }

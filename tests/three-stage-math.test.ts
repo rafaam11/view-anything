@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { clipPlanes, gridSpec, orbitDirection, resolveSibling } from "../src/three/core/stage-math";
+import { batchByBudget, clipPlanes, gridSpec, orbitDirection, resolveSibling } from "../src/three/core/stage-math";
 
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
@@ -24,7 +24,7 @@ test("clipPlanes: tight around the sphere outside, small near inside", () => {
   const out = clipPlanes(100, 10);
   expect(out.near).toBeCloseTo(90, 6);
   expect(out.far).toBeCloseTo(110, 6);
-  const inside = clipPlanes(1, 10);
+  const inside = clipPlanes(1, 10, 1);
   expect(inside.near).toBeGreaterThan(0);
   expect(inside.near).toBeLessThan(0.1);
   expect(inside.far).toBeCloseTo(11, 6);
@@ -46,10 +46,8 @@ test("gridSpec: power-of-ten cells covering the model, capped divisions", () => 
 test("resolveSibling: relative URIs against the model's folder", () => {
   expect(resolveSibling("C:\\m\\a.gltf", "a.bin")).toBe("C:\\m\\a.bin");
   expect(resolveSibling("C:\\m\\a.gltf", "tex/b%20c.png")).toBe("C:\\m\\tex\\b c.png");
-  expect(resolveSibling("C:\\m\\sub\\a.gltf", "../x.bin")).toBe("C:\\m\\x.bin");
   expect(resolveSibling("C:\\m\\a.gltf", "./t/../u.png")).toBe("C:\\m\\u.png");
   expect(resolveSibling("/home/u/a.gltf", "b.bin")).toBe("/home/u/b.bin");
-  expect(resolveSibling("/home/u/a.gltf", "../../../x")).toBe("/x");
   expect(resolveSibling("\\\\srv\\share\\a.gltf", "b.bin")).toBe("\\\\srv\\share\\b.bin");
   expect(resolveSibling("C:\\m\\a.gltf", "bad%zz.png")).toBe("C:\\m\\bad%zz.png");
 });
@@ -58,4 +56,26 @@ test("resolveSibling refuses absolute paths, UNC and other schemes", () => {
   for (const uri of ["/etc/x.bin", "//evil/share/x.bin", "\\\\evil\\share\\x.bin", "C:/x.bin", "D:\\x.bin", "file:///C:/x.bin", "https://e.com/x.bin", "%2F%2Fevil/x"]) {
     expect(resolveSibling("C:\\m\\a.gltf", uri), uri).toBeNull();
   }
+});
+
+test("clipPlanes: near floor shrinks with the camera-target distance (close zoom)", () => {
+  // Inside the sphere, 0.5 from the target: floor min(R*1e-3, d*1e-2) = 0.005.
+  expect(clipPlanes(1, 10, 0.5).near).toBeCloseTo(0.005, 12);
+  // Far from the target the floor is capped at R*1e-3.
+  expect(clipPlanes(1, 10, 100).near).toBeCloseTo(0.01, 12);
+  // Absolute minimum keeps near > 0.
+  expect(clipPlanes(0, 10, 0).near).toBeGreaterThan(0);
+});
+
+test("resolveSibling: '..' may not leave the model's folder", () => {
+  expect(resolveSibling("C:\\m\\sub\\a.gltf", "../x.bin")).toBeNull();
+  expect(resolveSibling("/home/u/a.gltf", "../../../x")).toBeNull();
+  expect(resolveSibling("C:\\m\\a.gltf", "t/../../x.bin")).toBeNull();
+  expect(resolveSibling("C:\\m\\a.gltf", "t/../x.bin")).toBe("C:\\m\\x.bin");
+});
+
+test("batchByBudget: consecutive groups up to the budget, oversize items alone", () => {
+  expect(batchByBudget([], 10)).toEqual([]);
+  expect(batchByBudget([4, 4, 4, 15, 1, 9, 1], 10)).toEqual([[0, 1], [2], [3], [4, 5], [6]]);
+  expect(batchByBudget([0, 0, 0], 10)).toEqual([[0, 1, 2]]);
 });

@@ -22,7 +22,7 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { displayRootMatrix, type FramePreset } from "./frames";
 import { fitDistance, standardViewDirection, standardViewUp, type StandardView } from "./views";
-import { clipPlanes, gridSpec, orbitDirection } from "./stage-math";
+import { batchByBudget, clipPlanes, gridSpec, orbitDirection } from "./stage-math";
 
 export class WebGLUnavailableError extends Error {
   constructor() {
@@ -32,6 +32,12 @@ export class WebGLUnavailableError extends Error {
 }
 
 const FIT_MARGIN = 1.1;
+/** Triangles uploaded per frame by `reveal` (~36 MB of non-indexed positions). */
+const UPLOAD_BUDGET = 1_000_000;
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
 
 export class Stage {
   readonly renderer: WebGLRenderer;
@@ -113,7 +119,11 @@ export class Stage {
 
   private render(): void {
     if (this.disposed) return;
-    const { near, far } = clipPlanes(this.camera.position.distanceTo(this.bounds.center), this.clipRadius);
+    const { near, far } = clipPlanes(
+      this.camera.position.distanceTo(this.bounds.center),
+      this.clipRadius,
+      this.camera.position.distanceTo(this.controls.target),
+    );
     if (near !== this.camera.near || far !== this.camera.far) {
       this.camera.near = near;
       this.camera.far = far;
@@ -122,10 +132,39 @@ export class Stage {
     this.renderer.render(this.scene, this.camera);
   }
 
-  add(object: Object3D): void {
+  /**
+   * Add a file object. `pending` draw objects stay hidden (but count for bounds and fitting)
+   * until `reveal` uploads them, so adding a huge mesh never uploads it in one frame.
+   */
+  add(object: Object3D, pending: readonly Object3D[] = []): void {
+    for (const o of pending) {
+      o.visible = false;
+      o.userData.vaPending = true;
+    }
     this.content.add(object);
     this.updateBounds();
     this.requestRender();
+  }
+
+  /**
+   * Show pending objects batch by batch (about UPLOAD_BUDGET triangles per frame), rendering after
+   * each batch so its buffers go to the GPU in that frame. Shaders are compiled (async where the
+   * driver supports it) before the first batch. Resolves when the last batch is on screen.
+   */
+  async reveal(objects: readonly Object3D[], sizes: readonly number[], onStep?: (done: number, total: number) => void, signal?: AbortSignal): Promise<void> {
+    const batches = batchByBudget(sizes, UPLOAD_BUDGET);
+    for (let b = 0; b < batches.length; b++) {
+      if (this.disposed || signal?.aborted) return;
+      for (const i of batches[b]) {
+        objects[i].visible = true;
+        delete objects[i].userData.vaPending;
+      }
+      if (b === 0) await this.renderer.compileAsync(this.scene, this.camera);
+      if (this.disposed || signal?.aborted) return;
+      this.render();
+      onStep?.(b + 1, batches.length);
+      await nextFrame();
+    }
   }
 
   remove(object: Object3D): void {
@@ -134,17 +173,22 @@ export class Stage {
     this.requestRender();
   }
 
-  /** Recompute the bounding sphere of visible content (world), then resize the grid to match. */
+  /** Recompute the bounding sphere of visible (or pending) content (world), then resize the grid to match. */
   updateBounds(): void {
     this.scene.updateMatrixWorld(true);
     const box = new Box3();
     const part = new Box3();
-    this.content.traverseVisible((o) => {
+    // Visible content plus objects still waiting for upload (hidden only because they are pending).
+    const visit = (o: Object3D) => {
+      if (!o.visible && !o.userData.vaPending) return;
       const g = (o as Object3D & { geometry?: BufferGeometry }).geometry;
-      if (!g) return;
-      if (!g.boundingBox) g.computeBoundingBox();
-      box.union(part.copy(g.boundingBox!).applyMatrix4(o.matrixWorld));
-    });
+      if (g) {
+        if (!g.boundingBox) g.computeBoundingBox();
+        box.union(part.copy(g.boundingBox!).applyMatrix4(o.matrixWorld));
+      }
+      o.children.forEach(visit);
+    };
+    visit(this.content);
     if (box.isEmpty()) this.bounds.set(new Vector3(), 1);
     else box.getBoundingSphere(this.bounds);
     if (!(this.bounds.radius > 0)) this.bounds.radius = 1e-3;

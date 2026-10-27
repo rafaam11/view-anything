@@ -73,3 +73,13 @@
 }
 .va3d-banner span { flex: 1; word-break: break-word; }
 .va3d-banner button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 0 4px; }
+
+.va3d-status {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  pointer-events: none;
+  user-select: text;
+}

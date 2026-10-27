@@ -4,10 +4,10 @@ import "./core/three.css";
 import type { Viewer } from "../registry";
 import { formatOf } from "./formats";
 import { Stage, WebGLUnavailableError } from "./core/stage";
-import { adoptGltfScene, buildParsedFile, disposeObject, type BuiltFile } from "./core/build-objects";
+import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
 import { buildTree, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
 import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
-import { formatProgress, progressPercent, type Phase } from "./worker/protocol";
+import { formatProgress, formatStatus, progressPercent, type Phase } from "./worker/protocol";
 import { loadGltfFile, loadMeshFile } from "./load";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
@@ -48,10 +48,10 @@ class Progress {
     this.root.hidden = true;
   }
 
-  show(fileName: string, phase: Phase, loaded: number, total: number): void {
+  show(fileName: string, phase: Phase, loaded: number, total: number, note?: string): void {
     this.root.hidden = false;
     this.name.textContent = fileName;
-    this.phase.textContent = formatProgress(phase, loaded, total);
+    this.phase.textContent = formatProgress(phase, loaded, total, note);
     const percent = progressPercent(loaded, total);
     this.bar.classList.toggle("indeterminate", percent === null);
     this.fill.style.width = percent === null ? "" : `${percent}%`;
@@ -89,6 +89,8 @@ class ThreeViewer {
   private nextId = 1;
   private readonly progress = new Progress();
   private readonly banner = new Banner();
+  /** Plain-text status line (bottom left): triangle count and load time of the last file. */
+  private readonly status = el("div", "va3d-status");
 
   constructor(readonly stage: Stage, root: HTMLElement) {
     const toolbar = el("div", "va3d-toolbar");
@@ -101,7 +103,8 @@ class ThreeViewer {
       b.addEventListener("click", () => this.run(action));
       toolbar.append(b);
     }
-    root.append(toolbar, this.progress.root, this.banner.root);
+    this.status.setAttribute("role", "status");
+    root.append(toolbar, this.progress.root, this.banner.root, this.status);
     window.addEventListener("keydown", (e) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
@@ -122,13 +125,16 @@ class ThreeViewer {
     const name = baseName(path);
     const format = formatOf(path);
     const id = `f${this.nextId++}`;
-    const onProgress = (phase: Phase, loaded: number, total: number) => this.progress.show(name, phase, loaded, total);
+    const started = performance.now();
+    let workerUsed = true;
+    const onProgress = (phase: Phase, loaded: number, total: number) =>
+      this.progress.show(name, phase, loaded, total, workerUsed ? undefined : "워커 미사용");
     try {
       let root: TreeNode;
       let built: BuiltFile;
       if (format === "stl" || format === "obj" || format === "ply") {
         onProgress("read", 0, 0);
-        const parsed = await loadMeshFile(path, format, onProgress, signal);
+        const parsed = await loadMeshFile(path, format, onProgress, signal, () => (workerUsed = false));
         root = buildTree(parsed.tree, name, id, parsed.meshes.map((m) => m.name));
         built = buildParsedFile(parsed, root);
       } else if (format === "gltf" || format === "glb") {
@@ -149,7 +155,11 @@ class ThreeViewer {
       const file: SceneFile = { id, path, name, format, sourceFrame: "as-is", sourceUnit: "as-is", root };
       this.model.files.push(file);
       this.objects.set(id, built);
-      this.stage.add(built.group);
+      // Hidden until uploaded batch by batch; fit first so every batch lands in view.
+      this.stage.add(built.group, built.renderables);
+      if (this.model.files.length === 1) this.stage.fitAll("iso");
+      await this.stage.reveal(built.renderables, renderableSizes(built.renderables), (k, n) => onProgress("upload", k, n), signal);
+      this.status.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
       return id;
     } catch (e) {
       if (!isAbort(e)) this.banner.show(describeLoadError(name, e));
@@ -187,7 +197,7 @@ const viewer: Viewer = {
       return;
     }
     const v = new ThreeViewer(stage, root);
-    if (await v.load(path)) stage.fitAll("iso");
+    await v.load(path);
   },
 };
 

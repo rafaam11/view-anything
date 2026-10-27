@@ -4,7 +4,8 @@ import type { ParsedTree } from "../core/scene-model";
 
 export type MeshFormat = "stl" | "obj" | "ply";
 export type Primitive = "triangles" | "lines" | "points";
-export type Phase = "read" | "parse";
+/** read/parse: bytes or nothing; upload: chunks put on the GPU so far / total chunks. */
+export type Phase = "read" | "parse" | "upload";
 
 export interface MeshData {
   name: string;
@@ -17,6 +18,11 @@ export interface MeshData {
   primitive?: Primitive;
   /** Axis-aligned bounds [minX, minY, minZ, maxX, maxY, maxZ], computed in the worker. */
   bounds?: number[];
+  /**
+   * Large meshes arrive split into pieces (one tree node, several draw objects) so the UI can upload
+   * them a frame at a time. When set, the top-level arrays are empty; use `meshPieces`.
+   */
+  chunks?: MeshData[];
 }
 
 export interface ParsedFile {
@@ -36,10 +42,15 @@ export type FromWorker =
   | { type: "done"; id: number; file: ParsedFile }
   | { type: "error"; id: number; message: string };
 
+/** The draw pieces of a mesh: its chunks, or the mesh itself. */
+export function meshPieces(m: MeshData): MeshData[] {
+  return m.chunks ?? [m];
+}
+
 /** Every distinct ArrayBuffer in `file` (a buffer may not appear twice in a transfer list). */
 export function transferables(file: ParsedFile): ArrayBuffer[] {
   const set = new Set<ArrayBuffer>();
-  for (const m of file.meshes) {
+  for (const m of file.meshes.flatMap(meshPieces)) {
     for (const a of [m.positions, m.normals, m.indices, m.colors]) {
       if (a && a.buffer instanceof ArrayBuffer) set.add(a.buffer);
     }
@@ -77,12 +88,21 @@ export function progressThrottle(emit: (phase: Phase, loaded: number, total: num
   };
 }
 
-const PHASE_LABEL: Record<Phase, string> = { read: "읽는 중", parse: "해석 중" };
+const PHASE_LABEL: Record<Phase, string> = { read: "읽는 중", parse: "해석 중", upload: "GPU 업로드" };
 
-/** "읽는 중 42%", "읽는 중 12.3 MB" (unknown total), "해석 중". */
-export function formatProgress(phase: Phase, loaded: number, total: number): string {
+/** "읽는 중 42%", "읽는 중 12.3 MB" (unknown total), "해석 중", "GPU 업로드 3/6"; optional " · note". */
+export function formatProgress(phase: Phase, loaded: number, total: number, note?: string): string {
   const percent = progressPercent(loaded, total);
-  if (percent !== null) return `${PHASE_LABEL[phase]} ${percent}%`;
-  if (loaded > 0) return `${PHASE_LABEL[phase]} ${(loaded / (1 << 20)).toFixed(1)} MB`;
-  return PHASE_LABEL[phase];
+  let text: string;
+  if (phase === "upload" && total > 0) text = `${PHASE_LABEL[phase]} ${loaded}/${total}`;
+  else if (percent !== null) text = `${PHASE_LABEL[phase]} ${percent}%`;
+  else if (loaded > 0) text = `${PHASE_LABEL[phase]} ${(loaded / (1 << 20)).toFixed(1)} MB`;
+  else text = PHASE_LABEL[phase];
+  return note ? `${text} · ${note}` : text;
+}
+
+/** Status line after a load: "삼각형 6,000,000 · 2.4초" (+ " · 워커 미사용" when the worker did not run). */
+export function formatStatus(triangles: number, ms: number, workerUsed: boolean): string {
+  const text = `삼각형 ${triangles.toLocaleString("en-US")} · ${(ms / 1000).toFixed(1)}초`;
+  return workerUsed ? text : `${text} · 워커 미사용`;
 }

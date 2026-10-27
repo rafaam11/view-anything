@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "vitest";
-import { Mesh, Points, type MeshStandardMaterial, type Object3D } from "three";
+import { expect, test, vi } from "vitest";
+import { BoxGeometry, Mesh, MeshBasicMaterial, Points, Texture, type MeshStandardMaterial, type Object3D } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { adoptGltfScene, buildParsedFile, disposeObject } from "../src/three/core/build-objects";
+import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes } from "../src/three/core/build-objects";
 import { buildTree, type TreeNode } from "../src/three/core/scene-model";
 import { parseMesh } from "../src/three/worker/parse-mesh";
 
@@ -84,4 +84,47 @@ test("disposeObject disposes every geometry and material once", () => {
   });
   disposeObject(built.group);
   expect(disposed.sort()).toEqual(["geometry", "material"]);
+});
+
+test("chunked meshes: one tree node, one draw object per chunk, flat shading without normals", () => {
+  const parsed = parseMesh("stl", fixture("cube-ascii.stl"), 5);
+  const root = buildTree(parsed.tree, "c.stl", "f5");
+  const built = buildParsedFile(parsed, root);
+  expect([...built.nodes.keys()]).toEqual(["f5"]);
+  expect(built.group.children).toHaveLength(3);
+  expect(built.renderables).toEqual(built.group.children);
+  expect(built.triangles).toBe(12);
+  const mat = (built.group.children[0] as Mesh).material as MeshStandardMaterial;
+  expect(mat.flatShading).toBe(true);
+  // Materials stay shared across chunks.
+  expect((built.group.children[2] as Mesh).material).toBe(mat);
+  // Indexed PLY has normals: smooth shading.
+  const ply = parseMesh("ply", fixture("cube-color.ply"));
+  const plyMat = (buildParsedFile(ply, buildTree(ply.tree, "c.ply", "f6")).group.children[0] as Mesh).material as MeshStandardMaterial;
+  expect(plyMat.flatShading).toBe(false);
+});
+
+test("renderableSizes: triangles, or vertices/3 for points and lines", async () => {
+  const pts = parseMesh("ply", fixture("points.ply"));
+  const built = buildParsedFile(pts, buildTree(pts.tree, "p.ply", "f7"));
+  expect(renderableSizes(built.renderables)).toEqual([5 / 3]);
+  const gltf = await new GLTFLoader().parseAsync(fixture("assembly.glb"), "");
+  const { built: g } = adoptGltfScene(gltf.scene, "a.glb", "g2");
+  expect(renderableSizes(g.renderables)).toEqual([1, 1, 1, 1, 1]);
+});
+
+test("disposeObject closes ImageBitmap texture images", () => {
+  const close = vi.fn();
+  class FakeBitmap {
+    close = close;
+  }
+  vi.stubGlobal("ImageBitmap", FakeBitmap);
+  try {
+    const tex = new Texture(new FakeBitmap() as never);
+    const mesh = new Mesh(new BoxGeometry(), new MeshBasicMaterial({ map: tex }));
+    disposeObject(mesh);
+    expect(close).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

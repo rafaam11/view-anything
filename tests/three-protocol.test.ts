@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatProgress, progressPercent, progressThrottle, type Phase } from "../src/three/worker/protocol";
+import { formatProgress, formatStatus, progressPercent, progressThrottle, type Phase } from "../src/three/worker/protocol";
 
 test("progressPercent: rounds down, clamps, unknown total is null", () => {
   expect(progressPercent(0, 200)).toBe(0);
@@ -44,4 +44,14 @@ test("formatProgress: korean phase label with percent or size", () => {
   expect(formatProgress("read", 3 * 1024 * 1024, 0)).toBe("읽는 중 3.0 MB");
   expect(formatProgress("parse", 0, 0)).toBe("해석 중");
   expect(formatProgress("parse", 1, 4)).toBe("해석 중 25%");
+});
+
+test("formatProgress: upload phase counts chunks", () => {
+  expect(formatProgress("upload", 3, 6)).toBe("GPU 업로드 3/6");
+  expect(formatProgress("read", 1, 4, "워커 미사용")).toBe("읽는 중 25% · 워커 미사용");
+});
+
+test("formatStatus: triangle count, seconds, worker note", () => {
+  expect(formatStatus(6_000_000, 2400, true)).toBe("삼각형 6,000,000 · 2.4초");
+  expect(formatStatus(12, 51, false)).toBe("삼각형 12 · 0.1초 · 워커 미사용");
 });
