@@ -110,6 +110,25 @@ test("a loading file shows a row with remove only, replaced in place when loaded
   expect([...panel.root.querySelectorAll<HTMLElement>(".va3d-tree > .va3d-node")].map((n) => n.dataset.id)).toEqual(["f1", "f2", "f3"]);
 });
 
+test("a narrow window (under 700px) collapses the panel, widening expands it again", () => {
+  let listener: ((e: { matches: boolean }) => void) | null = null;
+  const mql = { matches: true, addEventListener: (_: string, l: (e: { matches: boolean }) => void) => (listener = l), removeEventListener() {} };
+  const spy = vi.spyOn(window, "matchMedia").mockImplementation((q: string) => {
+    expect(q).toBe("(max-width: 700px)");
+    return mql as unknown as MediaQueryList;
+  });
+  try {
+    const { panel } = setup([sceneFile("f1", nested)]);
+    expect(panel.root.classList.contains("collapsed")).toBe(true);
+    listener!({ matches: false });
+    expect(panel.root.classList.contains("collapsed")).toBe(false);
+    listener!({ matches: true });
+    expect(panel.root.classList.contains("collapsed")).toBe(true);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
 test("the panel collapses and expands", () => {
   const { panel } = setup([sceneFile("f1", nested)]);
   const head = panel.root.querySelector<HTMLButtonElement>(".va3d-panel-toggle")!;

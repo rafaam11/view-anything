@@ -26,6 +26,9 @@ function button(className: string, text: string, title: string, action: string):
   return b;
 }
 
+/** Below this width the panel starts collapsed (keep in sync with three.css). */
+const NARROW = "(max-width: 700px)";
+
 const EYE_ON = "●";
 const EYE_OFF = "○";
 
@@ -47,6 +50,13 @@ export class ScenePanel {
     this.tree.setAttribute("aria-label", "장면");
     this.root.append(head, this.tree);
     this.root.addEventListener("click", (e) => this.onClick(e));
+    // A narrow window has no room for the panel next to the toolbar: start collapsed there, and
+    // follow resizes across the breakpoint (the user can still open it by hand).
+    const narrow = window.matchMedia?.(NARROW);
+    if (narrow) {
+      this.setCollapsed(narrow.matches);
+      narrow.addEventListener("change", (e) => this.setCollapsed(e.matches));
+    }
   }
 
   /** Names of all files in the panel (loading ones included), in order. */

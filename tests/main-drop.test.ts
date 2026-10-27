@@ -39,6 +39,7 @@ const MD = "D:\\d\\x.md";
 const MD2 = "D:\\d\\y.md";
 const A = "D:\\m\\a.step";
 const B = "D:\\m\\b.stl";
+const TXT = "D:\\d\\z.txt";
 const settle = async () => {
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
 };
@@ -126,6 +127,25 @@ test("shift falls back to the JS-tracked key state when the OS cannot tell", asy
   expect(opened()).toEqual([B]);
   window.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift", shiftKey: false }));
   drop!({ payload: { type: "drop", paths: [B] } });
+  await settle();
+  expect(threeViewer.accept).toHaveBeenCalledWith([B], { newWindow: false });
+});
+
+test("while the 3D viewer is still mounting, other files open at once and Ctrl+O keeps working", async () => {
+  let release!: () => void;
+  threeViewer.mount.mockImplementationOnce(() => new Promise<void>((r) => (release = r)));
+  await start(A);
+  drop!({ payload: { type: "drop", paths: [B, MD] } });
+  await settle();
+  expect(opened()).toEqual([MD]); // not held back by the pending mount
+  platform.pickFiles.mockResolvedValueOnce([MD2]).mockResolvedValueOnce([TXT]);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "o", ctrlKey: true }));
+  await settle();
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "o", ctrlKey: true }));
+  await settle();
+  expect(platform.pickFiles).toHaveBeenCalledTimes(2);
+  expect(opened()).toEqual([MD, MD2, TXT]);
+  release();
   await settle();
   expect(threeViewer.accept).toHaveBeenCalledWith([B], { newWindow: false });
 });

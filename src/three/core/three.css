@@ -138,3 +138,11 @@
 /* The banner starts right of the panel. */
 .va3d-panel ~ .va3d-banner { left: 276px; max-width: min(640px, calc(100% - 620px)); }
 .va3d-panel.collapsed ~ .va3d-banner { left: 56px; max-width: min(640px, calc(100% - 400px)); }
+
+/* Narrow windows (panel auto-collapses, see panel.ts NARROW): the toolbar may wrap, and the
+   banner moves to the bottom, above the progress overlay, spanning the width. */
+@media (max-width: 700px) {
+  .va3d-toolbar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 100px); }
+  .va3d-panel:not(.collapsed) { bottom: 28px; width: min(260px, calc(100% - 16px)); z-index: 1; }
+  .va3d .va3d-banner { top: auto; bottom: 84px; left: 8px; right: 8px; min-width: 0; max-width: none; }
+}

@@ -197,7 +197,11 @@ export class ThreeViewer {
     this.discard(fileId);
   }
 
-  /** Abort every queued or loading file. */
+  /**
+   * Abort every queued or loading file (files already on screen stay). Each aborted load cleans
+   * up after itself: a file aborted mid-upload is disposed and removed like a × removal. For
+   * teardown (e.g. a future window/viewer dispose) and tests.
+   */
   abortAll(): void {
     for (const e of this.entries.values()) e.controller.abort();
   }
@@ -330,7 +334,10 @@ const viewer: Viewer = {
     }
     const v = new ThreeViewer(stage, root);
     current = v;
-    await v.load(path);
+    // Resolve as soon as the viewer can take files: the first load (minutes for a big STEP) runs
+    // in the queue, so drops and Ctrl+O meanwhile are appended or opened at once. Failures go to
+    // the banner.
+    void v.load(path);
   },
   accept(paths: string[], opts: { newWindow: boolean }): string[] {
     return current ? current.accept(paths, opts) : [...paths];

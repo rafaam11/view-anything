@@ -77,14 +77,20 @@ async function openPaths(paths: string[], shift: boolean) {
       return;
     }
   }
+  // New windows never wait for this window's viewer (it may still be mounting).
+  openWindows(windows);
   if (route.append.length > 0) {
     await ready;
-    windows.push(...(viewer?.accept?.(route.append, { newWindow: false }) ?? route.append));
+    openWindows(viewer?.accept?.(route.append, { newWindow: false }) ?? route.append);
   }
-  openWindows(windows);
 }
 
-/** Shift as the drop happened: the OS state where available, else the last key events seen. */
+/**
+ * Shift as the drop happened: the OS state where available, else the last key events seen.
+ * The fallback rarely helps: during an OS (OLE) drag the webview gets no key events, so it only
+ * knows Shift if it was pressed while the window had focus before the drag. On Windows the OS
+ * answer is always there; elsewhere Shift-drop is best-effort.
+ */
 let shiftHeld = false;
 async function shiftState(): Promise<boolean> {
   try {
@@ -104,13 +110,16 @@ let picking = false; // one dialog at a time
 async function pickAndOpen() {
   if (picking) return;
   picking = true;
+  let paths: string[];
   try {
-    await openPaths(await platform.pickFiles(), false);
+    paths = await platform.pickFiles();
   } catch (e) {
     await platform.alert(String(e)).catch(() => {});
+    return;
   } finally {
-    picking = false;
+    picking = false; // the dialog is closed; routing below must not block the next Ctrl+O
   }
+  await openPaths(paths, false).catch((e) => platform.alert(String(e)).catch(() => {}));
 }
 
 applyTheme(currentMode());
