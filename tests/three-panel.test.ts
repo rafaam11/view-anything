@@ -205,3 +205,30 @@ test("Escape closes an open ⋯ menu (from inside it or from the ⋯ button); ar
   expect(menuOf(panel, "f3")!.hidden).toBe(true);
   expect(more.getAttribute("aria-expanded")).toBe("false");
 });
+
+test("clicking a row name selects the node; buttons on the row do not", () => {
+  const model: SceneModel = { files: [sceneFile("f1", nested)] };
+  const select = vi.fn();
+  const panel = new ScenePanel({ toggle: () => {}, remove: () => {}, select });
+  document.body.append(panel.root);
+  panel.addFile(model.files[0]);
+  node(panel, "f1/1")!.querySelector<HTMLElement>(":scope > .va3d-row > .va3d-name")!.click();
+  expect(select).toHaveBeenCalledWith("f1/1");
+  btn(panel, "f1/1", "va3d-eye").click();
+  expect(select).toHaveBeenCalledTimes(1);
+});
+
+test("setSelected expands the ancestors, marks the row, and clears the previous one", () => {
+  const { panel } = setup([sceneFile("f1", nested)]);
+  panel.setSelected("f1/0/0/0");
+  const deep = node(panel, "f1/0/0/0")!;
+  expect(deep).not.toBeNull();
+  expect(deep.classList.contains("selected")).toBe(true);
+  expect(deep.getAttribute("aria-selected")).toBe("true");
+  expect(node(panel, "f1/0")!.getAttribute("aria-expanded")).toBe("true");
+  panel.setSelected("f1/1");
+  expect(deep.classList.contains("selected")).toBe(false);
+  expect(node(panel, "f1/1")!.classList.contains("selected")).toBe(true);
+  panel.setSelected(null);
+  expect(panel.root.querySelectorAll(".va3d-node.selected")).toHaveLength(0);
+});

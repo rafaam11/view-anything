@@ -119,15 +119,73 @@
 .va3d-banner .va3d-banner-action { flex: none; border: 1px solid currentColor; border-radius: 4px; padding: 0 8px; }
 .va3d-banner button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 0 4px; }
 
-.va3d-status {
+/* Bottom bar (below the panel, which ends 28px above the bottom): "보기" popover + status line. */
+.va3d-bottom {
   position: absolute;
   left: 8px;
-  bottom: 6px;
+  right: 8px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.va3d-status {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   color: var(--muted);
   font-size: 0.75rem;
-  pointer-events: none;
   user-select: text;
 }
+.va3d-status > span:empty { display: none; }
+.va3d-status > span { overflow: hidden; text-overflow: ellipsis; }
+.va3d-cursor { font-variant-numeric: tabular-nums; color: var(--fg); }
+
+.va3d-viewbar { position: relative; flex: none; pointer-events: auto; }
+.va3d-view-button {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.va3d-view-button:hover, .va3d-view-button[aria-expanded="true"] { background: var(--border); }
+/* Opens upward from the bottom bar, over the panel. */
+.va3d-view-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  z-index: 2;
+  width: 250px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.va3d-view-menu fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: 3px; }
+.va3d-view-menu legend { padding: 0 0 2px; color: var(--muted); font-size: 0.75rem; }
+.va3d-view-modes { grid-template-columns: 1fr 1fr; }
+.va3d-view-modes legend, .va3d-view-note { grid-column: 1 / -1; }
+.va3d-view-menu label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.va3d-view-menu input:disabled + span { opacity: 0.5; }
+.va3d-view-note { margin: 0; color: var(--muted); font-size: 0.75rem; }
+.va3d-clip-row { display: grid !important; grid-template-columns: auto 1.2em 1fr 4.5em; }
+.va3d-clip-axis { font-weight: 700; }
+.va3d-clip-row input[type="range"] { width: 100%; min-width: 0; margin: 0; }
+.va3d-clip-value { text-align: right; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+
+/* Selected tree row (click in 3D or on the row). */
+.va3d-node.selected > .va3d-row { background: color-mix(in srgb, #3e7bfa 22%, transparent); }
+.va3d-row { cursor: default; }
 
 /* Scene panel (left, collapsible). */
 .va3d-panel {

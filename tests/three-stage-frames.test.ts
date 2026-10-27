@@ -169,3 +169,16 @@ test("axis labels sit at the projected axis tips and hide behind the camera", ()
   const behind = axisLabelPositions(camera, s.displayRoot.matrix, 1, 200, 200);
   expect(behind.map((p) => p.visible)).toEqual([false, false, false]);
 });
+
+test("the ground grid draws first, in the opaque pass, without depth writes (never over the model)", async () => {
+  const { GridHelper, CustomBlending } = await import("three");
+  const { styleGrid } = await import("../src/three/core/stage");
+  const grid = new GridHelper(10, 10);
+  styleGrid(grid);
+  const m = grid.material as import("three").Material;
+  expect(m.transparent).toBe(false); // opaque list: sorted by renderOrder before the meshes
+  expect(grid.renderOrder).toBeLessThan(0);
+  expect(m.depthWrite).toBe(false); // meshes drawn after it cover it, below the ground too
+  expect(m.blending).toBe(CustomBlending); // keeps its alpha outside the transparent pass
+  expect(m.opacity).toBeLessThan(1);
+});

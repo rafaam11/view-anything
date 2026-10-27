@@ -18,6 +18,9 @@ vi.mock("../src/three/load", () => ({
 
 vi.mock("../src/three/core/stage", () => {
   class Stage {
+    canvas = document.createElement("canvas");
+    onChange() {}
+    requestRender() {}
     add() {}
     remove() {}
     fitAll() {}

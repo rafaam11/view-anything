@@ -38,6 +38,10 @@ let revealGate: Promise<void> | null;
 let revealSignals: (AbortSignal | undefined)[];
 function fakeStage() {
   return {
+    // ViewTools (selection, modes, sections) only listens; no change events from a fake stage.
+    canvas: document.createElement("canvas"),
+    onChange: vi.fn(),
+    requestRender: vi.fn(),
     add: vi.fn(),
     remove: vi.fn(),
     fitAll: vi.fn(),

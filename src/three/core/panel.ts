@@ -12,6 +12,8 @@ export interface PanelHandlers {
   remove(fileId: string): void;
   /** File ⋯ menu: set the file's source frame and unit (the handler updates the SceneFile). */
   frame?(fileId: string, frame: ObjectFrame): void;
+  /** Click on a row (outside its buttons): select that node. */
+  select?(nodeId: string): void;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
@@ -45,6 +47,7 @@ export class ScenePanel {
   private readonly fileNames = new Map<string, string>();
   /** Loaded files by id (the ⋯ menu reads and shows their source frame and unit). */
   private readonly files = new Map<string, SceneFile>();
+  private selected: string | null = null;
 
   constructor(private readonly handlers: PanelHandlers) {
     const head = el("div", "va3d-panel-head");
@@ -103,6 +106,29 @@ export class ScenePanel {
     }
     this.fileNames.delete(fileId);
     this.files.delete(fileId);
+  }
+
+  /**
+   * Mark the selected node (null: none). Its ancestors are expanded first, so a node picked in 3D
+   * deep in a big assembly gets its row built and scrolled into view.
+   */
+  setSelected(nodeId: string | null): void {
+    if (this.selected) this.paintSelected(this.selected, false);
+    this.selected = nodeId;
+    if (!nodeId) return;
+    const parts = nodeId.split("/");
+    for (let i = 1; i < parts.length; i++) this.expand(parts.slice(0, i).join("/"));
+    this.paintSelected(nodeId, true);
+    const row = this.rows.get(nodeId)?.item.querySelector<HTMLElement>(":scope > .va3d-row");
+    row?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  private paintSelected(nodeId: string, on: boolean): void {
+    const item = this.rows.get(nodeId)?.item;
+    if (!item) return;
+    item.classList.toggle("selected", on);
+    if (on) item.setAttribute("aria-selected", "true");
+    else item.removeAttribute("aria-selected");
   }
 
   /** Re-read a rendered node's visibility (after the model changed). */
@@ -274,8 +300,15 @@ export class ScenePanel {
   }
 
   private onClick(e: Event): void {
-    const b = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>("button[data-action]");
-    if (!b || !this.root.contains(b)) return;
+    const target = e.target as HTMLElement | null;
+    const b = target?.closest<HTMLButtonElement>("button[data-action]");
+    if (!b || !this.root.contains(b)) {
+      // A click on a row (name or blank part, not a button or the ⋯ menu) selects its node.
+      const rowEl = target?.closest(".va3d-row");
+      const id = rowEl?.parentElement?.dataset.id;
+      if (rowEl && !target?.closest("button, select, label") && id && this.rows.get(id)?.node) this.handlers.select?.(id);
+      return;
+    }
     if (b.dataset.action === "panel") return this.setCollapsed(!this.root.classList.contains("collapsed"));
     const item = b.closest<HTMLElement>(".va3d-node");
     const id = item?.dataset.id;

@@ -4,6 +4,7 @@ import {
   AxesHelper,
   Box3,
   Color,
+  CustomBlending,
   DirectionalLight,
   GridHelper,
   Group,
@@ -49,6 +50,8 @@ export class Stage {
   readonly displayRoot = new Group();
   /** File objects go here (display-frame coordinates). */
   readonly content = new Group();
+  /** Display-frame overlays owned by callers (selection box); never rebuilt by the stage. */
+  readonly overlay = new Group();
 
   private display: FramePreset = "zup-rh";
   private displayUnit: Unit = "mm";
@@ -66,6 +69,7 @@ export class Stage {
   private pending = 0;
   private disposed = false;
   private readonly cleanups: (() => void)[] = [];
+  private readonly changeListeners: (() => void)[] = [];
 
   constructor(private readonly host: HTMLElement) {
     if (typeof WebGL2RenderingContext === "undefined") throw new WebGLUnavailableError();
@@ -75,9 +79,11 @@ export class Stage {
       throw new WebGLUnavailableError();
     }
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // Section planes are per material (shared array, see clipping.ts).
+    this.renderer.localClippingEnabled = true;
     host.append(this.renderer.domElement);
 
-    this.displayRoot.add(this.helpers, this.content);
+    this.displayRoot.add(this.helpers, this.content, this.overlay);
     this.scene.add(this.displayRoot);
     this.scene.add(this.camera);
     // Display root matrix, camera up (= orbit axis: set before OrbitControls is built, it caches
@@ -171,6 +177,24 @@ export class Stage {
       .fromArray(objectMatrix(this.display, this.displayUnit, frame.frame, frame.unit))
       .multiply(new Matrix4().fromArray(o.userData.vaBase as number[]));
     o.matrixWorldNeedsUpdate = true;
+  }
+
+  /** Display frame -> world matrix (the display root's). Read-only for callers. */
+  get displayToWorld(): Matrix4 {
+    return this.displayMatrix;
+  }
+
+  /** The canvas (pointer events for picking). */
+  get canvas(): HTMLCanvasElement {
+    return this.renderer.domElement;
+  }
+
+  /**
+   * Call `fn` after every bounds update: content added, removed, shown or hidden, a file's frame
+   * or the display frame changed.
+   */
+  onChange(fn: () => void): void {
+    this.changeListeners.push(fn);
   }
 
   /** Display-frame direction -> world direction. */
@@ -290,6 +314,7 @@ export class Stage {
     else box.getBoundingSphere(this.bounds);
     if (!(this.bounds.radius > 0)) this.bounds.radius = 1e-3;
     this.rebuildHelpers();
+    for (const fn of this.changeListeners) fn();
   }
 
   /** Frame all visible content; with `view`, also turn to that standard view. */
@@ -374,11 +399,7 @@ export class Stage {
     const c = this.bounds.center.clone().applyMatrix4(this.displayMatrix.clone().invert());
     c.addScaledVector(up, -c.dot(up));
     grid.position.set(...(c.toArray().map((x) => Math.round(x / spec.cell) * spec.cell) as [number, number, number]));
-    const material = grid.material as Material;
-    material.transparent = true;
-    material.opacity = 0.8;
-    material.depthWrite = false;
-    grid.renderOrder = -1;
+    styleGrid(grid);
     this.axisLength = spec.size / 4;
     const axes = new AxesHelper(this.axisLength);
     (axes.material as Material).depthTest = false;
@@ -413,6 +434,22 @@ export function axisLabelPositions(camera: Camera, displayMatrix: Matrix4, lengt
     p.project(camera);
     return { x: ((p.x + 1) / 2) * width, y: ((1 - p.y) / 2) * height, visible: inFront && p.z <= 1 };
   });
+}
+
+/**
+ * The ground grid must never paint over the model, also where the model goes below the ground
+ * plane. It is drawn in the opaque pass (transparent: false) first (renderOrder -1) without
+ * writing depth, so every mesh drawn after it covers it; custom blending keeps its 0.8 alpha
+ * (NormalBlending with transparent false would draw it fully opaque). X-ray meshes (transparent
+ * pass, after it) still let it show through.
+ */
+export function styleGrid(grid: Object3D): void {
+  const material = (grid as Object3D & { material: Material }).material;
+  material.transparent = false;
+  material.blending = CustomBlending;
+  material.opacity = 0.8;
+  material.depthWrite = false;
+  grid.renderOrder = -1;
 }
 
 function disposeHelper(o: Object3D): void {

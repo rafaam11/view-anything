@@ -7,9 +7,10 @@ import { platform } from "../platform";
 import { windowTitle } from "../open-route";
 import { Stage, WebGLUnavailableError } from "./core/stage";
 import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
-import { buildTree, fixedSourceUnit, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
+import { buildTree, findNode, fixedSourceUnit, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
 import { FRAME_LABELS, FRAME_PRESETS, FRAME_SHORT_LABELS, UNIT_LABELS, UNITS, type FramePreset, type ObjectFrame, type Unit } from "./core/frames";
 import { ScenePanel } from "./core/panel";
+import { ViewTools } from "./core/view-tools";
 import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
 import { canCoarsen } from "./worker/cad-params";
@@ -134,8 +135,12 @@ export class ThreeViewer {
   private readonly progress = new Progress();
   private readonly banner = new Banner();
   private readonly panel: ScenePanel;
-  /** Plain-text status line (bottom left): triangle count and load time of the last file. */
+  /** Plain-text status line (bottom left): last load, dimensions, cursor coordinates. */
   private readonly status = el("div", "va3d-status");
+  /** Triangle count and load time of the last file. */
+  private readonly loadStatus = el("span", "va3d-load");
+  /** Display mode, sections, selection, dimensions and cursor readout. */
+  readonly tools: ViewTools;
   /** Queued or loading files (not yet settled), by file id. */
   private readonly entries = new Map<string, Entry>();
   /** Files load one at a time (one parse worker, one upload), in the order they were added. */
@@ -160,10 +165,29 @@ export class ThreeViewer {
       toggle: (id, v) => this.setVisible(id, v),
       remove: (id) => this.remove(id),
       frame: (id, f) => this.setFileFrame(id, f),
+      select: (id) => this.tools.select(id),
+    });
+    this.tools = new ViewTools(stage, {
+      files: () =>
+        this.model.files.flatMap((f) => {
+          const b = this.objects.get(f.id);
+          return b ? [{ id: f.id, group: b.group, nodes: b.nodes, triangles: b.triangles, sourceUnit: f.sourceUnit }] : [];
+        }),
+      nodeName: (id) => findNode(this.model, id)?.name,
+      displayUnit: () => this.displayUnit,
+      selected: (id) => this.panel.setSelected(id),
+      notice: (message) => this.banner.show(message),
     });
     this.status.setAttribute("role", "status");
-    root.append(this.panel.root, toolbar, this.progress.root, this.banner.root, this.status);
+    this.status.append(this.loadStatus, this.tools.dims, this.tools.cursor);
+    const bottom = el("div", "va3d-bottom");
+    bottom.append(this.tools.bar, this.status);
+    root.append(this.panel.root, toolbar, this.progress.root, this.banner.root, bottom);
     window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        this.tools.escape();
+        return;
+      }
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       const action = keyAction(e);
@@ -280,13 +304,14 @@ export class ThreeViewer {
   private discard(fileId: string): void {
     const built = this.objects.get(fileId);
     if (built) {
+      this.tools.fileRemoved(fileId, built.group);
       this.stage.remove(built.group);
       disposeObject(built.group);
       this.objects.delete(fileId);
     }
     removeFile(this.model, fileId);
     this.panel.removeFile(fileId);
-    if (this.model.files.length === 0) this.status.textContent = "";
+    if (this.model.files.length === 0) this.loadStatus.textContent = "";
     this.updateTitle();
   }
 
@@ -341,7 +366,7 @@ export class ThreeViewer {
         this.discard(id);
         return null;
       }
-      this.status.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
+      this.loadStatus.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
       return id;
     } catch (e) {
       this.discard(id);
