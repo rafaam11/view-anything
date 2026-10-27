@@ -111,6 +111,29 @@ export function exportTree(node: TreeNode): ExportNode {
 
 /** Binary glTF of `scene` (three's GLTFExporter, loaded on demand). */
 export async function exportGlb(scene: Object3D): Promise<Uint8Array> {
+  if (typeof Worker !== "undefined") {
+    const worker = new Worker(new URL("./scene.worker.ts", import.meta.url), { type: "module" });
+    let failure: Error | null = null;
+    let rejectPending: ((error: Error) => void) | null = null;
+    worker.onerror = (event) => {
+      failure = new Error(event.message || "export worker failed");
+      rejectPending?.(failure);
+    };
+    try {
+      const { packScene } = await import("./transfer-scene");
+      const { packet, transfer } = await packScene(scene);
+      if (failure) { Object.values(packet.images).forEach((image) => image.close()); throw failure; }
+      return await new Promise<Uint8Array>((resolve, reject) => {
+        rejectPending = reject;
+        worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(new Uint8Array(data.result));
+        try { worker.postMessage(packet, transfer); }
+        catch (error) { Object.values(packet.images).forEach((image) => image.close()); reject(error); }
+      });
+    } finally { worker.terminate(); }
+  }
+  let vertices = 0;
+  scene.traverse((o) => { const g = (o as Mesh).geometry; if (g) vertices += g.getAttribute("position")?.count ?? 0; });
+  if (vertices > 150_000) throw new Error("백그라운드 작업자를 쓸 수 없어 큰 장면을 HTML로 내보낼 수 없습니다.");
   const { GLTFExporter } = await import("three/addons/exporters/GLTFExporter.js");
   scene.updateMatrixWorld(true);
   const result = await new GLTFExporter().parseAsync(scene, { binary: true });

@@ -27,7 +27,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집)과 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB
   - `parse.worker.ts` + `parse-mesh.ts`(STL/OBJ/PLY) + `occt.ts`(STEP/IGES, occt-import-js wasm를 이 형식일 때만 동적 import). `protocol.ts`는 양쪽이 쓰는 순수 메시지 정의.
   - `geometry.worker.ts`: 엣지 선과 BVH를 만든다. UI 쪽 러너는 `geometry-worker.ts`이고, 작업 큐는 `core/geometry-jobs.ts`다. 우선순위는 pick → edges → prebuild 순이다. 파일을 지우면 실행 중인 작업의 워커를 종료하고, 워커를 쓸 수 없으면 5만 삼각형 넘는 작업은 UI 스레드에서 돌리지 않는다.
 - `core/`: **Tauri 없는 공용 코어.** 앱 뷰어와 HTML 내보내기 런타임이 함께 쓴다. stage(카메라·조작·그리드), scene-model·panel(트리), frames(좌표계 프리셋·단위), display-modes·fast-edges·clipping·info·view-tools(표시 모드, 엣지, 단면, 치수, 커서 좌표), menubar·view-menu·keys.
-- `export/`: 파일 > HTML로 내보내기(GLTFExporter → meshopt 압축 워커 → 단일 HTML 템플릿). 앱에서만 lazy import한다.
+- `export/`: 파일 > HTML로 내보내기(geometry 청크 복사·텍스처 스냅샷 → GLTFExporter 워커 → meshopt 압축 워커 → 청크 단위 HTML 조립). 앱에서만 lazy import한다. 워커 실패 시 큰 작업을 UI 스레드로 돌리지 않는다.
 - `export-runtime/main.ts`: 내보낸 HTML 안에서 도는 뷰어. 공용 코어와 Tauri 없는 geometry 워커 러너를 쓴다. 워커는 단일 HTML에 인라인되며 CSP `worker-src blob:`으로 실행한다. Tauri를 참조하면 안 된다.
 
 ## 3D 코드 규칙

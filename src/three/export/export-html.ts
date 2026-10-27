@@ -44,11 +44,12 @@ async function compress(glb: Uint8Array): Promise<Uint8Array> {
         w.postMessage({ glb });
       });
     } catch (e) {
-      console.warn("export worker failed, compressing on the UI thread", e);
+      console.warn("export worker failed", e);
     } finally {
       w.terminate();
     }
   }
+  if (glb.byteLength > 8 * 1024 * 1024) throw new Error("압축 작업자를 쓸 수 없어 큰 장면을 내보내지 않습니다. 다시 시도해 주세요.");
   const { compressGlb } = await import("./compress");
   return compressGlb(glb);
 }

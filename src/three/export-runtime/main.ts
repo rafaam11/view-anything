@@ -65,20 +65,25 @@ function toTree(n: ExportNode): TreeNode {
  * Quantized (KHR_mesh_quantization) or interleaved attributes -> plain Float32 ones, so edges,
  * BVHs and bounds work exactly as in the app.
  */
-function dequantize(root: Object3D): void {
-  root.traverse((o) => {
-    const g = (o as Mesh).geometry as BufferGeometry | undefined;
-    if (!g) return;
+async function dequantize(root: Object3D): Promise<void> {
+  const geometries = new Set<BufferGeometry>();
+  root.traverse((o) => { const g = (o as Mesh).geometry; if (g) geometries.add(g); });
+  for (const g of geometries) {
     for (const name of ["position", "normal"]) {
       const a = g.getAttribute(name);
       if (!a || (!("isInterleavedBufferAttribute" in a && a.isInterleavedBufferAttribute) && a.array instanceof Float32Array && !a.normalized)) continue;
       const out = new Float32Array(a.count * a.itemSize);
-      for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+      for (let start = 0; start < a.count; start += 65_536) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        const end = Math.min(start + 65_536, a.count);
+        for (let i = start; i < end; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+      }
       g.setAttribute(name, new BufferAttribute(out, a.itemSize));
     }
     g.computeBoundingBox();
     g.computeBoundingSphere();
-  });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
 }
 
 class ExportedViewer {
@@ -109,7 +114,12 @@ class ExportedViewer {
       displayUnit: () => state.unit,
       displayFrame: () => state.display,
       selected: (id) => this.panel.setSelected(id),
-      notice: () => {},
+      notice: (message) => {
+        const warning = root.querySelector(".va-runtime-warning") ?? el("div", "va3d-banner va-runtime-warning");
+        warning.setAttribute("role", "status");
+        warning.textContent = message;
+        root.append(warning);
+      },
     });
     this.menubar = new Menubar([
       {
@@ -158,7 +168,9 @@ class ExportedViewer {
   }
 
   /** Put the loaded glTF scene on stage, file by file, and restore the exported view. */
-  show(scene: Object3D): void {
+  async show(scene: Object3D): Promise<void> {
+    const pending: Object3D[] = [];
+    const sizes: number[] = [];
     const byId = new Map<string, Object3D>();
     scene.traverse((o) => {
       const id = o.userData.vaId;
@@ -180,9 +192,12 @@ class ExportedViewer {
       this.files.push({ id: f.id, group, nodes, triangles: meshTriangles(group), sourceUnit: f.sourceUnit });
       this.panel.addFile(file);
       // The file node carries the baked frame matrix; "as-is" keeps it as the group's own transform.
-      this.stage.add(group);
+      const drawables: Object3D[] = [];
+      group.traverse((o) => { if ((o as Mesh).geometry && o.visible) drawables.push(o); });
+      pending.push(...drawables);
+      sizes.push(...drawables.map((o) => meshTriangles(o)));
+      this.stage.add(group, drawables);
     }
-    this.tools.setMode(this.state.mode);
     this.tools.restoreSections(this.state.sections);
     if (this.state.panelCollapsed !== undefined) this.panel.setCollapsed(this.state.panelCollapsed);
     const { camera, controls } = this.stage;
@@ -190,6 +205,8 @@ class ExportedViewer {
     controls.target.fromArray(this.state.camera.target);
     camera.lookAt(controls.target);
     controls.update();
+    await this.stage.reveal(pending, sizes);
+    this.tools.setMode(this.state.mode);
     this.stage.requestRender();
   }
 }
@@ -228,8 +245,8 @@ async function main(): Promise<void> {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const buffer = glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength) as ArrayBuffer;
     const gltf = await loader.parseAsync(buffer, "");
-    dequantize(gltf.scene);
-    viewer.show(gltf.scene);
+    await dequantize(gltf.scene);
+    await viewer.show(gltf.scene);
   } catch (e) {
     notice(host, "내보낸 장면을 읽을 수 없습니다", e instanceof Error ? e.message : String(e));
   }

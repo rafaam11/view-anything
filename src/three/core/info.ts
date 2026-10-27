@@ -110,6 +110,10 @@ export class Picker {
   /** Ask the worker for a BVH (no-op if there is one or it is on its way). */
   request(g: BufferGeometry, priority: number): void {
     if (g.boundsTree || this.jobs.failed("bvh", g)) return;
+    if (this.live.has(g)) {
+      void this.jobs.request("bvh", g, priority); // promote the queued job without adding another completion handler
+      return;
+    }
     this.live.add(g);
     void this.jobs.request("bvh", g, priority).then((data) => {
       if (!data) {
