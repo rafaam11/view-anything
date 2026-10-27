@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "predev": "npm run build:runtime",
+    "build:runtime": "vite build -c vite.runtime.config.ts",
+    "build": "npm run build:runtime && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",

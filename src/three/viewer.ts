@@ -4,14 +4,16 @@ import "./core/three.css";
 import type { Viewer } from "../registry";
 import { formatOf, isThreeD } from "./formats";
 import { platform } from "../platform";
-import { windowTitle } from "../open-route";
+import { OPEN_EVENT, windowTitle, type OpenEventDetail } from "../open-route";
 import { Stage, WebGLUnavailableError } from "./core/stage";
 import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
 import { buildTree, findNode, fixedSourceUnit, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
 import { FRAME_LABELS, FRAME_PRESETS, FRAME_SHORT_LABELS, UNIT_LABELS, UNITS, type FramePreset, type ObjectFrame, type Unit } from "./core/frames";
 import { ScenePanel } from "./core/panel";
 import { ViewTools } from "./core/view-tools";
-import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
+import { keyAction, type KeyAction } from "./core/keys";
+import { Menubar } from "./core/menubar";
+import { buildToolbar, viewMenuItems } from "./core/view-menu";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
 import { canCoarsen } from "./worker/cad-params";
 import { loadGltfFile, loadMeshFile } from "./load";
@@ -129,6 +131,17 @@ interface Entry {
   controller: AbortController;
 }
 
+/**
+ * App-level hooks for the 파일 menu. `onCheckUpdate` is wired by the auto-update task; while it is
+ * null, "업데이트 확인" stays disabled.
+ */
+export const menuHooks: { onCheckUpdate: (() => void) | null } = { onCheckUpdate: null };
+
+/** Ctrl+Shift+E (KeyboardEvent.code, so a Korean IME layout still works). */
+export function isExportKey(e: Pick<KeyboardEvent, "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
+  return e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "KeyE";
+}
+
 export class ThreeViewer {
   readonly model: SceneModel = { files: [] };
   readonly objects = new Map<string, BuiltFile>();
@@ -150,17 +163,12 @@ export class ThreeViewer {
   private display: FramePreset = "zup-rh";
   private displayUnit: Unit = "mm";
 
+  /** Top-left "파일 · 보기". */
+  readonly menubar: Menubar;
+  private exporting = false;
+
   constructor(readonly stage: Stage, root: HTMLElement) {
-    const toolbar = el("div", "va3d-toolbar");
-    toolbar.setAttribute("role", "toolbar");
-    for (const [action, label, tip] of TOOLBAR) {
-      const b = el("button");
-      b.type = "button";
-      b.textContent = label;
-      b.title = tip;
-      b.addEventListener("click", () => this.run(action));
-      toolbar.append(b);
-    }
+    const toolbar = buildToolbar((action) => this.run(action));
     toolbar.append(this.displaySelects());
     this.panel = new ScenePanel({
       toggle: (id, v) => this.setVisible(id, v),
@@ -185,11 +193,46 @@ export class ThreeViewer {
     this.status.setAttribute("role", "status");
     this.status.append(this.loadStatus, this.tools.dims, this.tools.cursor);
     const bottom = el("div", "va3d-bottom");
-    bottom.append(this.tools.bar, this.status);
-    root.append(this.panel.root, toolbar, this.progress.root, this.banner.root, bottom);
+    bottom.append(this.status);
+    const open = (append: boolean) => window.dispatchEvent(new CustomEvent<OpenEventDetail>(OPEN_EVENT, { detail: { append } }));
+    this.menubar = new Menubar([
+      {
+        label: "파일",
+        accessKey: "f",
+        items: [
+          { label: "열기…", shortcut: "Ctrl+O", run: () => open(false) },
+          { label: "장면에 추가…", run: () => open(true) },
+          { label: "HTML로 내보내기…", shortcut: "Ctrl+Shift+E", run: () => void this.exportHtml() },
+          { separator: true },
+          {
+            label: "업데이트 확인",
+            run: () => menuHooks.onCheckUpdate?.(),
+            disabled: () => menuHooks.onCheckUpdate === null,
+            title: "다음 작업에서 연결",
+          },
+        ],
+      },
+      {
+        label: "보기",
+        accessKey: "v",
+        items: viewMenuItems({
+          run: (action) => this.run(action),
+          panelShown: () => !this.panel.collapsed,
+          setPanelShown: (shown) => this.panel.setCollapsed(!shown),
+          controls: this.tools.controls,
+        }),
+      },
+    ]);
+    root.append(this.menubar.root, this.panel.root, toolbar, this.progress.root, this.banner.root, bottom);
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !e.defaultPrevented) {
-        this.tools.escape();
+        if (!this.menubar.close()) this.tools.escape();
+        return;
+      }
+      if (this.menubar.handleKey(e)) return;
+      if (isExportKey(e)) {
+        e.preventDefault();
+        if (!e.repeat) void this.exportHtml();
         return;
       }
       const t = e.target as HTMLElement | null;
@@ -259,6 +302,47 @@ export class ThreeViewer {
   run(action: KeyAction): void {
     if (action.type === "fit") this.stage.fitAll();
     else this.stage.setView(action.view);
+  }
+
+  /**
+   * 파일 > HTML로 내보내기: the visible scene as one offline HTML file. Not while files load (their
+   * objects are not all there yet). The exporter (glTF, meshopt, runtime) is a lazy chunk.
+   */
+  async exportHtml(): Promise<void> {
+    if (this.exporting) return;
+    if (this.entries.size > 0) {
+      this.banner.show("파일을 불러오는 중에는 내보낼 수 없습니다. 불러오기가 끝난 뒤 다시 시도하세요.");
+      return;
+    }
+    const files = this.model.files.flatMap((file) => {
+      const built = this.objects.get(file.id);
+      return built ? [{ file, built }] : [];
+    });
+    if (!files.some(({ file }) => file.root.visible)) {
+      this.banner.show("내보낼 표시 중인 모델이 없습니다.");
+      return;
+    }
+    this.exporting = true;
+    try {
+      const { exportHtml } = await import("./export/export-html");
+      await exportHtml({
+        files,
+        stage: this.stage,
+        display: this.display,
+        unit: this.displayUnit,
+        mode: this.tools.displayMode,
+        sections: this.tools.sectionState(),
+        panelCollapsed: this.panel.collapsed,
+        progress: (note) => {
+          if (note === null) this.progress.hide();
+          else this.progress.show("HTML로 내보내기", "export", 0, 0, note);
+        },
+      });
+    } catch (e) {
+      this.banner.show(`HTML로 내보내지 못했습니다. (${e instanceof Error ? e.message : String(e)})`);
+    } finally {
+      this.exporting = false;
+    }
   }
 
   /** Take the 3D files of `paths` (appended to the scene); return the rest. `newWindow`: take nothing. */

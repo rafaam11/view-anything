@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // ViewTools with a minimal stage: click selection, dimensions, Escape, the readout, the 5M limits,
-// and the section popover.
+// and the section controls (보기 menu).
 import { expect, test, vi } from "vitest";
 import { Box3Helper, BoxGeometry, Group, Matrix4, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from "three";
 import { ViewTools, type ToolFile, type ToolStage } from "../src/three/core/view-tools";
@@ -61,7 +61,7 @@ function setup(opts: { triangles?: number; scale?: number; sourceUnit?: ToolFile
     notice: vi.fn(),
   };
   const tools = new ViewTools(stage, host);
-  document.body.append(tools.bar);
+  document.body.append(tools.controls);
   change();
   return { tools, host, stage, box, group, change: () => change(), cameraChange: () => cameraChange() };
 }
@@ -100,7 +100,7 @@ test("above 5M triangles: edges are refused with a notice and the hover readout 
   const { tools, host } = setup({ triangles: 6_000_000 });
   tools.setMode("edges");
   expect(tools.displayMode).toBe("solid");
-  const edges = tools.bar.querySelector<HTMLInputElement>('input[value="edges"]')!;
+  const edges = tools.controls.querySelector<HTMLInputElement>('input[value="edges"]')!;
   expect(edges.disabled).toBe(true);
   const canvas = (tools as unknown as { stage: ToolStage }).stage.canvas;
   canvas.dispatchEvent(new PointerEvent("pointermove", { clientX: 0.5, clientY: 0.5, buttons: 0 }));
@@ -123,13 +123,9 @@ test("edges on, then the scene grows past 5M: edges go off with a notice", () =>
   expect(stage.content).toBeDefined();
 });
 
-test("the 보기 popover: mode radios and section checkboxes drive modes and planes", () => {
+test("the 보기 controls: mode radios and section checkboxes drive modes and planes", () => {
   const { tools, box } = setup();
-  const button = tools.bar.querySelector<HTMLButtonElement>(".va3d-view-button")!;
-  const menu = tools.bar.querySelector<HTMLElement>(".va3d-view-menu")!;
-  expect(menu.hidden).toBe(true);
-  button.click();
-  expect(menu.hidden).toBe(false);
+  const menu = tools.controls;
   const xray = menu.querySelector<HTMLInputElement>('input[value="xray"]')!;
   xray.checked = true;
   xray.dispatchEvent(new Event("change"));
@@ -143,8 +139,25 @@ test("the 보기 popover: mode radios and section checkboxes drive modes and pla
   zSlider.value = "500";
   zSlider.dispatchEvent(new Event("input"));
   expect(tools.clipper.value(2)).toBeCloseTo(0); // middle of the box (display z -1..1)
-  tools.escape();
-  expect(menu.hidden).toBe(true);
+});
+
+test("section state round trip (export -> runtime restore)", () => {
+  const a = setup();
+  a.tools.clipper.setValue(1, 0.25);
+  a.tools.clipper.setValue(2, -0.5);
+  a.tools.clipper.setEnabled(2, false);
+  const saved = a.tools.sectionState();
+  expect(saved).toEqual([
+    { enabled: false, value: null },
+    { enabled: true, value: 0.25 },
+    { enabled: false, value: -0.5 },
+  ]);
+  const b = setup();
+  b.tools.restoreSections(saved);
+  expect(b.tools.sectionState()).toEqual(saved);
+  expect(b.tools.clipper.planes).toHaveLength(1);
+  const checks = b.tools.controls.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+  expect([...checks].map((c) => c.checked)).toEqual([false, true, false]);
 });
 
 test("two files: the whole-scene line carries the total triangle count", () => {
@@ -188,7 +201,7 @@ test("the readout is re-picked when the camera moves under a still pointer", asy
 
 test("sections keep their position when the range changes and follow a unit change", () => {
   const { tools, host, group, change } = setup();
-  const menu = tools.bar.querySelector<HTMLElement>(".va3d-view-menu")!;
+  const menu = tools.controls;
   const zCheck = menu.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[2];
   zCheck.checked = true;
   zCheck.dispatchEvent(new Event("change"));

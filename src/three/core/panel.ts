@@ -8,8 +8,8 @@ import { fixedSourceUnit, type SceneFile, type TreeNode } from "./scene-model";
 export interface PanelHandlers {
   /** Eye button: the handler applies the change (model + objects); the panel then re-reads `node.visible`. */
   toggle(nodeId: string, visible: boolean): void;
-  /** File × button: remove the file (abort it if still loading). */
-  remove(fileId: string): void;
+  /** File × button: remove the file (abort it if still loading). Absent: no × (exported HTML). */
+  remove?(fileId: string): void;
   /** File ⋯ menu: set the file's source frame and unit (the handler updates the SceneFile). */
   frame?(fileId: string, frame: ObjectFrame): void;
   /** Click on a row (outside its buttons): select that node. */
@@ -157,7 +157,8 @@ export class ScenePanel {
     label.title = name;
     const status = el("span", "va3d-loading");
     status.textContent = "불러오는 중";
-    row.append(el("span", "va3d-twisty-space"), label, status, button("va3d-remove", "×", "제거", "remove"));
+    row.append(el("span", "va3d-twisty-space"), label, status);
+    if (this.handlers.remove) row.append(button("va3d-remove", "×", "제거", "remove"));
     item.append(row);
     this.rows.set(fileId, { item, node: null });
     return item;
@@ -185,7 +186,7 @@ export class ScenePanel {
         more.setAttribute("aria-expanded", "false");
         row.append(more);
       }
-      row.append(button("va3d-remove", "×", "제거", "remove"));
+      if (this.handlers.remove) row.append(button("va3d-remove", "×", "제거", "remove"));
     }
     item.append(row);
     this.rows.set(node.id, { item, node });
@@ -297,7 +298,11 @@ export class ScenePanel {
     }
   }
 
-  private setCollapsed(collapsed: boolean): void {
+  get collapsed(): boolean {
+    return this.root.classList.contains("collapsed");
+  }
+
+  setCollapsed(collapsed: boolean): void {
     this.root.classList.toggle("collapsed", collapsed);
     this.tree.hidden = collapsed;
     this.toggleButton.textContent = collapsed ? "▶" : "◀";
@@ -331,7 +336,7 @@ export class ScenePanel {
         break;
       }
       case "remove":
-        this.handlers.remove(id);
+        this.handlers.remove?.(id);
         break;
       case "frame":
         this.toggleFrameMenu(item, id);

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Exported-HTML runtime (npm run build:runtime)
+/build/

@@ -15,6 +15,14 @@ export function routeOpen(currentFile: string | null, paths: string[]): { here: 
 export type WindowKind = "empty" | "md" | "3d";
 
 /**
+ * Window event a viewer's menu dispatches to open files through the app (main.ts owns the dialog
+ * and the routing). detail.append: "장면에 추가" (3D files only, always appended to this scene);
+ * otherwise "열기" (same routing as Ctrl+O).
+ */
+export const OPEN_EVENT = "va:open";
+export type OpenEventDetail = { append: boolean };
+
+/**
  * Where dropped (or Ctrl+O-picked) files go, by what the window shows:
  * - md (or any non-3D document): every file opens a new window (v0.1 rule).
  * - 3d: 3D files are appended to the scene, other files open new windows; with Shift, 3D files

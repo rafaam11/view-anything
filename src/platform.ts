@@ -33,16 +33,15 @@ export const platform = {
   async openWindow(path?: string): Promise<void> {
     await invoke("open_window", { path: path ?? null });
   },
-  /** Native file-open dialog; [] when cancelled. */
-  async pickFiles(): Promise<string[]> {
+  /** Native file-open dialog; [] when cancelled. `only3d`: 3D models only (장면에 추가). */
+  async pickFiles(opts: { only3d?: boolean } = {}): Promise<string[]> {
+    const models = { name: "3D 모델", extensions: [...THREE_D_EXTENSIONS] };
     const picked = await open({
       multiple: true,
       directory: false,
-      filters: [
-        { name: "Markdown", extensions: ["md", "markdown"] },
-        { name: "3D 모델", extensions: [...THREE_D_EXTENSIONS] },
-        { name: "모든 파일", extensions: ["*"] },
-      ],
+      filters: opts.only3d
+        ? [models]
+        : [{ name: "Markdown", extensions: ["md", "markdown"] }, models, { name: "모든 파일", extensions: ["*"] }],
     });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];

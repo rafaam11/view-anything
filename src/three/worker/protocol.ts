@@ -11,7 +11,7 @@ export type Primitive = "triangles" | "lines" | "points";
  * read/parse: bytes or nothing; tessellate: STEP/IGES meshing (no progress, spinner only);
  * upload: chunks put on the GPU so far / total chunks.
  */
-export type Phase = "read" | "parse" | "tessellate" | "upload" | "edges";
+export type Phase = "read" | "parse" | "tessellate" | "upload" | "edges" | "export";
 
 /** Default mesh colour (sRGB hex) when a file has none. */
 export const DEFAULT_COLOR = 0xb4bcc6;
@@ -122,7 +122,7 @@ export function progressThrottle(emit: (phase: Phase, loaded: number, total: num
   };
 }
 
-const PHASE_LABEL: Record<Phase, string> = { read: "읽는 중", parse: "해석 중", tessellate: "형상 변환 중", upload: "GPU 업로드", edges: "엣지" };
+const PHASE_LABEL: Record<Phase, string> = { read: "읽는 중", parse: "해석 중", tessellate: "형상 변환 중", upload: "GPU 업로드", edges: "엣지", export: "내보내는 중" };
 
 /**
  * "읽는 중 42%", "읽는 중 12.3 MB" (unknown total), "해석 중", "형상 변환 중" (never a percent),

@@ -3,7 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { resolveViewer, type Viewer } from "./registry";
 import { platform } from "./platform";
 import { applyTheme, currentMode, cycleTheme } from "./theme";
-import { isOpenKey, routeDrop, type WindowKind } from "./open-route";
+import { isOpenKey, OPEN_EVENT, routeDrop, type OpenEventDetail, type WindowKind } from "./open-route";
 import { isThreeD } from "./three/formats";
 
 const app = document.getElementById("app")!;
@@ -107,20 +107,33 @@ window.addEventListener("keyup", trackShift, true);
 window.addEventListener("blur", () => (shiftHeld = false));
 
 let picking = false; // one dialog at a time
-async function pickAndOpen() {
+/** Ctrl+O / 파일 > 열기 (routed like a drop); `append`: 파일 > 장면에 추가 (3D files into this scene). */
+async function pickAndOpen(append = false) {
   if (picking) return;
   picking = true;
   let paths: string[];
   try {
-    paths = await platform.pickFiles();
+    paths = await platform.pickFiles({ only3d: append });
   } catch (e) {
     await platform.alert(String(e)).catch(() => {});
     return;
   } finally {
     picking = false; // the dialog is closed; routing below must not block the next Ctrl+O
   }
-  await openPaths(paths, false).catch((e) => platform.alert(String(e)).catch(() => {}));
+  const run = append && kind === "3d" ? appendPaths(paths) : openPaths(paths, false);
+  await run.catch((e) => platform.alert(String(e)).catch(() => {}));
 }
+
+/** Every picked 3D file goes into this window's scene (no Shift, no routing); anything else opens a window. */
+async function appendPaths(paths: string[]) {
+  await ready;
+  openWindows(viewer?.accept?.(paths, { newWindow: false }) ?? paths);
+}
+
+window.addEventListener(OPEN_EVENT, (e) => {
+  const detail = (e as CustomEvent<OpenEventDetail>).detail;
+  void pickAndOpen(detail?.append === true);
+});
 
 applyTheme(currentMode());
 // Capture phase: the editor must not swallow app shortcuts.

@@ -244,3 +244,17 @@ test("the selection mark survives a row rebuild (loading row replaced, lazy expa
   panel.setSelected("f1/0/1");
   expect(node(panel, "f1/0/1")!.classList.contains("selected")).toBe(true);
 });
+
+test("exported-HTML panel (no remove, no frame handler): no × or ⋯ buttons; collapse is scriptable", () => {
+  const panel = new ScenePanel({ toggle: vi.fn() });
+  document.body.append(panel.root);
+  panel.addLoading("f9", "x.stl");
+  expect(node(panel, "f9")!.querySelector(".va3d-remove")).toBeNull();
+  panel.addFile(sceneFile("f9", nested));
+  expect(node(panel, "f9")!.querySelector(".va3d-remove")).toBeNull();
+  expect(node(panel, "f9")!.querySelector(".va3d-more")).toBeNull();
+  panel.setCollapsed(true);
+  expect(panel.collapsed).toBe(true);
+  panel.setCollapsed(false);
+  expect(panel.collapsed).toBe(false);
+});

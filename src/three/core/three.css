@@ -119,7 +119,7 @@
 .va3d-banner .va3d-banner-action { flex: none; border: 1px solid currentColor; border-radius: 4px; padding: 0 8px; }
 .va3d-banner button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 0 4px; }
 
-/* Bottom bar (below the panel, which ends 28px above the bottom): "보기" popover + status line. */
+/* Bottom bar (below the panel, which ends 28px above the bottom): the status line. */
 .va3d-bottom {
   position: absolute;
   left: 8px;
@@ -144,39 +144,78 @@
 .va3d-status > span { overflow: hidden; text-overflow: ellipsis; }
 .va3d-cursor { font-variant-numeric: tabular-nums; color: var(--fg); }
 
-.va3d-viewbar { position: relative; flex: none; pointer-events: auto; }
-.va3d-view-button {
-  font: inherit;
-  font-size: 0.75rem;
-  color: var(--fg);
+/* Top-left menubar ("파일 · 보기"): 8 + at most 104 px wide, 26 px high; the panel starts below
+   it. Dropdowns open over the panel. */
+.va3d-menubar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  height: 26px;
+  max-width: 104px;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: 0 2px;
+  box-sizing: border-box;
+  align-items: center;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 6px;
-  cursor: pointer;
+  border-radius: 6px;
 }
-.va3d-view-button:hover, .va3d-view-button[aria-expanded="true"] { background: var(--border); }
-/* Opens upward from the bottom bar, over the panel. */
-.va3d-view-menu {
+.va3d-menu-wrap { position: relative; }
+.va3d-menu-title {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 9px;
+  cursor: default;
+}
+.va3d-menu-title:hover, .va3d-menu-title.open { background: var(--border); }
+.va3d-menu {
   position: absolute;
-  left: 0;
-  bottom: calc(100% + 4px);
-  z-index: 2;
-  width: 250px;
+  top: calc(100% + 4px);
+  left: -2px;
+  min-width: 220px;
   display: grid;
-  gap: 6px;
-  padding: 8px;
+  padding: 4px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.16);
 }
-.va3d-view-menu fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: 3px; }
-.va3d-view-menu legend { padding: 0 0 2px; color: var(--muted); font-size: 0.75rem; }
+.va3d-menu-item {
+  display: grid;
+  grid-template-columns: 1.2em 1fr auto;
+  gap: 6px;
+  align-items: center;
+  font: inherit;
+  text-align: left;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 8px 3px 4px;
+  cursor: default;
+  white-space: nowrap;
+}
+.va3d-menu-item:hover, .va3d-menu-item:focus-visible { background: var(--border); outline: none; }
+.va3d-menu-item[aria-disabled="true"] { color: var(--muted); }
+.va3d-menu-item[aria-disabled="true"]:hover { background: transparent; }
+.va3d-menu-mark { text-align: center; }
+.va3d-menu-key { color: var(--muted); font-size: 0.75rem; padding-left: 16px; }
+.va3d-menu-sep { height: 1px; margin: 4px 2px; background: var(--border); }
+.va3d-menu-block { padding: 2px 6px 4px; width: 250px; }
+
+/* Display mode and section controls (inside the 보기 menu). */
+.va3d-view-controls { display: grid; gap: 6px; }
+.va3d-view-controls fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: 3px; }
+.va3d-view-controls legend { padding: 0 0 2px; color: var(--muted); font-size: 0.75rem; }
 .va3d-view-modes { grid-template-columns: 1fr 1fr; }
 .va3d-view-modes legend, .va3d-view-note { grid-column: 1 / -1; }
-.va3d-view-menu label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.va3d-view-menu input:disabled + span { opacity: 0.5; }
+.va3d-view-controls label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.va3d-view-controls input:disabled + span { opacity: 0.5; }
 .va3d-view-note { margin: 0; color: var(--muted); font-size: 0.75rem; }
 .va3d-clip-row { display: grid !important; grid-template-columns: auto 1.2em 1fr 4.5em; }
 .va3d-clip-axis { font-weight: 700; }
@@ -190,7 +229,7 @@
 /* Scene panel (left, collapsible). */
 .va3d-panel {
   position: absolute;
-  top: 8px;
+  top: 40px; /* below the menubar (8 + 26 + 6) */
   left: 8px;
   bottom: 28px;
   width: 260px;
@@ -230,14 +269,15 @@
 .va3d-node.off .va3d-name { opacity: 0.45; }
 .va3d-node.off .va3d-eye { color: var(--muted); }
 
-/* Layout budget (top row): panel 8 + 260 px on the left, toolbar ~470 px (8 buttons + the
-   display dropdowns) + 8 px on the right, banner (min 240 px) in between.
-   - wide (> 1080px): the banner sits between panel and toolbar.
+/* Layout budget (top row): menubar 8 + 104 px on the left (the panel, 8 + 260 px, starts below
+   it but reaches up to the banner's row), toolbar ~470 px (8 buttons + the display dropdowns)
+   + 8 px on the right, banner (min 240 px) in between.
+   - wide (> 1080px): the banner sits between panel (or, collapsed, the menubar) and toolbar.
    - mid (821-1080px): no room for the banner up there; it moves below the toolbar.
    - narrow (<= 820px, panel auto-collapses, see panel.ts NARROW): toolbar may wrap, banner at
      the bottom. 820 keeps the open panel clear of the toolbar (268 + 470 + 16 < 821). */
 .va3d-panel ~ .va3d-banner { left: 276px; max-width: min(640px, calc(100% - 762px)); }
-.va3d-panel.collapsed ~ .va3d-banner { left: 56px; max-width: min(640px, calc(100% - 542px)); }
+.va3d-panel.collapsed ~ .va3d-banner { left: 120px; max-width: min(640px, calc(100% - 606px)); }
 
 @media (min-width: 821px) and (max-width: 1080px) {
   .va3d .va3d-panel ~ .va3d-banner,
@@ -245,7 +285,7 @@
 }
 
 @media (max-width: 820px) {
-  .va3d-toolbar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 100px); }
+  .va3d-toolbar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 128px); }
   .va3d-panel:not(.collapsed) { bottom: 28px; width: min(260px, calc(100% - 16px)); z-index: 1; }
   /* Must out-rank `.va3d-panel.collapsed ~ .va3d-banner` above: the panel is collapsed here. */
   .va3d .va3d-panel ~ .va3d-banner,

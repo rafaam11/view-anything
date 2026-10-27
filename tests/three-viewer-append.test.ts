@@ -315,3 +315,51 @@ test("removing the file that holds the selection clears it (panel included)", as
   expect(v.tools.selected).toBeNull();
   expect(root.querySelector(".va3d-dims")!.textContent).toBe("");
 });
+
+test("menubar: 파일 items dispatch the open event, update check is a disabled placeholder; no bottom 보기 button", async () => {
+  const v = make();
+  expect(root.querySelector(".va3d-view-button")).toBeNull();
+  expect(root.querySelector(".va3d-bottom .va3d-view-controls")).toBeNull();
+  const titles = [...root.querySelectorAll<HTMLButtonElement>(".va3d-menubar .va3d-menu-title")];
+  expect(titles.map((t) => t.textContent)).toEqual(["파일", "보기"]);
+  const events: unknown[] = [];
+  const onOpen = (e: Event) => events.push((e as CustomEvent).detail);
+  window.addEventListener("va:open", onOpen);
+  titles[0].click();
+  const items = () => [...root.querySelectorAll<HTMLButtonElement>(".va3d-menu:not([hidden]) .va3d-menu-item")];
+  expect(items().map((b) => b.querySelector(".va3d-menu-label")!.textContent)).toEqual(["열기…", "장면에 추가…", "HTML로 내보내기…", "업데이트 확인"]);
+  const update = items()[3];
+  expect(update.getAttribute("aria-disabled")).toBe("true");
+  expect(update.title).toBe("다음 작업에서 연결");
+  items()[0].click();
+  titles[0].click();
+  items()[1].click();
+  window.removeEventListener("va:open", onOpen);
+  expect(events).toEqual([{ append: false }, { append: true }]);
+  // The 보기 menu holds the display mode / section controls and the panel toggle.
+  titles[1].click();
+  const view = root.querySelector<HTMLElement>(".va3d-menu:not([hidden])")!;
+  expect(view.querySelector(".va3d-view-controls")).not.toBeNull();
+  const panelToggle = view.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')!;
+  const panel = root.querySelector(".va3d-panel")!;
+  const wasCollapsed = panel.classList.contains("collapsed");
+  panelToggle.click();
+  expect(panel.classList.contains("collapsed")).toBe(!wasCollapsed);
+  v.menubar.close();
+});
+
+test("export refuses while files load, and with nothing visible; Ctrl+Shift+E runs it", async () => {
+  const v = make();
+  revealGate = new Promise(() => {}); // the first file never finishes loading
+  void v.load(P("a.stl"));
+  await settle();
+  await v.exportHtml();
+  expect(root.querySelector(".va3d-banner")!.textContent).toContain("불러오는 중에는 내보낼 수 없습니다");
+  const spy = vi.spyOn(v, "exportHtml").mockResolvedValue();
+  window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyE", key: "E", ctrlKey: true, shiftKey: true }));
+  expect(spy).toHaveBeenCalledOnce();
+  spy.mockRestore();
+  const empty = make();
+  await empty.exportHtml();
+  expect(root.querySelector(".va3d-banner")!.textContent).toContain("내보낼 표시 중인 모델이 없습니다");
+});

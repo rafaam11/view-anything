@@ -1,5 +1,5 @@
-// "보기" tools of the 3D stage: display mode and section planes (a compact popover in the bottom
-// bar), click selection with a display-frame bounding box, dimensions and the cursor coordinate
+// "보기" tools of the 3D stage: display mode and section planes (controls the caller puts in the
+// 보기 menu of the menubar), click selection with a display-frame bounding box, dimensions and the cursor coordinate
 // readout. No Tauri: shared with the exported-HTML runtime.
 import { Box3, Box3Helper, Color, Vector2, Vector3, type Camera, type Intersection, type Material, type Matrix4, type Object3D } from "three";
 import { AXES, AXIS_NAMES, Clipper } from "./clipping";
@@ -58,8 +58,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): 
 }
 
 export class ViewTools {
-  /** Bottom-left bar: the "보기" button and its popover. */
-  readonly bar = el("div", "va3d-viewbar");
+  /** Display mode radios and section rows (placed in the 보기 menu by the caller). */
+  readonly controls = el("div", "va3d-view-controls");
   /** Status line parts (plain text). */
   readonly dims = el("span", "va3d-dims");
   readonly cursor = el("span", "va3d-cursor");
@@ -67,8 +67,6 @@ export class ViewTools {
   readonly modes: DisplayModes;
   private readonly jobs: GeometryJobs;
   private readonly picker: Picker;
-  private readonly button = el("button", "va3d-view-button");
-  private readonly menu = el("div", "va3d-view-menu");
   private readonly edgeNote = el("p", "va3d-view-note");
   private readonly modeInputs = new Map<DisplayMode, HTMLInputElement>();
   private readonly clipRows: { check: HTMLInputElement; slider: HTMLInputElement; value: HTMLElement }[] = [];
@@ -122,28 +120,9 @@ export class ViewTools {
       this.hoverAt = null;
       this.cursor.textContent = "";
     });
-    document.addEventListener("pointerdown", (e) => {
-      if (!this.menu.hidden && !this.bar.contains(e.target as Node)) this.showMenu(false);
-    });
   }
 
   private buildMenu(): void {
-    this.button.type = "button";
-    this.button.textContent = "보기 ▾";
-    this.button.title = "표시 모드와 단면";
-    this.button.setAttribute("aria-haspopup", "dialog");
-    this.button.setAttribute("aria-expanded", "false");
-    this.button.addEventListener("click", () => this.showMenu(this.menu.hidden !== false));
-    this.menu.hidden = true;
-    this.menu.setAttribute("role", "dialog");
-    this.menu.setAttribute("aria-label", "보기");
-    this.menu.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation();
-      this.showMenu(false);
-      this.button.focus();
-    });
-
     const modes = el("fieldset", "va3d-view-modes");
     const legend = el("legend");
     legend.textContent = "표시";
@@ -190,13 +169,7 @@ export class ViewTools {
       clip.append(row);
       this.clipRows.push({ check, slider, value });
     }
-    this.menu.append(modes, clip);
-    this.bar.append(this.button, this.menu);
-  }
-
-  private showMenu(open: boolean): void {
-    this.menu.hidden = !open;
-    this.button.setAttribute("aria-expanded", String(open));
+    this.controls.append(modes, clip);
   }
 
   get displayMode(): DisplayMode {
@@ -230,10 +203,26 @@ export class ViewTools {
     });
   }
 
-  /** Escape: close the popover if open, else clear the selection. */
+  /** Escape (no menu open): clear the selection. */
   escape(): void {
-    if (!this.menu.hidden) return this.showMenu(false);
     this.select(null);
+  }
+
+  /** Section state per axis (display coordinates), e.g. for an export. */
+  sectionState(): { enabled: boolean; value: number | null }[] {
+    return this.clipper.axes.map((a) => ({ enabled: a.enabled, value: a.value }));
+  }
+
+  /** Restore sections saved by `sectionState` (after the scene is in place). */
+  restoreSections(state: readonly { enabled: boolean; value: number | null }[]): void {
+    this.setClip(() =>
+      AXES.forEach((axis) => {
+        const s = state[axis];
+        if (!s) return;
+        if (s.value !== null) this.clipper.setValue(axis, s.value);
+        this.clipper.setEnabled(axis, s.enabled);
+      }),
+    );
   }
 
   /** Select a tree node (null: none); the panel follows through `host.selected`. */
