@@ -110,11 +110,11 @@ test("a loading file shows a row with remove only, replaced in place when loaded
   expect([...panel.root.querySelectorAll<HTMLElement>(".va3d-tree > .va3d-node")].map((n) => n.dataset.id)).toEqual(["f1", "f2", "f3"]);
 });
 
-test("a narrow window (under 700px) collapses the panel, widening expands it again", () => {
+test("a narrow window (820px or less) collapses the panel, widening expands it again", () => {
   let listener: ((e: { matches: boolean }) => void) | null = null;
   const mql = { matches: true, addEventListener: (_: string, l: (e: { matches: boolean }) => void) => (listener = l), removeEventListener() {} };
   const spy = vi.spyOn(window, "matchMedia").mockImplementation((q: string) => {
-    expect(q).toBe("(max-width: 700px)");
+    expect(q).toBe("(max-width: 820px)");
     return mql as unknown as MediaQueryList;
   });
   try {
@@ -191,9 +191,17 @@ test("STEP/IGES files show their unit fixed as mm", () => {
   expect(unitSel.title).toBe("STEP/IGES는 mm로 변환되어 열립니다");
 });
 
-test("Escape closes an open ⋯ menu", () => {
+test("Escape closes an open ⋯ menu (from inside it or from the ⋯ button); aria-expanded follows", () => {
   const { panel } = setupFrames([{ ...sceneFile("f3", nested, "a.obj"), format: "obj" }]);
-  btn(panel, "f3", "va3d-more").click();
-  menuOf(panel, "f3")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  const more = btn(panel, "f3", "va3d-more");
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  more.click();
+  expect(more.getAttribute("aria-expanded")).toBe("true");
+  menuOf(panel, "f3")!.querySelector("select")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   expect(menuOf(panel, "f3")!.hidden).toBe(true);
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  more.click();
+  more.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  expect(menuOf(panel, "f3")!.hidden).toBe(true);
+  expect(more.getAttribute("aria-expanded")).toBe("false");
 });

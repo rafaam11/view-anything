@@ -46,6 +46,14 @@ export const FRAME_LABELS: Readonly<Record<FramePreset, string>> = {
   "yup-lh": "Y-up 왼손 (Unity)",
   "zup-lh": "Z-up 왼손 (Unreal)",
 };
+/** Short names for the closed toolbar dropdown. */
+export const FRAME_SHORT_LABELS: Readonly<Record<FramePreset, string>> = {
+  "zup-rh": "Z-up RH",
+  "yup-rh": "Y-up RH",
+  ros: "ROS",
+  "yup-lh": "Y-up LH",
+  "zup-lh": "Z-up LH",
+};
 export const UNIT_LABELS: Readonly<Record<Unit, string>> = { mm: "mm", cm: "cm", m: "m", in: "inch" };
 
 /** A file's source frame and unit ("as-is": take the file values as display-frame values). */

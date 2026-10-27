@@ -139,7 +139,9 @@ test("camera up and the hemisphere sky follow the display up axis (world +Y for 
 
 // Mirrored (det < 0) meshes are not culled or lit inside-out: three flips the front-face winding
 // from the world matrix determinant, and flat shading derives normals from screen derivatives.
-// Guard the three internals we rely on, so an upgrade that changes them fails here.
+// Guard the three internals we rely on, so an upgrade that changes them fails here. These are the
+// src/ files; the app bundles build/three.module.js, which is generated from them and carries the
+// same code (checked for 0.186.1: frontFaceCW at three.module.js:17237, flipSided at :10416).
 test("three flips front-face winding for det < 0 meshes", () => {
   const renderer = readFileSync("node_modules/three/src/renderers/WebGLRenderer.js", "utf8");
   expect(renderer).toMatch(/frontFaceCW = \( object\.isMesh && object\.matrixWorld\.determinant(?:Affine)?\(\) < 0 \)/);

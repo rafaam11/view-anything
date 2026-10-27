@@ -11,7 +11,6 @@ import {
   Matrix4,
   MOUSE,
   PerspectiveCamera,
-  Quaternion,
   type Camera,
   Scene,
   Sphere,
@@ -58,6 +57,9 @@ export class Stage {
   /** X/Y/Z labels at the axis tips (DOM overlay, coloured by CSS so they follow the theme). */
   private readonly axisLabels: HTMLElement[] = [];
   private axisLength = 1;
+  /** Canvas host size in CSS px, cached by trackSize (no layout read per frame). */
+  private width = 1;
+  private height = 1;
   private readonly helpers = new Group();
   private readonly bounds = new Sphere(new Vector3(), 1);
   private clipRadius = 1;
@@ -105,6 +107,7 @@ export class Stage {
       const span = document.createElement("span");
       span.className = `va3d-axis-label ${axis}`;
       span.textContent = axis.toUpperCase();
+      span.hidden = true; // placed (and shown) by the first render
       labels.append(span);
       this.axisLabels.push(span);
     }
@@ -144,17 +147,13 @@ export class Stage {
     this.displayRoot.matrixAutoUpdate = false;
     this.displayRoot.matrix.copy(this.displayMatrix);
     this.displayRoot.matrixWorldNeedsUpdate = true;
-    // Lights and orbit follow the display up. (The display root sends display up to world +Y for
-    // every preset today, so this is a no-op after construction, but keep it general.)
+    // Lights and orbit follow the display up. The display root maps display up to world +Y for
+    // every preset (B_yup⁻¹·B_D·B_D⁻¹·e_z = B_yup⁻¹·e_z), so camera.up never changes after
+    // construction and OrbitControls' cached up rotation stays valid. A preset whose up did not
+    // map to +Y would have to rebuild that cache.
     const up = this.worldVector(standardViewUp("front", this.display));
     this.hemi.position.copy(up);
-    if (this.camera.up.equals(up)) return;
     this.camera.up.copy(up);
-    const c = this.controls as unknown as { _quat?: Quaternion; _quatInverse?: Quaternion } | undefined;
-    if (c?._quat && c._quatInverse) {
-      c._quat.setFromUnitVectors(up, new Vector3(0, 1, 0));
-      c._quatInverse.copy(c._quat).invert();
-    }
   }
 
   /**
@@ -204,7 +203,7 @@ export class Stage {
   }
 
   private placeAxisLabels(): void {
-    const spots = axisLabelPositions(this.camera, this.displayMatrix, this.axisLength, this.host.clientWidth, this.host.clientHeight);
+    const spots = axisLabelPositions(this.camera, this.displayMatrix, this.axisLength, this.width, this.height);
     spots.forEach((p, i) => {
       const label = this.axisLabels[i];
       label.hidden = !p.visible;
@@ -343,8 +342,8 @@ export class Stage {
 
   private trackSize(): void {
     const resize = () => {
-      const w = Math.max(1, this.host.clientWidth);
-      const h = Math.max(1, this.host.clientHeight);
+      const w = (this.width = Math.max(1, this.host.clientWidth));
+      const h = (this.height = Math.max(1, this.host.clientHeight));
       this.renderer.setSize(w, h, false);
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();

@@ -30,7 +30,7 @@ function button(className: string, text: string, title: string, action: string):
 }
 
 /** Below this width the panel starts collapsed (keep in sync with three.css). */
-const NARROW = "(max-width: 700px)";
+const NARROW = "(max-width: 820px)";
 
 const EYE_ON = "●";
 const EYE_OFF = "○";
@@ -57,10 +57,14 @@ export class ScenePanel {
     this.root.addEventListener("click", (e) => this.onClick(e));
     this.root.addEventListener("change", (e) => this.onFrameChange(e));
     this.root.addEventListener("keydown", (e) => {
-      const menu = (e.target as HTMLElement | null)?.closest<HTMLElement>(".va3d-frame-menu");
-      if (e.key === "Escape" && menu) {
-        menu.hidden = true;
-        menu.parentElement?.querySelector<HTMLButtonElement>(":scope > .va3d-row > .va3d-more")?.focus();
+      // Escape inside an open ⋯ menu, or on its ⋯ button, closes it.
+      const t = e.target as HTMLElement | null;
+      const item = t?.closest(".va3d-frame-menu, .va3d-more") ? t.closest<HTMLElement>(".va3d-node") : null;
+      const menu = item?.querySelector<HTMLElement>(":scope > .va3d-frame-menu");
+      if (e.key === "Escape" && item && menu && !menu.hidden) {
+        e.stopPropagation();
+        this.showFrameMenu(item, menu, false);
+        item.querySelector<HTMLButtonElement>(":scope > .va3d-row > .va3d-more")?.focus();
       }
     });
     // A narrow window has no room for the panel next to the toolbar: start collapsed there, and
@@ -150,7 +154,11 @@ export class ScenePanel {
     label.title = node.name;
     row.append(eye, label);
     if (node.kind === "file") {
-      if (this.handlers.frame) row.append(button("va3d-more", "⋯", "원본 좌표계·단위", "frame"));
+      if (this.handlers.frame) {
+        const more = button("va3d-more", "⋯", "원본 좌표계·단위", "frame");
+        more.setAttribute("aria-expanded", "false");
+        row.append(more);
+      }
       row.append(button("va3d-remove", "×", "제거", "remove"));
     }
     item.append(row);
@@ -165,10 +173,7 @@ export class ScenePanel {
     const file = this.files.get(fileId);
     if (!file) return;
     let menu = item.querySelector<HTMLElement>(":scope > .va3d-frame-menu");
-    if (menu && !menu.hidden) {
-      menu.hidden = true;
-      return;
-    }
+    if (menu && !menu.hidden) return this.showFrameMenu(item, menu, false);
     if (!menu) {
       menu = el("div", "va3d-frame-menu");
       const frame = this.select("frame", "원본 좌표계", [["as-is", "그대로"], ...FRAME_PRESETS.map((p): [string, string] => [p, FRAME_LABELS[p]])]);
@@ -182,8 +187,13 @@ export class ScenePanel {
     unitSel.value = fixed ?? file.sourceUnit;
     unitSel.disabled = fixed !== null;
     unitSel.title = fixed ? "STEP/IGES는 mm로 변환되어 열립니다" : "";
-    menu.hidden = false;
+    this.showFrameMenu(item, menu, true);
     frameSel.focus();
+  }
+
+  private showFrameMenu(item: HTMLElement, menu: HTMLElement, open: boolean): void {
+    menu.hidden = !open;
+    item.querySelector(":scope > .va3d-row > .va3d-more")?.setAttribute("aria-expanded", String(open));
   }
 
   private select(key: string, caption: string, options: [string, string][]): { label: HTMLLabelElement } {

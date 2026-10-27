@@ -231,11 +231,17 @@ test("toolbar coordinate dropdowns set the display preset and unit (default Z-up
   const unit = root.querySelector<HTMLSelectElement>(".va3d-toolbar select.va3d-display-unit")!;
   expect(frame.value).toBe("zup-rh");
   expect(unit.value).toBe("mm");
-  expect(frame.options[0].textContent).toBe("Z-up 오른손 (CATIA/NX/Creo/STEP)");
+  // Closed select stays short; the full description is the option title and the tooltip.
+  expect([...frame.options].map((o) => o.textContent)).toEqual(["Z-up RH", "Y-up RH", "ROS", "Y-up LH", "Z-up LH"]);
+  expect(frame.options[0].title).toBe("Z-up 오른손 (CATIA/NX/Creo/STEP)");
+  expect(frame.title).toContain("Z-up 오른손 (CATIA/NX/Creo/STEP)");
   expect([...unit.options].map((o) => o.textContent)).toEqual(["mm", "cm", "m", "inch"]);
+  frame.focus();
   frame.value = "yup-lh";
   frame.dispatchEvent(new Event("change"));
   expect(stage.setDisplay).toHaveBeenLastCalledWith("yup-lh", "mm");
+  expect(document.activeElement).not.toBe(frame); // blurred: F and 1-7 reach the stage again
+  expect(frame.title).toContain("Unity");
   unit.value = "m";
   unit.dispatchEvent(new Event("change"));
   expect(stage.setDisplay).toHaveBeenLastCalledWith("yup-lh", "m");

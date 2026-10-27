@@ -8,7 +8,7 @@ import { windowTitle } from "../open-route";
 import { Stage, WebGLUnavailableError } from "./core/stage";
 import { adoptGltfScene, buildParsedFile, disposeObject, renderableSizes, type BuiltFile } from "./core/build-objects";
 import { buildTree, fixedSourceUnit, removeFile, setVisible, type SceneFile, type SceneModel, type TreeNode } from "./core/scene-model";
-import { FRAME_LABELS, FRAME_PRESETS, UNIT_LABELS, UNITS, type FramePreset, type ObjectFrame, type Unit } from "./core/frames";
+import { FRAME_LABELS, FRAME_PRESETS, FRAME_SHORT_LABELS, UNIT_LABELS, UNITS, type FramePreset, type ObjectFrame, type Unit } from "./core/frames";
 import { ScenePanel } from "./core/panel";
 import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
@@ -189,15 +189,29 @@ export class ThreeViewer {
       sel.value = value;
       return sel;
     };
-    const frame = make("va3d-display-frame", "좌표계 (화면 기준)", FRAME_PRESETS.map((p) => [p, FRAME_LABELS[p]]), this.display);
+    // The closed select shows the short name (keeps the toolbar narrow); the full Korean
+    // description is each option's title and the select's tooltip.
+    const frame = make("va3d-display-frame", "좌표계 (화면 기준)", FRAME_PRESETS.map((p) => [p, FRAME_SHORT_LABELS[p]]), this.display);
+    for (const o of frame.options) o.title = FRAME_LABELS[o.value as FramePreset];
     const unit = make("va3d-display-unit", "단위 (화면 기준)", UNITS.map((u) => [u, UNIT_LABELS[u]]), this.displayUnit);
-    const apply = () => this.setDisplay(frame.value as FramePreset, unit.value as Unit);
+    const frameTip = () => (frame.title = `좌표계 (화면 기준): ${FRAME_LABELS[frame.value as FramePreset]}`);
+    frameTip();
+    const apply = (e: Event) => {
+      frameTip();
+      this.setDisplay(frame.value as FramePreset, unit.value as Unit);
+      // Hand the keyboard back to the stage so F and 1-7 work right away.
+      (e.target as HTMLSelectElement).blur();
+    };
     frame.addEventListener("change", apply);
     unit.addEventListener("change", apply);
     box.append(frame, unit);
     return box;
   }
 
+  /**
+   * Display frame and unit are independent choices: picking ROS (whose convention is metres)
+   * does not switch the unit to m, so changing the frame never silently rescales unit-tagged files.
+   */
   setDisplay(display: FramePreset, unit: Unit): void {
     this.display = display;
     this.displayUnit = unit;
