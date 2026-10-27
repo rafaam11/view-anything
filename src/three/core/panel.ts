@@ -190,6 +190,11 @@ export class ScenePanel {
     item.append(row);
     this.rows.set(node.id, { item, node });
     this.paintVisible(item, node);
+    // Rows are rebuilt (loading -> loaded, lazy expand): keep the selection mark.
+    if (node.id === this.selected) {
+      item.classList.add("selected");
+      item.setAttribute("aria-selected", "true");
+    }
     item.dataset.depth = String(depth);
     return item;
   }

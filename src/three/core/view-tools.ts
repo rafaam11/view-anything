@@ -2,10 +2,11 @@
 // bar), click selection with a display-frame bounding box, dimensions and the cursor coordinate
 // readout. No Tauri: shared with the exported-HTML runtime.
 import { Box3, Box3Helper, Color, Vector2, Vector3, type Camera, type Intersection, type Material, type Matrix4, type Object3D } from "three";
-import { AXES, AXIS_NAMES, Clipper, type Axis } from "./clipping";
+import { AXES, AXIS_NAMES, Clipper } from "./clipping";
 import { canShowEdges, DISPLAY_MODE_LABELS, DISPLAY_MODES, DisplayModes, type DisplayMode } from "./display-modes";
-import { CURSOR_TRIANGLE_LIMIT, decimalsFor, displayBox, formatPoint, formatSize, meshTriangles, Picker } from "./info";
-import { UNIT_LABELS, type Unit } from "./frames";
+import { CURSOR_TRIANGLE_LIMIT, decimalsFor, displayBox, formatPoint, formatSize, meshTriangles, Picker, type PickResult } from "./info";
+import { UNIT_LABELS, UNIT_MM, type FramePreset, type Unit } from "./frames";
+import { GeometryJobs, type JobRunner } from "./geometry-jobs";
 
 /** What the tools need from the stage. */
 export interface ToolStage {
@@ -17,6 +18,8 @@ export interface ToolStage {
   readonly canvas: HTMLElement;
   requestRender(): void;
   onChange(fn: () => void): void;
+  /** Camera moved (orbit, zoom, fit): the readout under a still pointer is re-picked. */
+  onCameraChange?(fn: () => void): void;
 }
 
 export interface ToolFile {
@@ -32,6 +35,11 @@ export interface ToolHost {
   files(): ToolFile[];
   nodeName(nodeId: string): string | undefined;
   displayUnit(): Unit;
+  displayFrame?(): FramePreset;
+  /** Runs edge and BVH jobs (a worker in the app); inline on the UI thread if absent. */
+  jobRunner?: JobRunner;
+  /** Edge jobs in the worker: `done` of `total` (done === total: finished). */
+  edgeProgress?(done: number, total: number): void;
   /** The selection changed (the panel follows). */
   selected(nodeId: string | null): void;
   /** A one-off notice for the user (e.g. edges turned off). */
@@ -56,8 +64,9 @@ export class ViewTools {
   readonly dims = el("span", "va3d-dims");
   readonly cursor = el("span", "va3d-cursor");
   readonly clipper = new Clipper();
-  readonly modes = new DisplayModes(this.clipper.planes);
-  private readonly picker = new Picker();
+  readonly modes: DisplayModes;
+  private readonly jobs: GeometryJobs;
+  private readonly picker: Picker;
   private readonly button = el("button", "va3d-view-button");
   private readonly menu = el("div", "va3d-view-menu");
   private readonly edgeNote = el("p", "va3d-view-note");
@@ -71,21 +80,35 @@ export class ViewTools {
   private hoverAt: { x: number; y: number } | null = null;
   private hoverFrame = 0;
   private press: { x: number; y: number } | null = null;
+  /** A pointer button is down on the canvas (orbit/pan): no re-picking per camera change. */
+  private pressed = false;
+  private lastUnit: Unit | null = null;
+  private lastFrame: FramePreset | null = null;
   private readonly reverse = new WeakMap<Map<string, Object3D>, Map<Object3D, string>>();
 
   constructor(
     private readonly stage: ToolStage,
     private readonly host: ToolHost,
   ) {
+    // Set here, not as field initializers: they need `host` (a parameter property).
+    this.jobs = new GeometryJobs(host.jobRunner);
+    this.modes = new DisplayModes(this.clipper.planes, this.jobs, {
+      render: () => stage.requestRender(),
+      progress: (done, total) => host.edgeProgress?.(done, total),
+    });
+    this.picker = new Picker(this.jobs, { onReady: () => this.rehover() });
     this.buildMenu();
     // Updated every frame under the pointer: keep it out of the status live region.
     this.cursor.setAttribute("aria-hidden", "true");
     stage.onChange(() => this.refresh());
+    stage.onCameraChange?.(() => this.rehover());
     const canvas = stage.canvas;
     canvas.addEventListener("pointerdown", (e) => {
+      this.pressed = true;
       if (e.button === 0) this.press = { x: e.clientX, y: e.clientY };
     });
     canvas.addEventListener("pointerup", (e) => {
+      this.pressed = false;
       const p = this.press;
       this.press = null;
       if (e.button === 0 && p && Math.hypot(e.clientX - p.x, e.clientY - p.y) <= CLICK_SLOP) this.click(e.clientX, e.clientY);
@@ -93,7 +116,7 @@ export class ViewTools {
     canvas.addEventListener("pointermove", (e) => {
       if (e.buttons !== 0) return; // orbiting or panning: keep the last readout
       this.hoverAt = { x: e.clientX, y: e.clientY };
-      if (!this.hoverFrame) this.hoverFrame = requestAnimationFrame(() => this.hover());
+      this.rehover();
     });
     canvas.addEventListener("pointerleave", () => {
       this.hoverAt = null;
@@ -161,8 +184,8 @@ export class ViewTools {
       slider.value = String(SLIDER_STEPS);
       slider.setAttribute("aria-label", `${AXIS_NAMES[axis]} 단면 위치`);
       const value = el("span", "va3d-clip-value");
-      check.addEventListener("change", () => this.setClip(axis, { enabled: check.checked }));
-      slider.addEventListener("input", () => this.setClip(axis, { enabled: true, t: Number(slider.value) / SLIDER_STEPS }));
+      check.addEventListener("change", () => this.setClip(() => this.clipper.setEnabled(axis, check.checked)));
+      slider.addEventListener("input", () => this.setClip(() => this.clipper.setFraction(axis, Number(slider.value) / SLIDER_STEPS)));
       row.append(check, name, slider, value);
       clip.append(row);
       this.clipRows.push({ check, slider, value });
@@ -189,10 +212,11 @@ export class ViewTools {
     this.stage.requestRender();
   }
 
-  private setClip(axis: Axis, change: { enabled?: boolean; t?: number }): void {
-    this.clipper.set(axis, change);
+  private setClip(change: () => void): void {
+    change();
     this.paintClip();
     this.stage.requestRender();
+    this.rehover();
   }
 
   private paintClip(): void {
@@ -201,7 +225,7 @@ export class ViewTools {
       const row = this.clipRows[axis];
       const state = this.clipper.axes[axis];
       row.check.checked = state.enabled;
-      row.slider.value = String(Math.round(state.t * SLIDER_STEPS));
+      row.slider.value = String(Math.round(this.clipper.fraction(axis) * SLIDER_STEPS));
       row.value.textContent = state.enabled ? this.clipper.value(axis).toFixed(decimals) : "";
     });
   }
@@ -251,11 +275,20 @@ export class ViewTools {
     }
     this.modes.apply(this.stage.content, this.mode);
 
+    // Section values are display lengths: follow a unit change; keep them in range after a
+    // frame change (the axes point elsewhere now).
+    const unit = this.host.displayUnit();
+    const frame = this.host.displayFrame?.() ?? null;
+    if (this.lastUnit && unit !== this.lastUnit) this.clipper.scale(UNIT_MM[this.lastUnit] / UNIT_MM[unit]);
+    const frameChanged = this.lastFrame !== null && frame !== this.lastFrame;
+    this.lastUnit = unit;
+    this.lastFrame = frame;
     const scene = displayBox(this.stage.content, this.stage.displayToWorld, { visibleOnly: true });
     const size = scene.isEmpty() ? new Vector3() : scene.getSize(new Vector3());
     this.extent = Math.max(size.x, size.y, size.z);
     this.clipper.setRange(scene.isEmpty() ? [0, 0, 0] : scene.min.toArray(), scene.isEmpty() ? [0, 0, 0] : scene.max.toArray());
     this.clipper.setDisplayMatrix(this.stage.displayToWorld);
+    if (frameChanged) this.clipper.clampToRange();
     this.paintClip();
     if (total > CURSOR_TRIANGLE_LIMIT) this.cursor.textContent = "";
     this.paintSelection();
@@ -292,7 +325,9 @@ export class ViewTools {
     }
     const scene = displayBox(this.stage.content, this.stage.displayToWorld, { visibleOnly: true });
     const size = scene.isEmpty() ? "-" : formatSize(scene.getSize(new Vector3()).toArray(), unit, decimals);
-    this.dims.textContent = `전체 ${size} · 삼각형 ${this.totalTriangles().toLocaleString("en-US")}`;
+    // One file: its triangle count is already in the load status.
+    const count = files.length > 1 ? ` · 삼각형 ${this.totalTriangles().toLocaleString("en-US")}` : "";
+    this.dims.textContent = `전체 ${size}${count}`;
   }
 
   private showBox(box: Box3): void {
@@ -312,16 +347,34 @@ export class ViewTools {
     return new Vector2(((x - r.left) / Math.max(1, r.width)) * 2 - 1, -((y - r.top) / Math.max(1, r.height)) * 2 + 1);
   }
 
-  private pickAt(x: number, y: number, bvh: boolean): Intersection | null {
+  private pickAt(x: number, y: number): PickResult {
     const clipped = this.clipper.active() ? (p: Vector3) => this.clipper.clipped(p) : undefined;
-    return this.picker.pick(this.stage.content, this.stage.camera, this.ndc(x, y), { bvh, clipped });
+    return this.picker.pick(this.stage.content, this.stage.camera, this.ndc(x, y), { build: true, clipped });
   }
 
-  /** Click: select the deepest tree node owning the hit mesh, or clear on empty space. */
+  /**
+   * Click: select the deepest tree node owning the hit mesh, or clear on empty space. A big mesh
+   * on the ray without its BVH yet is never brute-forced: the click is ignored with a notice and
+   * the BVH is built in the worker (above the hover limit, only for meshes someone clicks at).
+   */
   click(x: number, y: number): void {
-    // Above the hover limit no BVH is built: one plain raycast per click.
-    const hit = this.pickAt(x, y, this.totalTriangles() <= CURSOR_TRIANGLE_LIMIT);
+    const { hit, waiting } = this.pickAt(x, y);
+    if (waiting) {
+      this.cursor.textContent = "선택 준비 중… 잠시 후 다시 클릭하세요";
+      return;
+    }
     this.select(hit ? this.nodeOf(hit.object) : null);
+  }
+
+  /** After upload: build the BVHs for hover picking in the worker (not above the hover limit). */
+  prebuild(group: Object3D): void {
+    if (this.totalTriangles() <= CURSOR_TRIANGLE_LIMIT) this.picker.prebuild(group);
+  }
+
+  /** Re-pick under a still pointer (camera or sections changed, a BVH arrived), once per frame. */
+  rehover(): void {
+    if (!this.hoverAt || this.pressed || this.hoverFrame) return;
+    this.hoverFrame = requestAnimationFrame(() => this.hover());
   }
 
   private fileOf(o: Object3D): ToolFile | undefined {
@@ -354,8 +407,8 @@ export class ViewTools {
       this.cursor.textContent = "커서 좌표 꺼짐 (삼각형 500만 개 초과)";
       return;
     }
-    const hit = this.pickAt(at.x, at.y, true);
-    this.cursor.textContent = hit ? this.describe(hit) : "";
+    const { hit, waiting } = this.pickAt(at.x, at.y);
+    this.cursor.textContent = waiting ? "좌표 준비 중…" : hit ? this.describe(hit) : "";
   }
 
   /** "X … Y … Z … mm (원본: X … Y … Z … inch)"; the source part only when it differs. */

@@ -36,34 +36,54 @@ test("Clipper: one shared plane array; enabling and moving planes mutates it in 
   expect(shared).toEqual([]);
   c.setRange([0, 0, 0], [10, 20, 30]);
   c.setDisplayMatrix(M("zup-rh"));
-  c.set(0, { enabled: true, t: 0.5 });
+  c.setEnabled(0, true);
   expect(c.planes).toBe(shared);
   expect(shared).toHaveLength(1);
-  expect(c.value(0)).toBe(5);
-  c.set(2, { enabled: true, t: 0.25 });
+  expect(c.value(0)).toBe(5); // first enabled at the middle of the range
+  c.setFraction(2, 0.25);
   expect(shared).toHaveLength(2);
   expect(c.value(2)).toBe(7.5);
   // Z at 7.5 -> world y = 7.5
   expect(shared[1].distanceToPoint(new Vector3(0, 7, 0))).toBeGreaterThan(0);
   expect(shared[1].distanceToPoint(new Vector3(0, 8, 0))).toBeLessThan(0);
-  c.set(0, { enabled: false });
+  c.setEnabled(0, false);
   expect(shared).toHaveLength(1);
   expect(c.active()).toBe(true);
-  c.set(2, { enabled: false });
+  c.setEnabled(2, false);
   expect(c.active()).toBe(false);
+  c.setEnabled(2, true);
+  expect(c.value(2)).toBe(7.5); // re-enabled where it was
 });
 
-test("Clipper follows display frame and range changes (slider position kept as a fraction)", () => {
+test("Clipper: a range change (hide, append) moves the slider, never the plane", () => {
   const c = new Clipper();
   c.setRange([0, 0, 0], [10, 10, 10]);
   c.setDisplayMatrix(M("zup-rh"));
-  c.set(1, { enabled: true, t: 0.5 });
+  c.setFraction(1, 0.5);
+  expect(c.value(1)).toBe(5);
   c.setRange([0, -10, 0], [10, 30, 10]);
-  expect(c.value(1)).toBe(10);
+  expect(c.value(1)).toBe(5);
+  expect(c.fraction(1)).toBe(0.375);
+  // Out of a shrunken range: the plane stays, the slider clamps.
+  c.setRange([0, 0, 0], [10, 2, 10]);
+  expect(c.value(1)).toBe(5);
+  expect(c.fraction(1)).toBe(1);
   c.setDisplayMatrix(M("yup-rh"));
-  // Y-up display: display Y is world Y, keep display y <= 10.
-  expect(c.planes[0].distanceToPoint(new Vector3(0, 9, 0))).toBeGreaterThan(0);
-  expect(c.planes[0].distanceToPoint(new Vector3(0, 11, 0))).toBeLessThan(0);
+  // Y-up display: display Y is world Y, keep display y <= 5.
+  expect(c.planes[0].distanceToPoint(new Vector3(0, 4, 0))).toBeGreaterThan(0);
+  expect(c.planes[0].distanceToPoint(new Vector3(0, 6, 0))).toBeLessThan(0);
+});
+
+test("Clipper: unit change rescales values; frame change clamps them into the new range", () => {
+  const c = new Clipper();
+  c.setRange([0, 0, 0], [100, 100, 100]);
+  c.setDisplayMatrix(M("zup-rh"));
+  c.setValue(0, 40); // mm
+  c.scale(1 / 10); // mm -> cm
+  expect(c.value(0)).toBe(4);
+  c.setRange([10, 0, 0], [20, 10, 10]);
+  c.clampToRange();
+  expect(c.value(0)).toBe(10);
 });
 
 test("Clipper.clipped tells whether a world point is cut away by an active plane", () => {
@@ -71,7 +91,7 @@ test("Clipper.clipped tells whether a world point is cut away by an active plane
   c.setRange([0, 0, 0], [10, 10, 10]);
   c.setDisplayMatrix(M("zup-rh"));
   expect(c.clipped(new Vector3(0, 100, 0))).toBe(false);
-  c.set(2, { enabled: true, t: 0.5 });
+  c.setFraction(2, 0.5);
   expect(c.clipped(new Vector3(0, 6, 0))).toBe(true);
   expect(c.clipped(new Vector3(0, 4, 0))).toBe(false);
 });

@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 // Dimensions (bbox in display units, triangle counts), readout formatting and BVH picking.
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Group, HemisphereLight, LineSegments, Mesh, PerspectiveCamera, PlaneGeometry, Vector2, Vector3 } from "three";
 import { Stage } from "../src/three/core/stage";
 import { decimalsFor, displayBox, formatPoint, formatSize, meshTriangles, Picker } from "../src/three/core/info";
+import { bvhData, edgePositions, GeometryJobs, type JobRunner } from "../src/three/core/geometry-jobs";
 
 /** A Stage carrying only the frame fields (no WebGL), like tests/three-stage-frames.test.ts. */
 function shell(): Stage {
@@ -116,14 +117,15 @@ function pickScene() {
   return { camera, root, near, far };
 }
 
-test("Picker: first hit along the ray; BVH is built lazily, only when asked for", () => {
+test("Picker: first hit along the ray; small meshes get a BVH on the spot only when building", () => {
   const { camera, root, near, far } = pickScene();
   const picker = new Picker();
   expect(near.geometry.boundsTree).toBeUndefined();
-  const plain = picker.pick(root, camera, new Vector2(0, 0), { bvh: false });
-  expect(plain?.object).toBe(near);
+  const plain = picker.pick(root, camera, new Vector2(0, 0), { build: false });
+  expect(plain.hit?.object).toBe(near);
+  expect(plain.waiting).toBe(false);
   expect(near.geometry.boundsTree).toBeUndefined();
-  const hit = picker.pick(root, camera, new Vector2(0, 0), { bvh: true });
+  const { hit } = picker.pick(root, camera, new Vector2(0, 0), { build: true });
   expect(hit?.object).toBe(near);
   expect(hit?.point.z).toBeCloseTo(1);
   expect(near.geometry.boundsTree).toBeDefined();
@@ -132,7 +134,7 @@ test("Picker: first hit along the ray; BVH is built lazily, only when asked for"
   other.position.set(50, 0, 0);
   root.add(other);
   root.updateMatrixWorld(true);
-  picker.pick(root, camera, new Vector2(0, 0), { bvh: true });
+  picker.pick(root, camera, new Vector2(0, 0), { build: true });
   expect(other.geometry.boundsTree).toBeUndefined();
   expect(far.geometry.boundsTree).toBeDefined(); // on the ray, behind the first hit
   picker.release(root);
@@ -143,9 +145,56 @@ test("Picker: hidden meshes and clipped points are skipped", () => {
   const { camera, root, near, far } = pickScene();
   const picker = new Picker();
   near.visible = false;
-  expect(picker.pick(root, camera, new Vector2(0, 0), { bvh: true })?.object).toBe(far);
+  expect(picker.pick(root, camera, new Vector2(0, 0), { build: true }).hit?.object).toBe(far);
   near.visible = true;
   // Cut away everything with z > 0.5 (the near plane): the far one is hit through it.
-  const hit = picker.pick(root, camera, new Vector2(0, 0), { bvh: true, clipped: (p) => p.z > 0.5 });
+  const { hit } = picker.pick(root, camera, new Vector2(0, 0), { build: true, clipped: (p) => p.z > 0.5 });
   expect(hit?.object).toBe(far);
+});
+
+/** A runner whose jobs finish only when `flush` is called (worker stand-in). */
+function deferredRunner() {
+  const queue: (() => void)[] = [];
+  const runner: JobRunner = (kind, input) =>
+    new Promise((resolve) => queue.push(() => resolve(kind === "edges" ? edgePositions(input) : bvhData(input))));
+  const flush = async () => {
+    while (queue.length) {
+      queue.shift()!();
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    }
+  };
+  return { runner, flush, queue };
+}
+
+test("Picker: a big mesh is never brute-forced; its BVH comes from the worker, then it is hit", async () => {
+  const { camera, root, near, far } = pickScene();
+  const { runner, flush } = deferredRunner();
+  const onReady = vi.fn();
+  const picker = new Picker(new GeometryJobs(runner), { syncTriangles: 0, onReady });
+  const raycast = vi.spyOn(near, "raycast");
+  const first = picker.pick(root, camera, new Vector2(0, 0), { build: true });
+  expect(first).toEqual({ hit: null, waiting: true });
+  expect(raycast).not.toHaveBeenCalled();
+  await flush();
+  expect(near.geometry.boundsTree).toBeDefined();
+  expect(far.geometry.boundsTree).toBeDefined();
+  expect(onReady).toHaveBeenCalled();
+  const second = picker.pick(root, camera, new Vector2(0, 0), { build: true });
+  expect(second.hit?.object).toBe(near);
+  expect(second.waiting).toBe(false);
+  expect(second.hit?.point.z).toBeCloseTo(1);
+});
+
+test("Picker: prebuild queues every mesh; release cancels what is still queued", async () => {
+  const { root, near, far } = pickScene();
+  const { runner, flush } = deferredRunner();
+  const jobs = new GeometryJobs(runner);
+  const picker = new Picker(jobs, { syncTriangles: 0 });
+  picker.prebuild(root);
+  expect(jobs.size).toBe(2);
+  picker.release(root);
+  await flush();
+  expect(near.geometry.boundsTree).toBeUndefined();
+  expect(far.geometry.boundsTree).toBeUndefined();
+  expect(jobs.size).toBe(0);
 });

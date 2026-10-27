@@ -70,6 +70,7 @@ export class Stage {
   private disposed = false;
   private readonly cleanups: (() => void)[] = [];
   private readonly changeListeners: (() => void)[] = [];
+  private readonly cameraListeners: (() => void)[] = [];
 
   constructor(private readonly host: HTMLElement) {
     if (typeof WebGL2RenderingContext === "undefined") throw new WebGLUnavailableError();
@@ -104,7 +105,10 @@ export class Stage {
     this.controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN };
     this.controls.zoomToCursor = true;
     this.controls.screenSpacePanning = true;
-    this.controls.addEventListener("change", () => this.requestRender());
+    this.controls.addEventListener("change", () => {
+      this.requestRender();
+      for (const fn of this.cameraListeners) fn();
+    });
 
     const labels = document.createElement("div");
     labels.className = "va3d-axis-labels";
@@ -195,6 +199,11 @@ export class Stage {
    */
   onChange(fn: () => void): void {
     this.changeListeners.push(fn);
+  }
+
+  /** Call `fn` whenever the camera moves (orbit, pan, zoom, fit, standard views). */
+  onCameraChange(fn: () => void): void {
+    this.cameraListeners.push(fn);
   }
 
   /** Display-frame direction -> world direction. */

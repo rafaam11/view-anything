@@ -32,6 +32,8 @@ vi.mock("../src/three/core/stage", () => {
   return { Stage, WebGLUnavailableError };
 });
 
+vi.mock("../src/three/geometry-worker", () => ({ workerRunner: () => undefined }));
+
 import viewer from "../src/three/viewer";
 
 test("mount resolves while the first file is still loading; an append shows its row at once", async () => {

@@ -4,9 +4,10 @@
 import { expect, test, vi } from "vitest";
 import { Box3Helper, BoxGeometry, Group, Matrix4, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from "three";
 import { ViewTools, type ToolFile, type ToolStage } from "../src/three/core/view-tools";
-import { displayRootMatrix } from "../src/three/core/frames";
+import { displayRootMatrix, type Unit } from "../src/three/core/frames";
+import { bvhData, edgePositions, type JobRunner } from "../src/three/core/geometry-jobs";
 
-function setup(opts: { triangles?: number; scale?: number; sourceUnit?: ToolFile["sourceUnit"] } = {}) {
+function setup(opts: { triangles?: number; scale?: number; sourceUnit?: ToolFile["sourceUnit"]; jobRunner?: JobRunner } = {}) {
   const displayToWorld = new Matrix4().fromArray(displayRootMatrix("zup-rh"));
   const displayRoot = new Group();
   displayRoot.matrixAutoUpdate = false;
@@ -27,6 +28,7 @@ function setup(opts: { triangles?: number; scale?: number; sourceUnit?: ToolFile
   displayRoot.updateMatrixWorld(true);
 
   let change = () => {};
+  let cameraChange = () => {};
   const stage: ToolStage = {
     content,
     overlay,
@@ -35,6 +37,7 @@ function setup(opts: { triangles?: number; scale?: number; sourceUnit?: ToolFile
     canvas: document.createElement("canvas"),
     requestRender: vi.fn(),
     onChange: (fn) => void (change = fn),
+    onCameraChange: (fn) => void (cameraChange = fn),
   };
   const file: ToolFile = {
     id: "f1",
@@ -49,19 +52,23 @@ function setup(opts: { triangles?: number; scale?: number; sourceUnit?: ToolFile
   const host = {
     files: () => [file],
     nodeName: (id: string) => (id === "f1/0" ? "Box" : "a.stl"),
-    displayUnit: () => "mm" as const,
+    unit: "mm" as Unit,
+    displayUnit(): Unit {
+      return this.unit;
+    },
+    jobRunner: opts.jobRunner,
     selected: vi.fn(),
     notice: vi.fn(),
   };
   const tools = new ViewTools(stage, host);
   document.body.append(tools.bar);
   change();
-  return { tools, host, stage, box, group };
+  return { tools, host, stage, box, group, change: () => change(), cameraChange: () => cameraChange() };
 }
 
 test("a click on a mesh selects its tree node: panel notified, dimensions and a box for the selection", () => {
   const { tools, host, stage } = setup();
-  expect(tools.dims.textContent).toBe("전체 2.000 × 2.000 × 2.000 mm · 삼각형 12");
+  expect(tools.dims.textContent).toBe("전체 2.000 × 2.000 × 2.000 mm"); // one file: count is in the load status
   tools.click(0.5, 0.5); // canvas centre (happy-dom rect is 0x0)
   expect(host.selected).toHaveBeenLastCalledWith("f1/0");
   expect(tools.dims.textContent).toBe("선택 Box: 2.000 × 2.000 × 2.000 mm · 삼각형 12");
@@ -138,4 +145,67 @@ test("the 보기 popover: mode radios and section checkboxes drive modes and pla
   expect(tools.clipper.value(2)).toBeCloseTo(0); // middle of the box (display z -1..1)
   tools.escape();
   expect(menu.hidden).toBe(true);
+});
+
+test("two files: the whole-scene line carries the total triangle count", () => {
+  const { tools, host, change } = setup();
+  const one = host.files()[0];
+  host.files = () => [one, { ...one, id: "f2", group: new Group(), nodes: new Map(), triangles: 30 }];
+  change();
+  expect(tools.dims.textContent).toBe("전체 2.000 × 2.000 × 2.000 mm · 삼각형 42");
+});
+
+test("a click on a big mesh whose BVH is not ready is ignored with a notice, never brute-forced", async () => {
+  const pending: (() => void)[] = [];
+  const jobRunner: JobRunner = (kind, input) => new Promise((r) => pending.push(() => r(kind === "edges" ? edgePositions(input) : bvhData(input))));
+  const { tools, host, box } = setup({ triangles: 6_000_000, jobRunner });
+  // Pretend the box is huge: no on-the-spot BVH or raycast for it.
+  (tools as unknown as { picker: { opts: { syncTriangles: number } } }).picker.opts.syncTriangles = 0;
+  const raycast = vi.spyOn(box, "raycast");
+  tools.click(0.5, 0.5);
+  expect(host.selected).not.toHaveBeenCalled();
+  expect(tools.cursor.textContent).toContain("선택 준비 중");
+  expect(raycast).not.toHaveBeenCalled();
+  pending.shift()!();
+  await vi.waitFor(() => expect(box.geometry.boundsTree).toBeDefined());
+  tools.click(0.5, 0.5);
+  expect(host.selected).toHaveBeenLastCalledWith("f1/0");
+});
+
+test("the readout is re-picked when the camera moves under a still pointer", async () => {
+  const { tools, stage, cameraChange } = setup();
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+  stage.canvas.dispatchEvent(new PointerEvent("pointermove", { clientX: 0.5, clientY: 0.5, buttons: 0 }));
+  await frame();
+  expect(tools.cursor.textContent).toBe("X 0.000  Y -1.000  Z 0.000 mm");
+  stage.camera.position.set(0, 0, -10); // look from behind: the hit is the far face now
+  stage.camera.lookAt(0, 0, 0);
+  stage.camera.updateMatrixWorld();
+  cameraChange();
+  await frame();
+  expect(tools.cursor.textContent).toBe("X 0.000  Y 1.000  Z 0.000 mm");
+});
+
+test("sections keep their position when the range changes and follow a unit change", () => {
+  const { tools, host, group, change } = setup();
+  const menu = tools.bar.querySelector<HTMLElement>(".va3d-view-menu")!;
+  const zCheck = menu.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[2];
+  zCheck.checked = true;
+  zCheck.dispatchEvent(new Event("change"));
+  expect(tools.clipper.value(2)).toBeCloseTo(0); // first enabled mid-range
+  group.add(new Mesh(new BoxGeometry(2, 2, 2)).translateZ(5)); // display z up to 6: range grows
+  change();
+  expect(tools.clipper.value(2)).toBeCloseTo(0);
+  host.unit = "cm";
+  group.scale.setScalar(0.1);
+  change();
+  expect(tools.clipper.value(2)).toBeCloseTo(0);
+  const zSlider = menu.querySelectorAll<HTMLInputElement>('input[type="range"]')[2];
+  zSlider.value = "1000";
+  zSlider.dispatchEvent(new Event("input"));
+  expect(tools.clipper.value(2)).toBeCloseTo(0.6); // top of the range, in cm
+  host.unit = "mm";
+  group.scale.setScalar(1);
+  change();
+  expect(tools.clipper.value(2)).toBeCloseTo(6);
 });

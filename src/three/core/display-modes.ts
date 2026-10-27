@@ -1,8 +1,10 @@
 // Display modes (solid, wire, solid + edges, x-ray) applied to the materials under a root, plus
 // the shared section planes. Edge lines (EdgesGeometry, 30°) are built the first time a mesh needs
-// them and cached per geometry; they hang under their mesh (userData.vaEdges) so they follow its
-// transform and visibility.
-import { EdgesGeometry, LineBasicMaterial, LineSegments, type BufferGeometry, type Material, type Mesh, type Object3D, type Plane } from "three";
+// them and cached per geometry: tiny meshes right away, the rest in the geometry worker (attached
+// as they arrive). They hang under their mesh (userData.vaEdges) so they follow its transform and
+// visibility.
+import { BufferAttribute, BufferGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, type Material, type Mesh, type Object3D, type Plane } from "three";
+import { EDGE_THRESHOLD_DEG, GeometryJobs, PRIORITY, triangles } from "./geometry-jobs";
 
 export type DisplayMode = "solid" | "wire" | "edges" | "xray";
 export const DISPLAY_MODES: readonly DisplayMode[] = ["solid", "wire", "edges", "xray"];
@@ -15,7 +17,10 @@ export const DISPLAY_MODE_LABELS: Readonly<Record<DisplayMode, string>> = {
 
 /** Above this many triangles in the scene, edges are off (building them would stall the UI). */
 export const EDGE_TRIANGLE_LIMIT = 5_000_000;
-const EDGE_THRESHOLD_DEG = 30;
+/** Meshes below this many triangles get their edges on the UI thread... */
+export const SYNC_EDGE_TRIANGLES = 50_000;
+/** ...up to this many triangles per `apply` in total (thousands of small parts go to the worker). */
+const SYNC_EDGE_BUDGET = 200_000;
 const XRAY_OPACITY = 0.3;
 
 export function canShowEdges(triangles: number): boolean {
@@ -24,6 +29,15 @@ export function canShowEdges(triangles: number): boolean {
 
 export class EdgeCache {
   private readonly cache = new Map<BufferGeometry, BufferGeometry>();
+
+  peek(geometry: BufferGeometry): BufferGeometry | undefined {
+    return this.cache.get(geometry);
+  }
+
+  put(geometry: BufferGeometry, edges: BufferGeometry): void {
+    this.cache.get(geometry)?.dispose();
+    this.cache.set(geometry, edges);
+  }
 
   get(geometry: BufferGeometry): BufferGeometry {
     let edges = this.cache.get(geometry);
@@ -96,14 +110,73 @@ function setMode(m: AnyMaterial, mode: DisplayMode, isMesh: boolean): void {
   if (`${m.transparent}:${m.wireframe}` !== before) m.needsUpdate = true;
 }
 
+export interface DisplayModeHooks {
+  /** Something changed on screen outside an `apply` call (edges arrived). */
+  render?(): void;
+  /** Worker edge jobs: `done` of `total` since the queue was last empty. */
+  progress?(done: number, total: number): void;
+  /** Override SYNC_EDGE_TRIANGLES (tests). */
+  syncEdgeTriangles?: number;
+}
+
 export class DisplayModes {
   readonly edgeCache = new EdgeCache();
   readonly edgeMaterial: LineBasicMaterial;
+  private mode: DisplayMode = "solid";
+  /** Geometries whose edges are being built in the worker -> the mesh to attach them to. */
+  private readonly wanted = new Map<BufferGeometry, Mesh>();
+  private jobsDone = 0;
+  private jobsTotal = 0;
 
   /** `planes`: the section planes array shared by every material (see clipping.ts). */
-  constructor(private readonly planes: Plane[] | null = null) {
+  constructor(
+    private readonly planes: Plane[] | null = null,
+    private readonly jobs = new GeometryJobs(),
+    private readonly hooks: DisplayModeHooks = {},
+  ) {
     this.edgeMaterial = new LineBasicMaterial({ color: 0x1f2328, transparent: true, opacity: 0.55 });
     this.edgeMaterial.clippingPlanes = planes;
+  }
+
+  /** Edge jobs still queued or running. */
+  get pendingEdges(): number {
+    return this.wanted.size;
+  }
+
+  private attach(mesh: Mesh, edges: BufferGeometry): void {
+    if (mesh.children.some((c) => c.userData.vaEdges)) return;
+    const lines = new LineSegments(edges, this.edgeMaterial);
+    lines.userData.vaEdges = true;
+    lines.raycast = () => {};
+    lines.visible = this.mode === "edges";
+    mesh.add(lines);
+  }
+
+  private requestEdges(mesh: Mesh): void {
+    const g = mesh.geometry;
+    if (this.wanted.has(g)) return;
+    this.wanted.set(g, mesh);
+    this.jobsTotal++;
+    this.hooks.progress?.(this.jobsDone, this.jobsTotal);
+    void this.jobs.request("edges", g, PRIORITY.edges).then((positions) => {
+      const target = this.wanted.get(g);
+      if (!target) return; // released meanwhile (counted there)
+      this.wanted.delete(g);
+      if (positions) {
+        const edges = new BufferGeometry();
+        edges.setAttribute("position", new BufferAttribute(positions, 3));
+        this.edgeCache.put(g, edges);
+        this.attach(target, edges);
+      }
+      this.jobDone();
+      this.hooks.render?.();
+    });
+  }
+
+  private jobDone(): void {
+    this.jobsDone++;
+    this.hooks.progress?.(this.jobsDone, this.jobsTotal);
+    if (this.jobsDone >= this.jobsTotal) this.jobsDone = this.jobsTotal = 0;
   }
 
   /**
@@ -111,6 +184,7 @@ export class DisplayModes {
    * also serves newly added files. Edge lines are built (once per geometry) only in edges mode.
    */
   apply(root: Object3D, mode: DisplayMode): void {
+    this.mode = mode;
     const meshes: Mesh[] = [];
     root.traverse((o) => {
       if (o.userData.vaEdges) return;
@@ -124,15 +198,20 @@ export class DisplayModes {
       }
       if (isMesh) meshes.push(o as Mesh);
     });
+    const syncLimit = this.hooks.syncEdgeTriangles ?? SYNC_EDGE_TRIANGLES;
+    let budget = SYNC_EDGE_BUDGET;
     for (const mesh of meshes) {
-      let lines = mesh.children.find((c) => c.userData.vaEdges) as LineSegments | undefined;
-      if (mode === "edges" && !lines) {
-        lines = new LineSegments(this.edgeCache.get(mesh.geometry), this.edgeMaterial);
-        lines.userData.vaEdges = true;
-        lines.raycast = () => {};
-        mesh.add(lines);
-      }
+      const lines = mesh.children.find((c) => c.userData.vaEdges);
       if (lines) lines.visible = mode === "edges";
+      else if (mode === "edges") {
+        const cached = this.edgeCache.peek(mesh.geometry);
+        const n = triangles(mesh.geometry);
+        if (cached) this.attach(mesh, cached);
+        else if (n < syncLimit && n <= budget) {
+          budget -= n;
+          this.attach(mesh, this.edgeCache.get(mesh.geometry));
+        } else this.requestEdges(mesh);
+      }
     }
   }
 
@@ -147,6 +226,14 @@ export class DisplayModes {
       l.removeFromParent();
       if (parent?.geometry) this.edgeCache.release(parent.geometry);
     }
+    root.traverse((o) => {
+      const g = (o as Mesh).geometry;
+      if (!g || !this.wanted.has(g)) return;
+      this.wanted.delete(g);
+      this.jobs.cancel(g);
+      this.edgeCache.release(g);
+      this.jobDone();
+    });
   }
 
   dispose(): void {

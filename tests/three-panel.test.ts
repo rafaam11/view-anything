@@ -232,3 +232,15 @@ test("setSelected expands the ancestors, marks the row, and clears the previous 
   panel.setSelected(null);
   expect(panel.root.querySelectorAll(".va3d-node.selected")).toHaveLength(0);
 });
+
+test("the selection mark survives a row rebuild (loading row replaced, lazy expand)", () => {
+  const model: SceneModel = { files: [sceneFile("f1", nested)] };
+  const panel = new ScenePanel({ toggle: () => {}, remove: () => {} });
+  document.body.append(panel.root);
+  panel.addLoading("f1", "f1.step");
+  panel.setSelected("f1");
+  panel.addFile(model.files[0]); // replaces the loading row
+  expect(node(panel, "f1")!.classList.contains("selected")).toBe(true);
+  panel.setSelected("f1/0/1");
+  expect(node(panel, "f1/0/1")!.classList.contains("selected")).toBe(true);
+});

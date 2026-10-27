@@ -15,6 +15,7 @@ import { keyAction, TOOLBAR, type KeyAction } from "./core/keys";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
 import { canCoarsen } from "./worker/cad-params";
 import { loadGltfFile, loadMeshFile } from "./load";
+import { workerRunner } from "./geometry-worker";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -175,6 +176,9 @@ export class ThreeViewer {
         }),
       nodeName: (id) => findNode(this.model, id)?.name,
       displayUnit: () => this.displayUnit,
+      displayFrame: () => this.display,
+      jobRunner: workerRunner(),
+      edgeProgress: (done, total) => this.edgeProgress(done, total),
       selected: (id) => this.panel.setSelected(id),
       notice: (message) => this.banner.show(message),
     });
@@ -301,17 +305,28 @@ export class ThreeViewer {
     if (o) this.stage.setObjectVisible(o, visible);
   }
 
+  /** Edge lines being built in the worker: shown in the progress box while no file loads. */
+  private edgeProgress(done: number, total: number): void {
+    if (this.entries.size > 0) return;
+    if (done < total) this.progress.show("엣지 표시", "edges", done, total);
+    else this.progress.hide();
+  }
+
   private discard(fileId: string): void {
     const built = this.objects.get(fileId);
+    // Model first, then the stage: removing from the stage refreshes the tools (dimensions,
+    // triangle totals, edge limit), which must no longer see this file.
     if (built) {
       this.tools.fileRemoved(fileId, built.group);
-      this.stage.remove(built.group);
-      disposeObject(built.group);
       this.objects.delete(fileId);
     }
     removeFile(this.model, fileId);
     this.panel.removeFile(fileId);
     if (this.model.files.length === 0) this.loadStatus.textContent = "";
+    if (built) {
+      this.stage.remove(built.group);
+      disposeObject(built.group);
+    }
     this.updateTitle();
   }
 
@@ -367,6 +382,8 @@ export class ThreeViewer {
         return null;
       }
       this.loadStatus.textContent = formatStatus(built.triangles, performance.now() - started, workerUsed);
+      // Hover picking: BVHs built in the worker while the user looks at the model.
+      this.tools.prebuild(built.group);
       return id;
     } catch (e) {
       this.discard(id);

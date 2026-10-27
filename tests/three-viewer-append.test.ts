@@ -18,7 +18,11 @@ vi.mock("../src/three/load", () => ({
   loadGltfFile: (path: string, _p: unknown, signal?: AbortSignal) => loadImpl(path, signal),
 }));
 
+// Geometry jobs run inline (no worker in happy-dom).
+vi.mock("../src/three/geometry-worker", () => ({ workerRunner: () => undefined }));
+
 import { Banner, canRetryCoarser, ThreeViewer } from "../src/three/viewer";
+import { Group, Matrix4, PerspectiveCamera } from "three";
 import { RetryableCadError, type ParsedFile } from "../src/three/worker/protocol";
 import type { Stage } from "../src/three/core/stage";
 import type { Mesh, Object3D } from "three";
@@ -37,13 +41,26 @@ function abortable(signal?: AbortSignal): Promise<never> {
 let revealGate: Promise<void> | null;
 let revealSignals: (AbortSignal | undefined)[];
 function fakeStage() {
+  // Enough of a stage for ViewTools: add/remove fire the change listeners like updateBounds does.
+  const listeners: (() => void)[] = [];
+  const content = new Group();
+  const fire = () => listeners.forEach((fn) => fn());
   return {
-    // ViewTools (selection, modes, sections) only listens; no change events from a fake stage.
     canvas: document.createElement("canvas"),
-    onChange: vi.fn(),
+    content,
+    overlay: new Group(),
+    camera: new PerspectiveCamera(),
+    displayToWorld: new Matrix4(),
+    onChange: vi.fn((fn: () => void) => void listeners.push(fn)),
     requestRender: vi.fn(),
-    add: vi.fn(),
-    remove: vi.fn(),
+    add: vi.fn((o: Object3D) => {
+      content.add(o);
+      fire();
+    }),
+    remove: vi.fn((o: Object3D) => {
+      content.remove(o);
+      fire();
+    }),
     fitAll: vi.fn(),
     setView: vi.fn(),
     setDisplay: vi.fn(),
@@ -270,4 +287,31 @@ test("the ⋯ menu changes a file's source frame through the stage and fits", as
   const sid = (await v.load(P("b.step")))!;
   v.setFileFrame(sid, { frame: "zup-lh", unit: "m" });
   expect(v.model.files[1]).toMatchObject({ sourceFrame: "zup-lh", sourceUnit: "mm" });
+});
+
+test("removing files updates dimensions and totals at once; removing the last clears the line", async () => {
+  const v = make();
+  await v.load(P("a.stl"));
+  await v.load(P("b.stl"));
+  const dims = () => root.querySelector(".va3d-dims")!.textContent;
+  expect(dims()).toMatch(/^전체 .* · 삼각형 4$/);
+  const [a, b] = v.model.files.map((f) => f.id);
+  row(a)!.querySelector<HTMLButtonElement>(".va3d-remove")!.click();
+  expect(dims()).toMatch(/^전체 /);
+  expect(dims()).not.toContain("삼각형"); // one file left: its count is in the load status
+  expect(v.tools.selected).toBeNull();
+  row(b)!.querySelector<HTMLButtonElement>(".va3d-remove")!.click();
+  expect(dims()).toBe("");
+  expect(status()).toBe("");
+});
+
+test("removing the file that holds the selection clears it (panel included)", async () => {
+  const v = make();
+  await v.load(P("a.stl"));
+  const id = v.model.files[0].id;
+  v.tools.select(`${id}/0`);
+  expect(root.querySelector(".va3d-node.selected")).not.toBeNull();
+  row(id)!.querySelector<HTMLButtonElement>(".va3d-remove")!.click();
+  expect(v.tools.selected).toBeNull();
+  expect(root.querySelector(".va3d-dims")!.textContent).toBe("");
 });

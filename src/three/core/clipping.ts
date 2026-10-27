@@ -19,8 +19,11 @@ export function clipPlane(axis: Axis, value: number, displayToWorld: Matrix4, ta
 
 export interface AxisClip {
   enabled: boolean;
-  /** Slider position as a fraction of the scene range on that axis (0 = min, 1 = max). */
-  t: number;
+  /**
+   * Section position in display coordinates (absolute, so hiding or adding content, which
+   * changes the slider range, never moves the plane). null until first enabled.
+   */
+  value: number | null;
 }
 
 /**
@@ -29,13 +32,13 @@ export interface AxisClip {
  */
 export class Clipper {
   readonly planes: Plane[] = [];
-  readonly axes: AxisClip[] = AXES.map(() => ({ enabled: false, t: 1 }));
+  readonly axes: AxisClip[] = AXES.map(() => ({ enabled: false, value: null }));
   private readonly own = AXES.map(() => new Plane());
   private min = [0, 0, 0];
   private max = [0, 0, 0];
   private matrix: Matrix4 | null = null;
 
-  /** Scene bounds in display coordinates (slider range). */
+  /** Scene bounds in display coordinates (slider range only; values stay put). */
   setRange(min: readonly number[], max: readonly number[]): void {
     this.min = [...min];
     this.max = [...max];
@@ -51,14 +54,52 @@ export class Clipper {
     this.update();
   }
 
-  set(axis: Axis, change: Partial<AxisClip>): void {
-    Object.assign(this.axes[axis], change);
+  /** Enable or disable an axis; first enabled at the middle of its range. */
+  setEnabled(axis: Axis, enabled: boolean): void {
+    const a = this.axes[axis];
+    a.enabled = enabled;
+    if (enabled && a.value === null) a.value = (this.min[axis] + this.max[axis]) / 2;
     this.update();
   }
 
-  /** The section value (display coordinates) of an axis. */
+  /** Set an axis's position (display coordinates) and enable it. */
+  setValue(axis: Axis, value: number): void {
+    Object.assign(this.axes[axis], { enabled: true, value });
+    this.update();
+  }
+
+  /** Set an axis's position from a slider fraction of the current range (0 = min, 1 = max). */
+  setFraction(axis: Axis, t: number): void {
+    this.setValue(axis, this.min[axis] + t * (this.max[axis] - this.min[axis]));
+  }
+
+  /** Slider fraction of an axis's position in the current range, clamped to 0..1. */
+  fraction(axis: Axis): number {
+    const v = this.axes[axis].value;
+    const span = this.max[axis] - this.min[axis];
+    if (v === null) return 1;
+    if (!(span > 0)) return 0.5;
+    return Math.min(1, Math.max(0, (v - this.min[axis]) / span));
+  }
+
+  /** The section value (display coordinates) of an axis (range max if never set). */
   value(axis: Axis): number {
-    return this.min[axis] + this.axes[axis].t * (this.max[axis] - this.min[axis]);
+    return this.axes[axis].value ?? this.max[axis];
+  }
+
+  /** Display unit changed: values are lengths, rescale them by old unit / new unit. */
+  scale(factor: number): void {
+    for (const a of this.axes) if (a.value !== null) a.value *= factor;
+    this.update();
+  }
+
+  /** Display frame changed (axes mean other directions now): keep values inside the new range. */
+  clampToRange(): void {
+    AXES.forEach((axis) => {
+      const a = this.axes[axis];
+      if (a.value !== null) a.value = Math.min(this.max[axis], Math.max(this.min[axis], a.value));
+    });
+    this.update();
   }
 
   active(): boolean {
