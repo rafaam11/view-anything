@@ -2,6 +2,7 @@ import "./viewer.css";
 import { platform } from "../platform";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
+import { equalBytes } from "../data/document";
 
 const MAX_BYTES = 100 * 1024 * 1024, MAX_PIXELS = 50_000_000;
 const nameOf = (p: string) => p.split(/[\\/]/).pop() ?? p;
@@ -10,12 +11,13 @@ const button = (text: string) => { const b = document.createElement("button"); b
 const viewer: Viewer = {
   async mount(el, initial) {
     let path = initial, files = await platform.siblingImages(path), url = "", dirty = false, edited = false, approved = false, busy = false, scale = 1;
-    let original: HTMLImageElement | null = null;
+    let original: HTMLImageElement | null = null, known = new Uint8Array();
     const root = document.createElement("div"); root.className = "image-root";
     const bar = document.createElement("header"); bar.className = "image-bar";
     const title = document.createElement("strong");
+    const status = document.createElement("span"); status.setAttribute("role", "status");
     const prev = button("이전"), next = button("다음"), zoomOut = button("축소"), zoomIn = button("확대"), rotate = button("회전"), flip = button("좌우 반전"), crop = button("자르기"), save = button("PNG로 저장");
-    bar.append(title, prev, next, zoomOut, zoomIn, rotate, flip, crop, save);
+    bar.append(title, prev, next, zoomOut, zoomIn, rotate, flip, crop, save, status);
     const coords = document.createElement("div"); coords.className = "image-coords";
     const inputs = ["X", "Y", "너비", "높이"].map(label => {
       const wrap = document.createElement("label"); wrap.textContent = label + " ";
@@ -41,7 +43,7 @@ const viewer: Viewer = {
       try { await candidate.decode(); } catch (e) { URL.revokeObjectURL(nextUrl); throw e; }
       if (candidate.naturalWidth * candidate.naturalHeight > MAX_PIXELS) { URL.revokeObjectURL(nextUrl); throw new Error("이미지가 5천만 픽셀을 초과합니다."); }
       if (url) URL.revokeObjectURL(url);
-      path = target; url = nextUrl; original = candidate; image.src = url; dirty = false; edited = false; scale = 1;
+      path = target; url = nextUrl; original = candidate; known = new Uint8Array(bytes); image.src = url; dirty = false; edited = false; scale = 1; status.textContent = "";
       canvas.hidden = true; image.hidden = false; inputs[0].value = "0"; inputs[1].value = "0";
       inputs[2].value = String(candidate.naturalWidth); inputs[3].value = String(candidate.naturalHeight);
       refresh(); applyScale();
@@ -95,6 +97,18 @@ const viewer: Viewer = {
     }
     registerUpdateGuard(() => dirty || busy, value => { approved = value; });
     await platform.onCloseRequested(confirmLeave);
+    window.addEventListener("focus", () => {
+      if (busy) return;
+      busy = true;
+      void (async () => {
+        if (await platform.fileSize(path) > MAX_BYTES) throw new Error("변경된 이미지가 100 MiB를 초과합니다.");
+        const disk = new Uint8Array(await platform.readFileRaw(path));
+        if (!equalBytes(known, disk)) {
+          if (dirty) status.textContent = "원본이 외부에서 변경됨 · 편집 내용 유지";
+          else await load(path);
+        }
+      })().catch(() => { status.textContent = "원본을 다시 읽을 수 없습니다."; }).finally(() => { busy = false; });
+    });
     window.addEventListener("beforeunload", e => { if (!approved && dirty) e.preventDefault(); });
     window.addEventListener("unload", () => { if (url) URL.revokeObjectURL(url); });
     await load(initial);
