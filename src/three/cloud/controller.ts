@@ -44,6 +44,7 @@ export class CloudController {
   private readonly retry: HTMLButtonElement;
   private readonly targetChoice = el("select");
   private readonly registrationDistance = el("input");
+  private readonly registrationSample = el("select");
   private readonly registrationButton: HTMLButtonElement;
   private readonly acceptRegistration: HTMLButtonElement;
   private readonly rejectRegistration: HTMLButtonElement;
@@ -100,6 +101,7 @@ export class CloudController {
     this.editBody.append(this.applyButton, this.rejectButton, this.undoButton, this.redoButton, this.saveButton);
     this.targetChoice.setAttribute("aria-label", "정합 기준 클라우드"); this.label("정합 기준", this.targetChoice);
     this.registrationDistance.type = "number"; this.registrationDistance.min = "0"; this.registrationDistance.step = "any"; this.registrationDistance.value = "1"; this.label("최대 대응 거리 (장면 단위)", this.registrationDistance);
+    this.registrationSample.setAttribute("aria-label", "정합 최대 표본 수"); for (const n of [10000, 50000, 100000]) { const option = el("option", n.toLocaleString()); option.value = String(n); this.registrationSample.append(option); } this.registrationSample.value = "100000"; this.label("최대 표본 수", this.registrationSample);
     this.registrationButton = this.button("정합 미리보기", () => void this.register());
     this.acceptRegistration = this.button("정합 적용", () => this.finishRegistration(true));
     this.rejectRegistration = this.button("정합 취소", () => this.finishRegistration(false));
@@ -167,7 +169,7 @@ export class CloudController {
     const target = this.targetChoice.value;
     this.targetChoice.replaceChildren(...[...this.entries].filter(([id]) => id !== this.selected).map(([id, item]) => { const o = el("option", this.host.file(id)?.name ?? item.path.split(/[\\/]/).pop()!); o.value = id; return o; }));
     if ([...this.targetChoice.options].some(o => o.value === target)) this.targetChoice.value = target;
-    this.targetChoice.disabled = !!this.registrationPreview; this.registrationDistance.disabled = !!this.registrationPreview;
+    this.targetChoice.disabled = !!this.registrationPreview; this.registrationDistance.disabled = this.registrationSample.disabled = !!this.registrationPreview;
     this.color.disabled = !!this.registrationPreview; this.rangeMin.disabled = this.rangeMax.disabled = !!this.registrationPreview;
     this.registrationButton.disabled = !!this.registrationPreview || this.entries.size < 2;
     this.acceptRegistration.disabled = this.rejectRegistration.disabled = !this.registrationPreview;
@@ -218,6 +220,7 @@ export class CloudController {
   private async history(direction: "undo" | "redo"): Promise<void> {
     const id = this.selected, e = this.entry(); if (!id || !e || this.isBusy() || e.stale || e.meta.preview || this.registrationPreview) return;
     const from = direction === "undo" ? e.undo : e.redo, to = direction === "undo" ? e.redo : e.undo, item = from[from.length - 1]; if (!item) return;
+    let alignmentChanged = false;
     this.stopSelection(); this.busy = true; this.cancelled = false; this.sync();
     try {
       if (item.kind === "filter") {
@@ -226,12 +229,12 @@ export class CloudController {
         from.pop(); to.push(item); await this.rebuild(id, e);
       } else {
         const matrix = direction === "undo" ? item.before : item.after;
-        this.setAlignment(id, matrix); e.alignment.copy(matrix); from.pop(); to.push(item);
+        this.setAlignment(id, matrix); e.alignment.copy(matrix); from.pop(); to.push(item); alignmentChanged = true;
       }
       this.status.textContent = direction === "undo" ? "실행 취소 완료" : "다시 실행 완료";
     } catch (error) { this.status.textContent = String(error); this.host.notice(String(error)); }
     finally { this.busy = false; this.committed = false; this.buildAbort = null; this.sync(); }
-    if (item.kind === "alignment" && e.display.mode === "height") await this.framesChanged(id);
+    if (alignmentChanged && e.display.mode === "height") await this.framesChanged(id);
   }
   private async filter(operation: Operation) { await this.act({ type: "filter", operation }); }
   private async save() {
@@ -267,7 +270,7 @@ export class CloudController {
     if (!Number.isFinite(base.determinant()) || Math.abs(base.determinant()) < 1e-18) { this.host.notice("원본 좌표계를 역변환할 수 없습니다"); return; }
     this.stopSelection(); this.busy = true; this.cancelled = false; this.sync();
     try {
-      const result = await this.client.register(source.meta, sourceWorld.toArray(), target.meta, targetWorld.toArray(), distance, t => this.status.textContent = t);
+      const result = await this.client.register(source.meta, sourceWorld.toArray(), target.meta, targetWorld.toArray(), distance, Number(this.registrationSample.value), t => this.status.textContent = t);
       if (!this.entries.has(id) || !this.entries.has(targetId)) throw new Error("클라우드가 제거되었습니다");
       const after = base.clone().invert().multiply(new Matrix4().fromArray(result.matrix)).multiply(base).multiply(source.alignment);
       if (!after.elements.every(Number.isFinite)) throw new Error("정합 변환이 유효하지 않습니다");

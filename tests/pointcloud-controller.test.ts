@@ -35,8 +35,11 @@ test("registration preview is protected and applied alignment is sent to save", 
   await c.open("f1", "a.pcd", new AbortController().signal);
   mocks.request.mockResolvedValueOnce({ ...meta, id: "c1" }); await c.open("f2", "b.pcd", new AbortController().signal);
   const choice = c.root.querySelector<HTMLSelectElement>('[aria-label="처리할 클라우드"]')!; choice.value = "f1"; choice.dispatchEvent(new Event("change"));
+  c.root.querySelector<HTMLSelectElement>('[aria-label="정합 최대 표본 수"]')!.value = "10000";
   mocks.register.mockResolvedValue({ matrix: new Matrix4().makeTranslation(1, 2, 3).toArray(), pairs: 2, sampledSource: 2, sampledTarget: 2, fitness: 1, rmse: 0, iterations: 2, converged: true });
   click("정합 미리보기"); await vi.waitFor(() => expect(c.hasRegistrationPreview()).toBe(true));
+  expect(mocks.register).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), expect.anything(), 1, 10000, expect.any(Function));
+  expect(c.root.querySelector('[role=status]')!.textContent).toContain('100.0%'); expect(c.root.querySelector('[role=status]')!.textContent).toContain('수렴');
   expect(c.dirty()).toBe(true); expect(c.lockExport()).toBe(false); expect(await c.canRemove("f1")).toBe(false);
   click("정합 적용"); expect(c.hasRegistrationPreview()).toBe(false); expect(c.dirty()).toBe(true);
   mocks.request.mockResolvedValueOnce({ ...meta, revision: 1, preview: true });

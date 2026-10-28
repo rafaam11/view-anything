@@ -25,13 +25,14 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - `npm run build:runtime`: HTML 내보내기용 뷰어 런타임(`vite.runtime.config.ts` → `build/runtime/va-runtime.js`, IIFE 한 파일)을 빌드한다. `build`와 `predev`가 먼저 실행하므로 보통 직접 돌릴 일은 없다. 앱의 내보내기 코드가 이 파일을 `?raw`로 인라인하므로 앱 빌드 전에 있어야 한다.
 - 측정 스크립트(커밋하지 않는 데이터만 만든다): `node scripts/bench-stl.mjs [삼각형 수]`(임시 폴더에 합성 바이너리 STL을 만들어 parseMesh 시간 측정), `node scripts/bench-edges.mjs [삼각형 수]`(엣지 추출 시간, three EdgesGeometry와 결과 비교).
 - 포인트클라우드 측정: `cargo run --release --manifest-path src-tauri/Cargo.toml --example bench-cloud -- 10000000`. OS 임시 폴더의 합성 XYZRGB+ring PCD만 사용한다.
+- ICP 측정: `cargo run --release --manifest-path src-tauri/Cargo.toml --example bench-registration -- 1000000 100000`. 합성 배열만 사용하며 인자는 원본 점 수와 표본 상한이다.
 
 ## 3D 모듈 구조 (`src/three/`)
 - `formats.ts`: 확장자 판별, 바이너리 STL 판별. three를 import하지 않는다(진입 청크에서 쓴다).
 - `viewer.ts`: 앱 3D 뷰어(레지스트리가 lazy import). 파일 큐, 드롭·append, 패널, 메뉴바, 진행률·배너. Tauri(`platform.ts`)를 쓰는 앱 전용 코드다.
 - `cloud/`: PCD/점 PLY의 앱 전용 지연 로딩 UI. Rust 세션의 25,000점 청크로 표시하며 GPU ID로 원본점을 조회한다. 미리보기/적용/20회 undo·redo/다른 이름 저장과 HTML 내보내기 잠금, 화면 갱신 실패 복구를 관리한다.
 - `src-tauri/src/cloud/`: 원본 점 레코드와 f64 좌표, ID 이력을 보관한다. 파싱/선택/필터/저장은 `spawn_blocking`, 이웃 검색은 kiddo + 4스레드 rayon. 계산은 앱 전체 하나씩, 세션은 창 소유. 원본 파일은 덮어쓰지 않는다.
-- `src-tauri/src/cloud/registration.rs`: 현재 장면 좌표로 점 대 점 강체 ICP를 계산한다. 소스·기준 점군을 각각 최대 10만 점으로 표본화하고 미리보기 후 명시적으로 적용한다. 정합 저장은 좌표만 변환해 별도 파일에 쓴다. LAS/LAZ 파형·COPC와 정밀도 보존 불가 좌표, 정수 XYZ PCD/PLY 및 기본값이 아닌 PCD VIEWPOINT의 정합 저장은 거부한다.
+- `src-tauri/src/cloud/registration.rs`: 현재 장면 좌표로 점 대 점 강체 ICP를 계산한다. 소스·기준 점군을 각각 최대 1만·5만·10만 점으로 표본화하고 미리보기 후 명시적으로 적용한다. 정합과 필터의 undo/redo 순서는 프런트에서 통합하고 원본 ID 이력은 Rust에서 보관한다. 정합 저장은 좌표만 변환해 별도 파일에 쓴다. LAS/LAZ 파형·COPC와 정밀도 보존 불가 좌표, 정수 XYZ PCD/PLY 및 기본값이 아닌 PCD VIEWPOINT의 정합 저장은 거부한다.
 - `load.ts`, `io/source.ts`: 파일 읽기(asset 프로토콜 병렬 Range 요청, 실패 시 `read_file_raw`). glTF는 UI 스레드의 GLTFLoader, 나머지는 파싱 워커.
 - `worker/`: Web Worker 코드.
   - `parse.worker.ts` + `parse-mesh.ts`(STL/OBJ/PLY) + `occt.ts`(STEP/IGES, occt-import-js wasm를 이 형식일 때만 동적 import). `protocol.ts`는 양쪽이 쓰는 순수 메시지 정의.

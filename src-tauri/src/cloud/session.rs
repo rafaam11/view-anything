@@ -198,8 +198,12 @@ fn registration_points(
     cloud: &Cloud,
     ids: &[u32],
     matrix: &[f64; 16],
+    sample_limit: usize,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<Vec<[f64; 3]>> {
+    if !(1000..=100_000).contains(&sample_limit) {
+        return Err("정합 표본 수가 잘못되었습니다".into());
+    }
     if !matrix.iter().all(|v| v.is_finite())
         || matrix[3] != 0.
         || matrix[7] != 0.
@@ -208,7 +212,7 @@ fn registration_points(
     {
         return Err("정합 좌표 변환이 잘못되었습니다".into());
     }
-    let step = ids.len().div_ceil(100_000).max(1);
+    let step = ids.len().div_ceil(sample_limit).max(1);
     let mut points = Vec::with_capacity(ids.len().div_ceil(step));
     for (i, id) in ids.iter().step_by(step).enumerate() {
         if i % 4096 == 0 {
@@ -242,6 +246,7 @@ pub async fn cloud_register(
     target_matrix: [f64; 16],
     max_distance: f64,
     max_iterations: usize,
+    sample_limit: usize,
 ) -> Result<super::registration::Registration> {
     if job_id.len() > 128 || source == target {
         return Err("정합 작업 또는 대상이 잘못되었습니다".into());
@@ -294,8 +299,20 @@ pub async fn cloud_register(
             );
             Ok(())
         };
-        let a = registration_points(&source_cloud, &source_ids, &source_matrix, &mut check)?;
-        let b = registration_points(&target_cloud, &target_ids, &target_matrix, &mut check)?;
+        let a = registration_points(
+            &source_cloud,
+            &source_ids,
+            &source_matrix,
+            sample_limit,
+            &mut check,
+        )?;
+        let b = registration_points(
+            &target_cloud,
+            &target_ids,
+            &target_matrix,
+            sample_limit,
+            &mut check,
+        )?;
         let result = super::registration::align(&a, &b, max_distance, max_iterations, &mut check)?;
         snapshot(&source_handle, source_revision)?;
         snapshot(&target_handle, target_revision)?;
@@ -887,10 +904,32 @@ mod tests {
         matrix[10] = 1.;
         matrix[15] = 1.;
         matrix[12] = 42.;
-        let points = registration_points(&s.cloud, &[0], &matrix, &mut |_, _| Ok(())).unwrap();
+        let points =
+            registration_points(&s.cloud, &[0], &matrix, 1000, &mut |_, _| Ok(())).unwrap();
         assert_eq!(points, vec![[42., 0., 0.]]);
         matrix[3] = 1.;
-        assert!(registration_points(&s.cloud, &[0], &matrix, &mut |_, _| Ok(())).is_err());
+        assert!(registration_points(&s.cloud, &[0], &matrix, 1000, &mut |_, _| Ok(())).is_err());
+    }
+    #[test]
+    fn registration_samples_are_bounded_and_invalid_limits_are_rejected() {
+        let mut s = session();
+        let cloud = Arc::get_mut(&mut s.cloud).unwrap();
+        cloud.positions = vec![[1., 2., 3.]; 2000];
+        let ids = (0..2000).collect::<Vec<u32>>();
+        let mut m = [0.; 16];
+        m[0] = 1.;
+        m[5] = 1.;
+        m[10] = 1.;
+        m[15] = 1.;
+        assert_eq!(
+            registration_points(&s.cloud, &ids, &m, 1000, &mut |_, _| Ok(()))
+                .unwrap()
+                .len(),
+            1000
+        );
+        for limit in [0, 999, 100001] {
+            assert!(registration_points(&s.cloud, &ids, &m, limit, &mut |_, _| Ok(())).is_err());
+        }
     }
     #[test]
     fn las_save_keeps_source_and_selected_attributes() {
