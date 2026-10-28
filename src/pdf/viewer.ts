@@ -38,12 +38,17 @@ const viewer: Viewer = {
     const canvas = document.createElement('canvas'); canvas.setAttribute('aria-label', 'PDF 페이지'); scroll.append(canvas);
     content.append(outline, scroll); root.append(toolbar, content); el.replaceChildren(root);
     let pageNumber = 1, scale = 1, generation = 0, searchGeneration = 0, task: RenderTask | null = null;
+    let renderBarrier: Promise<unknown> = Promise.resolve();
     let lastQuery = '', lastFoundPage = 0;
     const render = async () => {
-      const id = ++generation; task?.cancel(); task = null;
+      const id = ++generation;
+      const previousTask = task;
+      previousTask?.cancel(); task = null;
+      if (previousTask) renderBarrier = previousTask.promise.catch(() => {});
       pageInput.value = String(pageNumber); prev.disabled = pageNumber <= 1; next.disabled = pageNumber >= doc.numPages;
       zoomLabel.textContent = `${Math.round(scale * 100)}%`;
       try {
+        await renderBarrier;
         const page = await doc.getPage(pageNumber); if (id !== generation) return;
         const viewport = page.getViewport({ scale });
         const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt(MAX_PIXELS / (viewport.width * viewport.height)));
@@ -76,9 +81,11 @@ const viewer: Viewer = {
       } catch (e) { if (id === searchGeneration) status.textContent = `검색 오류: ${e instanceof Error ? e.message : String(e)}`; }
     };
     searchInput.onkeydown = e => { if (e.key === 'Enter') search.click(); };
+    let outlineCount = 0;
     const addOutline = (items: OutlineItem[], host: HTMLElement, depth: number) => {
       if (depth > 20) return;
       for (const item of items.slice(0, 1000)) {
+        if (++outlineCount > 2000) return;
         const line = document.createElement('div'); line.style.paddingInlineStart = `${depth}em`;
         const link = button(item.title || '(제목 없음)'); link.disabled = !item.dest;
         link.onclick = async () => {
