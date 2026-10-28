@@ -506,8 +506,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -2142,6 +2144,31 @@ dependencies = [
  "sorted-vec",
  "tracing",
  "yep-cache-line-size",
+]
+
+[[package]]
+name = "las"
+version = "0.9.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c2594be0d2ec4f04c944f5cb5160625cd1a69451db14de73b990065f97fb84"
+dependencies = [
+ "byteorder",
+ "chrono",
+ "laz",
+ "log",
+ "num-traits",
+ "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
+name = "laz"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4913af39d4e471d749fbcec0d726c5d4fc6f97cac851a62ff7a84300a7a7579"
+dependencies = [
+ "byteorder",
+ "num-traits",
 ]
 
 [[package]]
@@ -4792,6 +4819,7 @@ name = "view-anything"
 version = "0.5.1"
 dependencies = [
  "kiddo",
+ "las",
  "libc",
  "nalgebra",
  "percent-encoding",
