@@ -141,6 +141,7 @@ test("missing original is not recreated and edited markdown can be saved as a co
   const v = await mount(path, "# old\n");
   v.toggle.click();
   await vi.waitFor(() => expect(v.toggle.textContent).toBe("읽기"));
+  expect(v.editorHost.dataset.testEditor).toBe("# old\n");
   v.editorHost.dataset.testEditor = "# new\n";
   disk.delete(path);
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
