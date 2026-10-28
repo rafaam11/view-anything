@@ -2,7 +2,7 @@
 
 탐색기에서 더블클릭하면 메모장처럼 바로 열리는 가벼운 범용 뷰어.
 Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 드래그 append, 단일 HTML 내보내기),
-포인트클라우드(PCD/PLY 검사·정리·원본 속성 보존 저장), 이미지, JSON/YAML/CSV를 지원한다. PDF로 확장한다.
+포인트클라우드(PCD/PLY/LAS/LAZ 검사·정리·원본 속성 보존 저장 및 강체 ICP), 이미지, JSON/YAML/CSV와 PDF를 지원한다.
 
 - 설계: `docs/superpowers/specs/2026-10-26-view-anything-design.md` (결정 사항의 source of truth)
 - 소통·문서는 한국어. 코드 식별자와 커밋 메시지는 영어.
@@ -10,6 +10,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 ## 스택
 - Tauri 2 (Rust, `src-tauri/`) + Vite + TypeScript vanilla 프런트엔드 (`src/`)
 - 뷰어는 확장자 → 모듈 레지스트리로 연결하고 lazy import한다. md를 열 때 three.js를 로드하지 않는다.
+- PDF 뷰어(`src/pdf/`)는 읽기 전용이며 PDF.js와 워커를 파일을 열 때만 로드한다. 100MiB 제한, 현재 페이지만 렌더링, 페이지 단위 검색과 목차를 제공한다. 암호화 문서와 검색 결과 강조는 지원하지 않는다.
 - 대상 OS: Windows(NSIS), Linux(deb, AppImage). macOS는 비목표.
 
 ## 창과 테마
@@ -30,6 +31,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - `viewer.ts`: 앱 3D 뷰어(레지스트리가 lazy import). 파일 큐, 드롭·append, 패널, 메뉴바, 진행률·배너. Tauri(`platform.ts`)를 쓰는 앱 전용 코드다.
 - `cloud/`: PCD/점 PLY의 앱 전용 지연 로딩 UI. Rust 세션의 25,000점 청크로 표시하며 GPU ID로 원본점을 조회한다. 미리보기/적용/20회 undo·redo/다른 이름 저장과 HTML 내보내기 잠금, 화면 갱신 실패 복구를 관리한다.
 - `src-tauri/src/cloud/`: 원본 점 레코드와 f64 좌표, ID 이력을 보관한다. 파싱/선택/필터/저장은 `spawn_blocking`, 이웃 검색은 kiddo + 4스레드 rayon. 계산은 앱 전체 하나씩, 세션은 창 소유. 원본 파일은 덮어쓰지 않는다.
+- `src-tauri/src/cloud/registration.rs`: 현재 장면 좌표로 점 대 점 강체 ICP를 계산한다. 소스·기준 점군을 각각 최대 10만 점으로 표본화하고 미리보기 후 명시적으로 적용한다. 정합 저장은 좌표만 변환해 별도 파일에 쓴다. LAS/LAZ 파형·COPC와 정밀도 보존 불가 좌표, 정수 XYZ PCD/PLY 및 기본값이 아닌 PCD VIEWPOINT의 정합 저장은 거부한다.
 - `load.ts`, `io/source.ts`: 파일 읽기(asset 프로토콜 병렬 Range 요청, 실패 시 `read_file_raw`). glTF는 UI 스레드의 GLTFLoader, 나머지는 파싱 워커.
 - `worker/`: Web Worker 코드.
   - `parse.worker.ts` + `parse-mesh.ts`(STL/OBJ/PLY) + `occt.ts`(STEP/IGES, occt-import-js wasm를 이 형식일 때만 동적 import). `protocol.ts`는 양쪽이 쓰는 순수 메시지 정의.
