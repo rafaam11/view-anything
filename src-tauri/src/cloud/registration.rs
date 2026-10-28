@@ -13,8 +13,12 @@ pub struct Registration {
     /// Column-major rigid transform in scene coordinates.
     pub matrix: [f64; 16],
     pub pairs: usize,
+    pub sampled_source: usize,
+    pub sampled_target: usize,
+    pub fitness: f64,
     pub rmse: f64,
     pub iterations: usize,
+    pub converged: bool,
 }
 
 fn sample(points: &[[f64; 3]]) -> Vec<[f64; 3]> {
@@ -58,6 +62,7 @@ pub fn align(
     let mut pairs = 0;
     let mut rmse = f64::INFINITY;
     let mut iterations = 0;
+    let mut converged = false;
     for iteration in 0..max_iterations {
         check(iteration, max_iterations)?;
         let mut correspondence = Vec::with_capacity(source.len());
@@ -123,6 +128,7 @@ pub fn align(
         }
         iterations = iteration + 1;
         if (previous - rmse).abs() <= 1e-8 * (1. + previous.abs().min(1e100)) {
+            converged = true;
             break;
         }
         previous = rmse;
@@ -141,8 +147,12 @@ pub fn align(
     Ok(Registration {
         matrix,
         pairs,
+        sampled_source: source.len(),
+        sampled_target: target.len(),
+        fitness: pairs as f64 / source.len() as f64,
         rmse,
         iterations,
+        converged,
     })
 }
 
@@ -162,6 +172,10 @@ mod tests {
         let r = align(&a, &b, 1., 30, &mut |_, _| Ok(())).unwrap();
         assert!(r.rmse < 1e-8);
         assert_eq!(r.pairs, 5);
+        assert_eq!(r.sampled_source, 5);
+        assert_eq!(r.sampled_target, 5);
+        assert_eq!(r.fitness, 1.);
+        assert!(r.converged);
         assert!(r.iterations >= 2);
         assert!(
             (r.matrix[12] - 0.1).abs() < 1e-8
@@ -171,6 +185,7 @@ mod tests {
         let line = [[0., 0., 0.], [1., 0., 0.], [2., 0., 0.]];
         assert!(align(&line, &line, 1., 10, &mut |_, _| Ok(())).is_err());
         assert!(align(&a, &b, 1., 10, &mut |_, _| Err("cancelled".into())).is_err());
+        assert!(!align(&a, &b, 1., 1, &mut |_, _| Ok(())).unwrap().converged);
     }
     #[test]
     fn aligns_small_rotation_without_reflection() {
