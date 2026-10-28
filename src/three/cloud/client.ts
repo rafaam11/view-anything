@@ -25,7 +25,7 @@ export class CloudClient {
     } finally { unlisten(); this.job = null; }
   }
   cancel(): void { this.pendingCancel = true; if (this.job) void invoke("cloud_cancel", { jobId: this.job }).catch(() => {}); }
-  async register(source: CloudMeta, sourceMatrix: number[], target: CloudMeta, targetMatrix: number[], maxDistance: number, progress?: (text: string) => void): Promise<{ matrix: number[]; pairs: number; rmse: number; iterations: number }> {
+  async register(source: CloudMeta, sourceMatrix: number[], target: CloudMeta, targetMatrix: number[], maxDistance: number, progress?: (text: string) => void): Promise<{ matrix: number[]; pairs: number; sampledSource: number; sampledTarget: number; fitness: number; rmse: number; iterations: number; converged: boolean }> {
     if (this.job) throw new Error("작업이 진행 중입니다");
     const job = crypto.randomUUID(); this.job = job; this.pendingCancel = false;
     let unlisten = () => {};
@@ -34,7 +34,7 @@ export class CloudClient {
         if (payload.jobId === job) progress?.(payload.total ? `정합 중 ${Math.floor(payload.loaded / payload.total * 100)}%` : "정합 중…");
         if (this.pendingCancel) void invoke("cloud_cancel", { jobId: job }).catch(() => {});
       });
-      const result = await invoke<{ matrix: number[]; pairs: number; rmse: number; iterations: number }>("cloud_register", { jobId: job, source: source.id, sourceRevision: source.revision, sourceMatrix, target: target.id, targetRevision: target.revision, targetMatrix, maxDistance, maxIterations: 50 });
+      const result = await invoke<{ matrix: number[]; pairs: number; sampledSource: number; sampledTarget: number; fitness: number; rmse: number; iterations: number; converged: boolean }>("cloud_register", { jobId: job, source: source.id, sourceRevision: source.revision, sourceMatrix, target: target.id, targetRevision: target.revision, targetMatrix, maxDistance, maxIterations: 50 });
       if (this.pendingCancel) throw new DOMException("작업을 취소했습니다", "AbortError");
       return result;
     } finally { unlisten(); this.job = null; }

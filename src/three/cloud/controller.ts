@@ -251,7 +251,7 @@ export class CloudController {
       if (!after.elements.every(Number.isFinite)) throw new Error("정합 변환이 유효하지 않습니다");
       this.setAlignment(id, after);
       this.registrationPreview = { id, target: targetId, before: source.alignment.clone(), after };
-      this.status.textContent = `정합 미리보기: 대응 ${result.pairs.toLocaleString()}점, RMSE ${result.rmse.toPrecision(4)}, ${result.iterations}회`;
+      this.status.textContent = `정합 미리보기: 대응 ${result.pairs.toLocaleString()}/${result.sampledSource.toLocaleString()}점 (${(result.fitness * 100).toFixed(1)}%), 기준 표본 ${result.sampledTarget.toLocaleString()}점, RMSE ${result.rmse.toPrecision(4)}, ${result.iterations}회, ${result.converged ? "수렴" : "반복 한도 도달"}`;
     } catch (error) { this.status.textContent = String(error); this.host.notice(String(error)); }
     finally { this.busy = false; this.sync(); }
   }
