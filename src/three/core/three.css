@@ -226,11 +226,11 @@
 .va3d-node.selected > .va3d-row { background: color-mix(in srgb, #3e7bfa 22%, transparent); }
 .va3d-row { cursor: default; }
 
-/* Scene panel (left, collapsible). */
+/* Scene and cloud tools share the collapsible right panel. */
 .va3d-panel {
   position: absolute;
-  top: 40px; /* below the menubar (8 + 26 + 6) */
-  left: 8px;
+  top: 48px;
+  right: 8px;
   bottom: 28px;
   width: 260px;
   display: flex;
@@ -248,6 +248,8 @@
 .va3d-panel-toggle { padding: 2px 6px; color: var(--muted) !important; }
 .va3d-panel-title { color: var(--muted); font-size: 0.75rem; }
 .va3d-tree { flex: 1; overflow: auto; padding: 2px 0; }
+.va3d-panel:has(.va-cloud:not([hidden])) .va3d-tree { flex: 0 1 35%; min-height: 60px; }
+.va3d-panel.collapsed .va-cloud { display: none; }
 .va3d-row { display: flex; align-items: center; gap: 2px; padding-right: 4px; min-height: 22px; white-space: nowrap; }
 .va3d-row:hover { background: color-mix(in srgb, var(--border) 45%, transparent); }
 .va3d-twisty, .va3d-twisty-space { flex: none; width: 18px; padding: 0 !important; text-align: center; color: var(--muted) !important; }
@@ -276,11 +278,11 @@
    - mid (821-1080px): no room for the banner up there; it moves below the toolbar.
    - narrow (<= 820px, panel auto-collapses, see panel.ts NARROW): toolbar may wrap, banner at
      the bottom. 820 keeps the open panel clear of the toolbar (268 + 470 + 16 < 821). */
-.va3d-panel ~ .va3d-banner { left: 276px; max-width: min(640px, calc(100% - 762px)); }
+.va3d-panel ~ .va3d-banner { left: 120px; max-width: min(640px, calc(100% - 606px)); }
 .va3d-panel.collapsed ~ .va3d-banner { left: 120px; max-width: min(640px, calc(100% - 606px)); }
 
 @media (min-width: 821px) and (max-width: 1080px) {
-  .va3d .va3d-panel ~ .va3d-banner,
+  .va3d .va3d-panel ~ .va3d-banner { top: 48px; right: 276px; min-width: 0; max-width: 640px; }
   .va3d .va3d-panel.collapsed ~ .va3d-banner { top: 48px; right: 8px; min-width: 0; max-width: 640px; }
 }
 

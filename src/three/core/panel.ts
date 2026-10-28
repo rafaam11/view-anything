@@ -40,7 +40,7 @@ const EYE_OFF = "○";
 export class ScenePanel {
   readonly root = el("aside", "va3d-panel");
   private readonly tree = el("div", "va3d-tree");
-  private readonly toggleButton = button("va3d-panel-toggle", "◀", "장면 패널 접기", "panel");
+  private readonly toggleButton = button("va3d-panel-toggle", "▶", "장면 패널 접기", "panel");
   /** Rendered rows by node id, and the tree node each one shows. */
   private readonly rows = new Map<string, { item: HTMLElement; node: TreeNode | null }>();
   /** Display names of the top-level entries (loading or loaded), in panel order. */
@@ -306,7 +306,7 @@ export class ScenePanel {
   setCollapsed(collapsed: boolean): void {
     this.root.classList.toggle("collapsed", collapsed);
     this.tree.hidden = collapsed;
-    this.toggleButton.textContent = collapsed ? "▶" : "◀";
+    this.toggleButton.textContent = collapsed ? "◀" : "▶";
     this.toggleButton.title = collapsed ? "장면 패널 펼치기" : "장면 패널 접기";
   }
 

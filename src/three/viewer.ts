@@ -173,7 +173,7 @@ export class ThreeViewer {
   private clouds: CloudController | null = null;
   private cloudLoading: Promise<CloudController> | null = null;
 
-  constructor(readonly stage: Stage, private readonly root: HTMLElement) {
+  constructor(readonly stage: Stage, root: HTMLElement) {
     const toolbar = buildToolbar((action) => this.run(action));
     toolbar.append(this.displaySelects());
     this.panel = new ScenePanel({
@@ -549,7 +549,7 @@ export class ThreeViewer {
           await this.stage.reveal(built.renderables, renderableSizes(built.renderables));
           this.tools.select(id);
         },
-      }, this.root);
+      }, this.panel.root);
       return this.clouds;
     });
   }

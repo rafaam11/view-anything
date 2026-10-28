@@ -25,9 +25,9 @@ test.each(["va3d-panel", "va3d-panel collapsed"])("narrow window (500px): the ba
   expect(s.maxWidth).toBe("none");
 });
 
-test("wide window: the banner starts right of the (collapsed) panel", () => {
+test("wide window: the banner starts right of the menubar", () => {
   (window as HappyWindow).happyDOM.setViewport({ width: 1200, height: 800 });
-  expect(getComputedStyle(layout("va3d-panel")).left).toBe("276px");
+  expect(getComputedStyle(layout("va3d-panel")).left).toBe("120px");
   expect(getComputedStyle(layout("va3d-panel collapsed")).left).toBe(`${MENUBAR_RIGHT + 8}px`);
 });
 
@@ -39,16 +39,16 @@ const MENUBAR_RIGHT = 112;
 const MENUBAR_HEIGHT = 26;
 
 test.each([
-  [1000, "va3d-panel", "276px"],
+  [1000, "va3d-panel", "120px"],
   [1000, "va3d-panel collapsed", "120px"],
-  [850, "va3d-panel", "276px"],
+  [850, "va3d-panel", "120px"],
   [850, "va3d-panel collapsed", "120px"],
 ])("mid window (%ipx, %s): the banner drops below the toolbar", (width, panelClass, left) => {
   (window as HappyWindow).happyDOM.setViewport({ width, height: 800 });
   const s = getComputedStyle(layout(panelClass));
   expect(s.top).toBe("48px");
   expect(s.left).toBe(left);
-  expect(s.right).toBe("8px");
+  expect(s.right).toBe(panelClass.endsWith("collapsed") ? "8px" : "276px");
   expect(s.minWidth).toMatch(/^0(px)?$/);
   // The open panel still clears the toolbar on this row.
   expect(PANEL_RIGHT + 8 + TOOLBAR_BUDGET + 8).toBeLessThan(width);
@@ -67,10 +67,10 @@ test("wide window (1100px): banner on the top row fits between panel and toolbar
   (window as HappyWindow).happyDOM.setViewport({ width: 1100, height: 800 });
   const s = getComputedStyle(layout("va3d-panel"));
   expect(s.top).toBe("8px");
-  expect(s.left).toBe("276px");
+  expect(s.left).toBe("120px");
   // max-width calc(100% - 762px) leaves the toolbar budget free and is at least min-width (240px).
   expect(1100 - 762).toBeGreaterThanOrEqual(240);
-  expect(276 + (1100 - 762) + 8 + TOOLBAR_BUDGET + 8).toBeLessThanOrEqual(1100);
+  expect(120 + (1100 - 606) + 8 + TOOLBAR_BUDGET + 8).toBeLessThanOrEqual(1100);
 });
 
 test.each([1200, 900, 500])("menubar top left; the panel starts below it (%ipx)", (width) => {
@@ -82,7 +82,7 @@ test.each([1200, 900, 500])("menubar top left; the panel starts below it (%ipx)"
   expect(bar.height).toBe(`${MENUBAR_HEIGHT}px`);
   const panel = getComputedStyle(document.querySelector<HTMLElement>(".va3d-panel")!);
   expect(parseFloat(panel.top)).toBeGreaterThanOrEqual(8 + MENUBAR_HEIGHT + 4);
-  expect(panel.left).toBe("8px");
+  expect(panel.right).toBe("8px");
   // The menu dropdowns sit above the panel.
   expect(Number(bar.zIndex)).toBeGreaterThan(1);
 });
