@@ -65,6 +65,21 @@ test("failed install reports failure and releases editor locks", async () => {
   expect(deps.unlock).toHaveBeenCalledOnce();
 });
 
+test("storage and unlock errors do not leave the updater permanently busy", async () => {
+  const { controller, deps, handle } = setup();
+  deps.record = () => { throw new Error("storage unavailable"); };
+  deps.clearAttempt = () => { throw new Error("storage unavailable"); };
+  deps.unlock = vi.fn(async () => { throw new Error("unlock failed"); });
+  await controller.check();
+  await controller.install();
+  expect(controller.status).toEqual({ state: "installFailed", version: "0.3.0" });
+  expect(handle.install).not.toHaveBeenCalled();
+  deps.unlock = vi.fn(async () => {});
+  deps.check = vi.fn(async () => null);
+  await controller.check();
+  expect(controller.status.state).toBe("latest");
+});
+
 test("attempt detection handles success, failure, invalid and stale records", () => {
   const raw = JSON.stringify({ from: "0.2.0", to: "0.3.0" });
   expect(failedAttempt(raw, "0.2.0")).toBe("0.3.0");

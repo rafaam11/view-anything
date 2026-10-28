@@ -84,11 +84,11 @@ export class UpdateController {
       await this.handle.install();
       await this.deps.relaunch();
     } catch {
-      this.deps.clearAttempt();
+      try { this.deps.clearAttempt(); } catch { /* storage may be unavailable */ }
       this.set({ state: "installFailed", version });
     } finally {
-      await this.deps.unlock();
-      this.busy = false;
+      try { await this.deps.unlock(); } catch { /* a closed window may no longer receive unlock */ }
+      finally { this.busy = false; }
     }
   }
 }
