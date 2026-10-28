@@ -18,6 +18,8 @@ Markdown, 이미지, JSON/YAML/CSV, 3D 모델과 포인트클라우드를 지원
 
 데이터 파일은 10 MiB, CSV는 100,000셀, 이미지는 100 MiB 및 5천만 픽셀까지 열며 썸네일은 처음 1,000개를 표시합니다. 저장 전에 외부 변경을 확인하고 충돌 시 편집 내용을 유지합니다. 같은 앱의 동시 저장은 직렬화하지만, 다른 프로그램이 저장 검증과 파일 교체 사이에 쓰는 경쟁까지 파일시스템에서 원자적으로 막지는 못합니다.
 
+CSV는 100행씩 표시하며 페이지를 바꿔도 편집 내용이 유지됩니다. Markdown·데이터 편집 중 충돌이 나면 다른 이름으로 복사본을 저장할 수 있습니다. 복사본 저장은 기존 대상을 덮어쓰지 않으며 하드 링크를 지원하지 않는 파일시스템에서는 실패합니다.
+
 > 개발 초기 단계입니다. 설계는 [docs/superpowers/specs](docs/superpowers/specs/2026-10-26-view-anything-design.md)를 참고하세요.
 
 ## 개발
@@ -29,7 +31,8 @@ npm run tauri dev
 
 ## 릴리스 노트
 
-- [v0.4.0](docs/release/v0.4.0.md) — 최신
+- [v0.4.1](docs/release/v0.4.1.md) — 최신
+- [v0.4.0](docs/release/v0.4.0.md)
 - [v0.3.0](docs/release/v0.3.0.md)
 - [v0.2.0](docs/release/v0.2.0.md)
 - [v0.1.0](docs/release/v0.1.0.md)
