@@ -7,7 +7,8 @@ use std::num::NonZeroUsize;
 type Tree = KdTree<f64, u32, Eytzinger, FlatVec<f64, u32, 3, 32>, 3, 32>;
 const MAX_SAMPLE: usize = 100_000;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Registration {
     /// Column-major rigid transform in scene coordinates.
     pub matrix: [f64; 16],

@@ -183,6 +183,118 @@ struct JobGuard {
     app: tauri::AppHandle,
     id: String,
 }
+
+fn registration_points(
+    cloud: &Cloud,
+    ids: &[u32],
+    matrix: &[f64; 16],
+    check: &mut impl FnMut(usize, usize) -> Result<()>,
+) -> Result<Vec<[f64; 3]>> {
+    if !matrix.iter().all(|v| v.is_finite())
+        || matrix[3] != 0.
+        || matrix[7] != 0.
+        || matrix[11] != 0.
+        || matrix[15] != 1.
+    {
+        return Err("정합 좌표 변환이 잘못되었습니다".into());
+    }
+    let step = ids.len().div_ceil(100_000).max(1);
+    let mut points = Vec::with_capacity(ids.len().div_ceil(step));
+    for (i, id) in ids.iter().step_by(step).enumerate() {
+        if i % 4096 == 0 {
+            check(i, ids.len().div_ceil(step))?;
+        }
+        let source = cloud.positions.get(*id as usize).ok_or("점 ID 오류")?;
+        if !process::finite(source) {
+            continue;
+        }
+        let p = process::transform(*source, matrix);
+        let p = [p[0], p[1], p[2]];
+        if !process::finite(&p) {
+            return Err("정합 좌표가 유효 범위를 벗어났습니다".into());
+        }
+        points.push(p);
+    }
+    Ok(points)
+}
+
+/// Compute a preview only; neither point records nor the scene are mutated here.
+#[tauri::command]
+pub async fn cloud_register(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    job_id: String,
+    source: String,
+    source_revision: u64,
+    source_matrix: [f64; 16],
+    target: String,
+    target_revision: u64,
+    target_matrix: [f64; 16],
+    max_distance: f64,
+    max_iterations: usize,
+) -> Result<super::registration::Registration> {
+    if job_id.len() > 128 || source == target {
+        return Err("정합 작업 또는 대상이 잘못되었습니다".into());
+    }
+    let state = app.state::<Clouds>();
+    if state
+        .busy
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        return Err("다른 포인트클라우드 작업이 진행 중입니다".into());
+    }
+    let cancel = Arc::new(AtomicBool::new(false));
+    state.jobs.lock().unwrap().insert(
+        job_id.clone(),
+        (window.label().into(), Some(source.clone()), cancel.clone()),
+    );
+    let guard = JobGuard {
+        app: app.clone(),
+        id: job_id.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        let state = app.state::<Clouds>();
+        let owner = window.label();
+        let source_handle = state.session(owner, &source)?;
+        let target_handle = state.session(owner, &target)?;
+        let snapshot =
+            |handle: &Arc<Mutex<Session>>, revision: u64| -> Result<(Arc<Cloud>, Arc<Vec<u32>>)> {
+                let s = handle.lock().unwrap();
+                if s.closed || s.revision != revision || s.preview.is_some() {
+                    return Err("클라우드가 변경됐거나 미리보기 중입니다".into());
+                }
+                Ok((s.cloud.clone(), s.active.clone()))
+            };
+        let (source_cloud, source_ids) = snapshot(&source_handle, source_revision)?;
+        let (target_cloud, target_ids) = snapshot(&target_handle, target_revision)?;
+        let mut check = |loaded: usize, total: usize| -> Result<()> {
+            if cancel.load(Ordering::Relaxed) || app.get_webview_window(owner).is_none() {
+                return Err("작업을 취소했습니다".into());
+            }
+            let _ = window.emit(
+                "va-cloud-progress",
+                Progress {
+                    job_id: job_id.clone(),
+                    phase: "정합 중".into(),
+                    loaded,
+                    total,
+                },
+            );
+            Ok(())
+        };
+        let a = registration_points(&source_cloud, &source_ids, &source_matrix, &mut check)?;
+        let b = registration_points(&target_cloud, &target_ids, &target_matrix, &mut check)?;
+        let result = super::registration::align(&a, &b, max_distance, max_iterations, &mut check)?;
+        snapshot(&source_handle, source_revision)?;
+        snapshot(&target_handle, target_revision)?;
+        check(1, 1)?;
+        Ok(result)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 impl Drop for JobGuard {
     fn drop(&mut self) {
         let state = self.app.state::<Clouds>();
@@ -730,6 +842,20 @@ pub async fn cloud_point(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn registration_uses_scene_transform_and_rejects_projective_matrices() {
+        let s = session();
+        let mut matrix = [0.; 16];
+        matrix[0] = 1.;
+        matrix[5] = 1.;
+        matrix[10] = 1.;
+        matrix[15] = 1.;
+        matrix[12] = 42.;
+        let points = registration_points(&s.cloud, &[0], &matrix, &mut |_, _| Ok(())).unwrap();
+        assert_eq!(points, vec![[42., 0., 0.]]);
+        matrix[3] = 1.;
+        assert!(registration_points(&s.cloud, &[0], &matrix, &mut |_, _| Ok(())).is_err());
+    }
     #[test]
     fn las_save_keeps_source_and_selected_attributes() {
         let dir = std::env::temp_dir().join(format!(

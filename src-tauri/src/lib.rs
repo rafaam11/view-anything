@@ -346,7 +346,7 @@ pub fn run() {
             update::update_context,
             update::update_status,
             update::update_request
-            ,cloud::cloud_request, cloud::cloud_cancel, cloud::cloud_close, cloud::cloud_chunk, cloud::cloud_point
+            ,cloud::cloud_request, cloud::cloud_register, cloud::cloud_cancel, cloud::cloud_close, cloud::cloud_chunk, cloud::cloud_point
         ])
         .setup(|app| {
             let argv: Vec<String> = std::env::args().collect();
