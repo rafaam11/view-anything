@@ -10,7 +10,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 ## 스택
 - Tauri 2 (Rust, `src-tauri/`) + Vite + TypeScript vanilla 프런트엔드 (`src/`)
 - 뷰어는 확장자 → 모듈 레지스트리로 연결하고 lazy import한다. md를 열 때 three.js를 로드하지 않는다.
-- PDF 뷰어(`src/pdf/`)는 읽기 전용이며 PDF.js와 워커를 파일을 열 때만 로드한다. 100MiB 제한, 현재 페이지만 렌더링, 페이지 단위 검색과 목차를 제공한다. 암호화 문서와 검색 결과 강조는 지원하지 않는다.
+- PDF 뷰어(`src/pdf/`)는 읽기 전용이며 PDF.js와 워커를 파일을 열 때만 로드한다. 100MiB 제한, 현재 페이지만 렌더링하며 텍스트 선택·검색 강조·목차를 제공한다. 암호는 입력 중에만 보관하고 저장하거나 로그에 남기지 않는다.
 - 대상 OS: Windows(NSIS), Linux(deb, AppImage). macOS는 비목표.
 
 ## 창과 테마

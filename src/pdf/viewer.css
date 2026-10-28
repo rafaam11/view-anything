@@ -7,3 +7,11 @@
 .pdf-outline button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
 .pdf-scroll { flex: 1; min-width: 0; overflow: auto; background: #7774; padding: 1rem; text-align: center; }
 .pdf-scroll canvas { display: block; margin: auto; background: white; }
+.pdf-page { position: relative; margin: auto; }
+.pdf-page .textLayer { position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial; transform-origin: 0 0; }
+.pdf-page .textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0 0; }
+.pdf-page .textLayer mark { color: transparent; background: #ffdc4d88; }
+.pdf-page .textLayer mark.selected { background: #ff9333bb; }
+.pdf-page .textLayer ::selection { background: #4278e966; }
+.pdf-password form { display: flex; flex-wrap: wrap; gap: .75rem; }
+.pdf-password label { flex-basis: 100%; display: grid; gap: .5rem; }

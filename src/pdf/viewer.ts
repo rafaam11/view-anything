@@ -1,5 +1,5 @@
 ﻿import './viewer.css';
-import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from 'pdfjs-dist';
+import { getDocument, GlobalWorkerOptions, PasswordResponses, TextLayer, type PDFDocumentProxy, type RenderTask } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { platform } from '../platform';
 import type { Viewer } from '../registry';
@@ -16,10 +16,25 @@ const viewer: Viewer = {
     if (await platform.fileSize(path) > MAX_BYTES) throw new Error('PDF 파일이 100 MiB를 초과합니다.');
     const bytes = new Uint8Array(await platform.readFileRaw(path));
     const loading = getDocument({ data: bytes, isEvalSupported: false, enableXfa: false });
+    let passwordDialog: HTMLDialogElement | null = null, passwordCancelled = false;
+    loading.onPassword = (submit: (password: string) => void, reason: number) => {
+      (passwordDialog as HTMLDialogElement | null)?.remove();
+      const dialog = document.createElement('dialog'); dialog.className = 'pdf-password'; passwordDialog = dialog;
+      const form = document.createElement('form'); form.method = 'dialog';
+      const label = document.createElement('label'); label.textContent = reason === PasswordResponses.INCORRECT_PASSWORD ? '암호가 틀렸습니다. 다시 입력하세요.' : 'PDF 암호를 입력하세요.';
+      const input = document.createElement('input'); input.type = 'password'; input.autocomplete = 'off'; input.setAttribute('aria-label', 'PDF 암호'); label.append(input);
+      const confirm = button('열기'), cancel = button('취소'); confirm.type = 'submit'; cancel.type = 'button';
+      const abort = () => { passwordCancelled = true; input.value = ''; dialog.remove(); passwordDialog = null; void loading.destroy().catch(() => {}); };
+      cancel.onclick = abort; dialog.addEventListener('cancel', e => { e.preventDefault(); abort(); });
+      form.onsubmit = e => { e.preventDefault(); const password = input.value; input.value = ''; dialog.remove(); passwordDialog = null; submit(password); };
+      form.append(label, confirm, cancel); dialog.append(form); el.replaceChildren(dialog); dialog.showModal(); input.focus();
+    };
     let doc: PDFDocumentProxy;
     try { doc = await loading.promise; }
     catch (e) {
+      (passwordDialog as HTMLDialogElement | null)?.remove();
       await loading.destroy();
+      if (passwordCancelled) throw new Error('PDF 암호 입력을 취소했습니다.');
       if (e instanceof Error && e.name === 'PasswordException') throw new Error('암호로 보호된 PDF는 열 수 없습니다.');
       throw new Error(`PDF를 읽을 수 없습니다: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -29,19 +44,47 @@ const viewer: Viewer = {
     const pageInput = document.createElement('input'); pageInput.type = 'number'; pageInput.min = '1'; pageInput.max = String(doc.numPages); pageInput.setAttribute('aria-label', '페이지');
     const total = document.createElement('span'); total.textContent = `/ ${doc.numPages}`;
     const zoomOut = button('축소'); const zoomLabel = document.createElement('span'); const zoomIn = button('확대');
-    const searchInput = document.createElement('input'); searchInput.type = 'search'; searchInput.placeholder = '문서 검색'; searchInput.setAttribute('aria-label', '문서 검색');
-    const search = button('찾기'); const status = document.createElement('span'); status.setAttribute('role', 'status');
-    toolbar.append(prev, pageInput, total, next, zoomOut, zoomLabel, zoomIn, searchInput, search, status);
+    const searchInput = document.createElement('input'); searchInput.type = 'search'; searchInput.maxLength = 512; searchInput.placeholder = '문서 검색'; searchInput.setAttribute('aria-label', '문서 검색');
+    const search = button('다음 결과'), searchPrev = button('이전 결과'); const status = document.createElement('span'); status.setAttribute('role', 'status');
+    toolbar.append(prev, pageInput, total, next, zoomOut, zoomLabel, zoomIn, searchInput, searchPrev, search, status);
     const content = document.createElement('div'); content.className = 'pdf-content';
     const outline = document.createElement('nav'); outline.className = 'pdf-outline'; outline.setAttribute('aria-label', '목차');
     const scroll = document.createElement('div'); scroll.className = 'pdf-scroll';
-    const canvas = document.createElement('canvas'); canvas.setAttribute('aria-label', 'PDF 페이지'); scroll.append(canvas);
+    const pageContainer = document.createElement('div'); pageContainer.className = 'pdf-page';
+    const canvas = document.createElement('canvas'); canvas.setAttribute('aria-label', 'PDF 페이지');
+    let textContainer = document.createElement('div'); textContainer.className = 'textLayer'; pageContainer.append(canvas, textContainer); scroll.append(pageContainer);
     content.append(outline, scroll); root.append(toolbar, content); el.replaceChildren(root);
     let pageNumber = 1, scale = 1, generation = 0, searchGeneration = 0, task: RenderTask | null = null;
     let renderBarrier: Promise<unknown> = Promise.resolve();
-    let lastQuery = '', lastFoundPage = 0;
+    let lastQuery = '', lastFoundPage = 0, lastFoundIndex = -1, textLayer: TextLayer | null = null;
+    let pageText: string[] = [], separators: string[] = [];
+    const markMatches = () => {
+      if (!textLayer) return;
+      const query = searchInput.value.trim().toLocaleLowerCase();
+      const divs = textLayer.textDivs, joined = pageText.map((s, i) => s + (separators[i] ?? '')).join('').toLocaleLowerCase();
+      const ranges: Array<[number, number]> = [];
+      if (query) for (let pos = joined.indexOf(query); pos >= 0 && ranges.length < 10000; pos = joined.indexOf(query, pos + Math.max(1, query.length))) ranges.push([pos, pos + query.length]);
+      let offset = 0, first = 0, selected: HTMLElement | null = null;
+      for (let i = 0; i < divs.length; i++) {
+        const div = divs[i], text = pageText[i] ?? ''; div.replaceChildren();
+        let start = 0;
+        while (first < ranges.length && ranges[first][1] <= offset) first++;
+        for (let index = first; index < ranges.length && ranges[index][0] < offset + text.length; index++) {
+          const [a, b] = ranges[index];
+          const begin = Math.max(a - offset, 0), end = Math.min(b - offset, text.length);
+          if (begin >= end) continue;
+          div.append(document.createTextNode(text.slice(start, begin))); const mark = document.createElement('mark');
+          if (pageNumber === lastFoundPage && index === lastFoundIndex) { mark.className = 'selected'; selected ??= mark; }
+          mark.textContent = text.slice(begin, end); div.append(mark); start = end;
+        }
+        div.append(document.createTextNode(text.slice(start)));
+        offset += text.length + (separators[i]?.length ?? 0);
+      }
+      selected?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    };
     const render = async () => {
       const id = ++generation;
+      textLayer?.cancel(); textLayer = null; const freshLayer = document.createElement('div'); freshLayer.className = 'textLayer'; textContainer.replaceWith(freshLayer); textContainer = freshLayer; pageText = []; separators = [];
       const previousTask = task;
       previousTask?.cancel(); task = null;
       if (previousTask) renderBarrier = previousTask.promise.catch(() => {});
@@ -54,9 +97,14 @@ const viewer: Viewer = {
         const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt(MAX_PIXELS / (viewport.width * viewport.height)));
         canvas.width = Math.max(1, Math.floor(viewport.width * ratio)); canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
         canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+        pageContainer.style.width = `${viewport.width}px`; pageContainer.style.height = `${viewport.height}px`; pageContainer.style.setProperty('--scale-factor', String(scale));
         const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('캔버스를 사용할 수 없습니다.');
         const current = page.render({ canvasContext: ctx, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }); task = current;
-        await current.promise; if (id === generation) { task = null; scroll.scrollTop = 0; }
+        await current.promise; if (id !== generation) return;
+        task = null;
+        const text = await page.getTextContent(); if (id !== generation) return;
+        const layer = new TextLayer({ textContentSource: text, container: freshLayer, viewport }); textLayer = layer;
+        await layer.render(); if (id === generation) { pageText = layer.textContentItemsStr; separators = text.items.filter(item => 'str' in item).map(item => 'hasEOL' in item && item.hasEOL ? ' ' : ''); scroll.scrollTop = 0; markMatches(); }
       } catch (e) { if (id === generation) status.textContent = `페이지 표시 오류: ${e instanceof Error ? e.message : String(e)}`; }
     };
     const go = (n: number) => { if (!Number.isFinite(n)) return; pageNumber = Math.max(1, Math.min(doc.numPages, Math.trunc(n))); void render(); };
@@ -64,22 +112,28 @@ const viewer: Viewer = {
     pageInput.onchange = () => go(Number(pageInput.value));
     zoomOut.onclick = () => { scale = Math.max(0.25, Math.round((scale - 0.25) * 100) / 100); void render(); };
     zoomIn.onclick = () => { scale = Math.min(3, Math.round((scale + 0.25) * 100) / 100); void render(); };
-    search.onclick = async () => {
+    const find = async (direction: 1 | -1) => {
       const query = searchInput.value.trim().toLocaleLowerCase(), id = ++searchGeneration;
       if (!query) { status.textContent = '검색어를 입력하세요.'; return; }
       status.textContent = '검색 중…';
       try {
-        const start = query === lastQuery && pageNumber === lastFoundPage ? pageNumber % doc.numPages + 1 : pageNumber;
+        const start = pageNumber;
         for (let offset = 0; offset < doc.numPages; offset++) {
-          const n = (start - 1 + offset) % doc.numPages + 1;
+          const n = ((start - 1 + direction * offset) % doc.numPages + doc.numPages) % doc.numPages + 1;
           const page = await doc.getPage(n); const text = await page.getTextContent();
           if (id !== searchGeneration) return;
-          const value = text.items.map(item => 'str' in item ? item.str : '').join(' ').toLocaleLowerCase();
-          if (value.includes(query)) { lastQuery = query; lastFoundPage = n; status.textContent = `${n}페이지에서 찾았습니다.`; go(n); return; }
+          const value = text.items.map(item => 'str' in item ? item.str + (item.hasEOL ? ' ' : '') : '').join('').toLocaleLowerCase();
+          const matches: number[] = []; for (let pos = value.indexOf(query); pos >= 0 && matches.length < 10000; pos = value.indexOf(query, pos + Math.max(1, query.length))) matches.push(pos);
+          const current = query === lastQuery && n === lastFoundPage && offset === 0 ? lastFoundIndex : direction > 0 ? -1 : matches.length;
+          const index = current + direction;
+          if (index >= 0 && index < matches.length) { lastQuery = query; lastFoundPage = n; lastFoundIndex = index; status.textContent = `${n}페이지 ${index + 1}/${matches.length}`; if (n !== pageNumber) go(n); else markMatches(); return; }
         }
+        if (query === lastQuery && lastFoundPage === pageNumber) { lastQuery = ''; return find(direction); }
         status.textContent = '검색 결과가 없습니다.';
       } catch (e) { if (id === searchGeneration) status.textContent = `검색 오류: ${e instanceof Error ? e.message : String(e)}`; }
     };
+    search.onclick = () => void find(1); searchPrev.onclick = () => void find(-1);
+    searchInput.oninput = () => { ++searchGeneration; lastQuery = ''; lastFoundPage = 0; lastFoundIndex = -1; markMatches(); };
     searchInput.onkeydown = e => { if (e.key === 'Enter') search.click(); };
     let outlineCount = 0;
     const addOutline = (items: OutlineItem[], host: HTMLElement, depth: number) => {
@@ -104,7 +158,7 @@ const viewer: Viewer = {
       if (entries?.length) addOutline(entries as OutlineItem[], outline, 0); else outline.hidden = true;
     } catch { outline.hidden = true; }
     await render();
-    window.addEventListener('unload', () => { ++generation; ++searchGeneration; task?.cancel(); void loading.destroy(); }, { once: true });
+    window.addEventListener('unload', () => { ++generation; ++searchGeneration; task?.cancel(); textLayer?.cancel(); void loading.destroy(); }, { once: true });
   },
 };
 export default viewer;
