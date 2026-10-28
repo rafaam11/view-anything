@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 
 const disk = new Map<string, Uint8Array>();
 /** When set, the next readFile waits for it (simulates a slow focus re-read). */
@@ -68,6 +68,17 @@ beforeAll(async () => {
 
 beforeEach(() => {
   gate = null;
+  vi.spyOn(window, "addEventListener");
+});
+
+afterEach(() => {
+  const listener = vi.mocked(window.addEventListener);
+  for (const [type, callback, options] of listener.mock.calls) {
+    window.removeEventListener(type, callback, options);
+  }
+  listener.mockRestore();
+  document.body.replaceChildren();
+  disk.clear();
 });
 
 test("an edit toggle during a focus re-read is queued, not dropped", async () => {
