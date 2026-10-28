@@ -2,7 +2,7 @@
 
 탐색기에서 더블클릭하면 메모장처럼 바로 열리는 가벼운 범용 뷰어.
 Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 드래그 append, 단일 HTML 내보내기),
-포인트클라우드(PCD/PLY 검사·정리·원본 속성 보존 저장), 이미지, JSON/YAML/CSV를 지원한다. PDF로 확장한다.
+포인트클라우드(PCD/PLY 검사·정리·원본 속성 보존 저장)를 지원한다. JSON/YAML/CSV·이미지·PDF로 확장한다.
 
 - 설계: `docs/superpowers/specs/2026-10-26-view-anything-design.md` (결정 사항의 source of truth)
 - 소통·문서는 한국어. 코드 식별자와 커밋 메시지는 영어.
@@ -45,11 +45,6 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - 포인트클라우드는 JS 워커 대신 Rust 백그라운드에서 처리한다. 장면 원본 점 합계 1천만(숨김·편집으로 제거된 원본점도 예약), 디코딩 2GiB/세션, 예상 작업 메모리 8GiB/앱을 제한한다. 실제 OS/GPU 메모리의 하드 상한은 아니다.
 - 파일을 제거하면 geometry, material, texture, 엣지 선, BVH를 모두 dispose한다(`tests/three-viewer-append.test.ts`의 dispose 점검 테스트).
 - 부품 이름 같은 파일 유래 문자열은 textContent로만 표시한다.
-
-## 이미지·데이터
-- `src/image/`는 원본을 보호하고 편집 결과를 별도 PNG로 저장한다. GIF/SVG 편집은 정적 결과다.
-- `src/data/`는 JSON/YAML 원문, CSV 수정 셀, UTF-8/UTF-16과 줄바꿈을 보존한다. 저장 직전 바이트 확인과 네이티브 조건부 원자 교체를 쓰며, 외부 프로세스와의 검증·교체 사이 경쟁은 완전히 제거할 수 없다.
-- 3D 조작은 `core/navigation.ts`의 Arcball/Fly를 앱과 HTML이 공유한다. 장면 트리와 앱 점군 도구는 오른쪽 통합 패널에 둔다.
 
 ## 꼭 지킬 것
 - md 저장 시 **고친 블록만** 원문에 반영한다. 손대지 않은 블록과 frontmatter는 바이트 단위로 보존해야 하며, 이를 회귀 테스트로 지킨다.
