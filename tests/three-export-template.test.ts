@@ -145,6 +145,7 @@ test("navigation and rolled camera orientation round-trip; older exports remain 
   const state = sampleState();
   state.navigation = "fly";
   state.camera.quaternion = [0, 0, 0.5, Math.sqrt(0.75)];
+  state.camera.up = [0, 1, 0];
   expect(parseState(JSON.parse(JSON.stringify(state)))).toEqual(state);
   expect(() => parseState({ ...state, navigation: "other" })).toThrow(/navigation/);
   expect(() => parseState({ ...state, camera: { ...state.camera, quaternion: [0, 1] } })).toThrow(/quaternion/);

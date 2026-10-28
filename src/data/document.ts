@@ -12,6 +12,7 @@ export class FileDocument {
   private known: Uint8Array;
   private current: Uint8Array;
   private saving = false;
+  private revision = 0;
 
   constructor(private readonly io: DocumentIO, bytes: Uint8Array) {
     this.known = bytes.slice();
@@ -21,22 +22,25 @@ export class FileDocument {
   get dirty(): boolean { return !equalBytes(this.known, this.current); }
   get bytes(): Uint8Array { return this.current.slice(); }
 
-  edit(bytes: Uint8Array): void { this.current = bytes.slice(); }
+  edit(bytes: Uint8Array): void { this.current = bytes.slice(); this.revision++; }
 
   /** Adopt freshly read disk contents after an explicit discard. */
   reset(bytes: Uint8Array): void {
     if (this.saving) throw new Error("저장이 이미 진행 중입니다");
     this.known = bytes.slice();
     this.current = bytes.slice();
+    this.revision++;
   }
 
   /** Reload only when clean; never discard edits on focus. */
   async reload(): Promise<boolean> {
     if (this.dirty || this.saving) return false;
+    const revision = this.revision;
     const disk = await this.io.read();
-    if (this.dirty || this.saving || equalBytes(this.known, disk)) return false;
+    if (revision !== this.revision || this.dirty || this.saving || equalBytes(this.known, disk)) return false;
     this.known = disk.slice();
     this.current = disk.slice();
+    this.revision++;
     return true;
   }
 
@@ -51,6 +55,7 @@ export class FileDocument {
       if (!equalBytes(this.known, disk)) return "conflict";
       await this.io.write(snapshot);
       this.known = snapshot;
+      this.revision++;
       return "saved";
     } finally {
       this.saving = false;

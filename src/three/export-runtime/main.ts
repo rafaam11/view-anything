@@ -211,9 +211,10 @@ class ExportedViewer {
     const { camera, controls } = this.stage;
     camera.position.fromArray(this.state.camera.position);
     controls.target.fromArray(this.state.camera.target);
-    if (this.state.camera.quaternion) camera.quaternion.fromArray(this.state.camera.quaternion);
-    else camera.lookAt(controls.target);
+    if (this.state.camera.up) camera.up.fromArray(this.state.camera.up);
+    camera.lookAt(controls.target);
     controls.update();
+    if (this.state.camera.quaternion) camera.quaternion.fromArray(this.state.camera.quaternion);
     await this.stage.reveal(pending, sizes);
     this.tools.setMode(this.state.mode);
     this.stage.requestRender();

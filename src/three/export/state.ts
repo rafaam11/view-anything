@@ -38,7 +38,7 @@ export interface ExportState {
   /** X, Y, Z. */
   sections: ExportSection[];
   /** World coordinates (the runtime uses the same display frame, so the same world). */
-  camera: { position: [number, number, number]; target: [number, number, number]; quaternion?: [number, number, number, number] };
+  camera: { position: [number, number, number]; target: [number, number, number]; quaternion?: [number, number, number, number]; up?: [number, number, number] };
   navigation?: "arcball" | "fly";
   panelCollapsed?: boolean;
   files: ExportFile[];
@@ -120,6 +120,7 @@ export function parseState(input: unknown): ExportState {
   };
   if (input.panelCollapsed !== undefined) state.panelCollapsed = input.panelCollapsed as boolean;
   if (camera.quaternion !== undefined) state.camera.quaternion = camera.quaternion as [number, number, number, number];
+  if (camera.up !== undefined) state.camera.up = vec3(camera.up, "camera up");
   if (input.navigation !== undefined) state.navigation = oneOf(input.navigation, ["arcball", "fly"] as const, "navigation");
   return state;
 }

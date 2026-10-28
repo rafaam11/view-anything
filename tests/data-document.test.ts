@@ -59,3 +59,19 @@ test("save snapshots edits before waiting for the disk read", async () => {
   expect(written).toEqual(bytes("first"));
   expect(doc.dirty).toBe(true);
 });
+
+test("a stale focus reload cannot revert a completed save", async () => {
+  let resolveReload!: (b: Uint8Array) => void;
+  let reads = 0;
+  const doc = new FileDocument({
+    read: () => ++reads === 1 ? new Promise(resolve => { resolveReload = resolve; }) : Promise.resolve(bytes("old")),
+    write: async () => {},
+  }, bytes("old"));
+  const reload = doc.reload();
+  doc.edit(bytes("new"));
+  expect(await doc.save()).toBe("saved");
+  resolveReload(bytes("old"));
+  expect(await reload).toBe(false);
+  expect(doc.bytes).toEqual(bytes("new"));
+  expect(doc.dirty).toBe(false);
+});

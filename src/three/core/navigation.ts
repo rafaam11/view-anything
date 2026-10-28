@@ -35,8 +35,13 @@ export class Navigation {
   set enabled(value: boolean) { this.active = value; this.arcball.enabled = value && this.modeValue === "arcball"; if (!value) this.clear(); }
   set minDistance(value: number) { this.arcball.minDistance = value; }
   get mode(): NavigationMode { return this.modeValue; }
-  setMode(mode: NavigationMode): void { this.clear(); this.modeValue = mode; this.arcball.enabled = this.active && mode === "arcball"; this.arcball.update(); }
-  update(): void { this.arcball.update(); }
+  setMode(mode: NavigationMode): void { this.clear(); this.modeValue = mode; this.arcball.enabled = this.active && mode === "arcball"; this.update(); }
+  update(): void {
+    // Arcball's update() calls lookAt and can remove camera roll. Keep the caller's orientation.
+    const orientation = this.camera.quaternion.clone();
+    this.arcball.update();
+    this.camera.quaternion.copy(orientation);
+  }
   dispose(): void {
     this.clear(); this.arcball.dispose();
     this.canvas.removeEventListener("pointerdown", this.down, true);
