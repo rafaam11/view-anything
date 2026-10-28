@@ -38,6 +38,9 @@ windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse",
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
 
+[patch.crates-io]
+las = { path = "../vendor/las" }
+
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

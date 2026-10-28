@@ -326,4 +326,37 @@ mod tests {
         assert!(read(input.clone(), 1, &mut |_, _| Ok(())).is_err());
         assert!(read(input, 1_000_000, &mut |_, _| Err("cancelled".into())).is_err());
     }
+
+    #[test]
+    fn destination_write_failure_is_an_error_not_a_cleanup_panic() {
+        struct Failing {
+            inner: Cursor<Vec<u8>>,
+            limit: u64,
+        }
+        impl Write for Failing {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if self.inner.position() + bytes.len() as u64 > self.limit {
+                    return Err(std::io::Error::other("disk full"));
+                }
+                self.inner.write(bytes)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.inner.flush()
+            }
+        }
+        impl Seek for Failing {
+            fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+                self.inner.seek(pos)
+            }
+        }
+        let cloud = LasCloud {
+            header: las::Header::default(),
+            points: vec![las::Point::default()],
+        };
+        let output = Failing {
+            inner: Cursor::new(Vec::new()),
+            limit: 240,
+        };
+        assert!(write(&cloud, &[0], output, &mut |_, _| Ok(())).is_err());
+    }
 }

@@ -948,6 +948,28 @@ mod tests {
                 )
                 .is_err()
             );
+            let mut invalid = [0.; 16];
+            invalid[0] = 1.;
+            invalid[5] = 1.;
+            invalid[10] = 1.;
+            invalid[15] = 1.;
+            invalid[12] = 1e20;
+            let rejected = dir.join(format!("rejected.{ext}"));
+            assert!(
+                save_transformed(
+                    &cloud,
+                    &[0],
+                    &source,
+                    &rejected,
+                    false,
+                    "overflow",
+                    Some(&invalid),
+                    &mut |_, _| Ok(())
+                )
+                .is_err()
+            );
+            assert!(!rejected.exists());
+            assert_eq!(std::fs::read(&source).unwrap(), original);
             save(
                 &cloud,
                 &[1],

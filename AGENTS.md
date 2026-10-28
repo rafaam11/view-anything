@@ -43,6 +43,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - 진입 청크와 md 뷰어 청크는 three와 occt를 정적으로 참조하지 않는다. `scripts/check-bundle.mjs`(`npm run check:bundle`, `npm run build` 뒤 실행)가 이를 검사하고, 런타임 번들(`build/runtime/va-runtime.js`)이 있는지, Tauri 참조나 ES 모듈 구문이 없는지도 확인한다.
 - 무거운 계산(파싱, 엣지, BVH, 압축)은 워커에서 한다. UI 스레드에서는 작은 메시만 처리하고, 큰 GPU 업로드는 청크로 나눠 한 프레임에 하나씩 올린다.
 - 포인트클라우드는 JS 워커 대신 Rust 백그라운드에서 처리한다. 장면 원본 점 합계 1천만(숨김·편집으로 제거된 원본점도 예약), 디코딩 2GiB/세션, 예상 작업 메모리 8GiB/앱을 제한한다. 실제 OS/GPU 메모리의 하드 상한은 아니다.
+- LAS/LAZ는 `vendor/las`의 로컬 패치를 사용한다. 저장 실패 시 writer 정리 과정에서 패닉하지 않게 한 변경과 원본 라이선스는 `vendor/las/PATCH.md`에 기록한다.
 - 파일을 제거하면 geometry, material, texture, 엣지 선, BVH를 모두 dispose한다(`tests/three-viewer-append.test.ts`의 dispose 점검 테스트).
 - 부품 이름 같은 파일 유래 문자열은 textContent로만 표시한다.
 

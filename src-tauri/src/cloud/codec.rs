@@ -833,6 +833,21 @@ mod tests {
         assert_eq!(c.positions[0], [1., 2., 3.]);
     }
     #[test]
+    fn transformed_save_rejects_integer_coordinates_and_sensor_viewpoint() {
+        let mut m = [0.; 16];
+        m[0] = 1.;
+        m[5] = 1.;
+        m[10] = 1.;
+        m[15] = 1.;
+        m[12] = 1.;
+        let integer = b"VERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE I I I\nWIDTH 1\nHEIGHT 1\nPOINTS 1\nDATA ascii\n1 2 3\n";
+        let cloud = parse(integer, "pcd");
+        assert!(write_transformed(&cloud, &[0], Vec::new(), Some(&m), &mut |_, _| Ok(())).is_err());
+        let sensor = b"VERSION .7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\nWIDTH 1\nHEIGHT 1\nVIEWPOINT 2 0 0 1 0 0 0\nPOINTS 1\nDATA ascii\n1 2 3\n";
+        let cloud = parse(sensor, "pcd");
+        assert!(write_transformed(&cloud, &[0], Vec::new(), Some(&m), &mut |_, _| Ok(())).is_err());
+    }
+    #[test]
     fn organized_invalid_and_empty_clouds_roundtrip() {
         let input = b"VERSION .7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\nWIDTH 1\nHEIGHT 2\nVIEWPOINT 1 2 3 1 0 0 0\nPOINTS 2\nDATA ascii\nnan inf -inf\n1 2 3\n";
         let c = parse(input, "pcd");
