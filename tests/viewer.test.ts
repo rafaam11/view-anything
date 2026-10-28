@@ -38,11 +38,10 @@ vi.mock("../src/platform", () => ({
   },
 }));
 vi.mock("../src/md/mermaid", () => ({ renderMermaid: async () => {}, watchTheme: () => {} }));
-const editors = new Map<HTMLElement, { text: string }>();
 vi.mock("../src/md/editor", () => ({
   createEditor: async (host: HTMLElement, md: string) => {
-    const state = { text: md }; editors.set(host, state);
-    return { getMarkdown: () => state.text, destroy: () => editors.delete(host) };
+    host.dataset.testEditor = md;
+    return { getMarkdown: () => host.dataset.testEditor!, destroy: () => {} };
   },
 }));
 
@@ -117,7 +116,7 @@ test("leaving edit mode re-reads the file from disk before rendering", async () 
   v.toggle.click();
   await settle();
   expect(v.toggle.textContent).toBe("읽기");
-  editors.get(v.editorHost)!.text = "# edited but discarded\n"; // dirty -> confirm (mocked: discard)
+  v.editorHost.dataset.testEditor = "# edited but discarded\n"; // dirty -> confirm (mocked: discard)
   disk.set(path, enc("# changed by agent\n"));
   v.toggle.click();
   await settle();
@@ -131,7 +130,7 @@ test("missing original is not recreated and edited markdown can be saved as a co
   const v = await mount(path, "# old\n");
   v.toggle.click();
   await vi.waitFor(() => expect(v.toggle.textContent).toBe("읽기"));
-  editors.get(v.editorHost)!.text = "# new\n";
+  v.editorHost.dataset.testEditor = "# new\n";
   disk.delete(path);
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
   await settle();
