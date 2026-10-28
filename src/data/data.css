@@ -5,3 +5,6 @@
 .data-table { border-collapse: collapse; }
 .data-table td { border: 1px solid var(--va-border, #888); padding: .35rem .5rem; white-space: pre-wrap; vertical-align: top; }
 .data-table textarea { min-width: 8rem; width: 100%; box-sizing: border-box; resize: vertical; color: inherit; background: transparent; }
+.data-tree details { margin-left: 1rem; }
+.data-tree div { margin-left: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.data-source { box-sizing: border-box; width: 100%; min-height: 70vh; font: 14px monospace; color: inherit; background: transparent; }

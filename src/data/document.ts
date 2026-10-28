@@ -45,10 +45,10 @@ export class FileDocument {
     if (this.saving) throw new Error("저장이 이미 진행 중입니다");
     if (!this.dirty) return "unchanged";
     this.saving = true;
+    const snapshot = this.current.slice();
     try {
       const disk = await this.io.read();
       if (!equalBytes(this.known, disk)) return "conflict";
-      const snapshot = this.current.slice();
       await this.io.write(snapshot);
       this.known = snapshot;
       return "saved";

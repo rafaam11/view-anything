@@ -46,3 +46,16 @@ test("read and write errors retain the dirty state", async () => {
   await expect(doc.save()).rejects.toThrow("offline");
   expect(doc.dirty).toBe(true);
 });
+
+test("save snapshots edits before waiting for the disk read", async () => {
+  let finish!: (bytes: Uint8Array) => void;
+  let written = bytes("");
+  const doc = new FileDocument({ read: () => new Promise(resolve => { finish = resolve; }), write: async b => { written = b; } }, bytes("old"));
+  doc.edit(bytes("first"));
+  const saving = doc.save();
+  doc.edit(bytes("second"));
+  finish(bytes("old"));
+  expect(await saving).toBe("saved");
+  expect(written).toEqual(bytes("first"));
+  expect(doc.dirty).toBe(true);
+});

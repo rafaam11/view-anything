@@ -64,6 +64,11 @@
         "role": "Viewer"
       },
       {
+        "ext": ["json", "yaml", "yml"],
+        "name": "Data",
+        "role": "Viewer"
+      },
+      {
         "ext": [
           "md",
           "markdown"

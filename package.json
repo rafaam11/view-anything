@@ -24,6 +24,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "2.4.0",
     "@tauri-apps/plugin-updater": "2.14.0",
+    "diff": "^9.0.0",
     "highlight.js": "^11.12.0",
     "katex": "^0.19.1",
     "mermaid": "^12.2.0",
@@ -42,7 +43,8 @@
     "remark-rehype": "^11.1.2",
     "three": "0.186.1",
     "three-mesh-bvh": "0.9.16",
-    "unified": "^11.0.5"
+    "unified": "^11.0.5",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
