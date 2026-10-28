@@ -101,7 +101,7 @@ pub fn align(
         let svd = covariance.svd(true, true);
         if !svd.singular_values.iter().all(|v| v.is_finite())
             || svd.singular_values[1] <= svd.singular_values[0] * 1e-12
-            || svd.singular_values[0] <= f64::EPSILON
+            || svd.singular_values[0] <= f64::MIN_POSITIVE
         {
             return Err("대응점이 퇴화하여 회전을 결정할 수 없습니다".into());
         }
@@ -127,7 +127,9 @@ pub fn align(
             return Err("정합 계산 범위를 초과했습니다".into());
         }
         iterations = iteration + 1;
-        if (previous - rmse).abs() <= 1e-8 * (1. + previous.abs().min(1e100)) {
+        if previous.is_finite()
+            && (previous - rmse).abs() <= 1e-8 * previous.abs().max(max_distance)
+        {
             converged = true;
             break;
         }
@@ -212,5 +214,19 @@ mod tests {
         assert!(
             (r.matrix[4] + angle.sin()).abs() < 1e-8 && (r.matrix[5] - angle.cos()).abs() < 1e-8
         );
+    }
+    #[test]
+    fn supports_small_coordinate_scales_without_declaring_them_degenerate() {
+        let a = [
+            [0., 0., 0.],
+            [5e-9, 0., 0.],
+            [0., 7e-9, 0.],
+            [0., 0., 9e-9],
+            [4e-9, 3e-9, 8e-9],
+        ];
+        let b = a.map(|p| [p[0] + 1e-11, p[1] - 2e-11, p[2] + 3e-11]);
+        let r = align(&a, &b, 1e-10, 30, &mut |_, _| Ok(())).unwrap();
+        assert!(r.rmse < 1e-18);
+        assert!((r.matrix[12] - 1e-11).abs() < 1e-18);
     }
 }
