@@ -14,3 +14,11 @@ test("handles trailing empty fields and rejects malformed quoted fields", () => 
   expect(() => parseCsv('"unfinished')).toThrow();
   expect(() => parseCsv('"x"bad')).toThrow();
 });
+
+test("applies multiple changes without changing intervening tokens and rejects duplicate empty fields", () => {
+  const input = 'a,"b,b",c\r\nx,y,';
+  const rows = parseCsv(input);
+  expect(updateCsv(input, ",", [{ cell: rows[1][2], value: "last" }, { cell: rows[0][0], value: "A" }])).toBe('A,"b,b",c\r\nx,y,last');
+  expect(() => updateCsv(input, ",", [{ cell: rows[1][2], value: "one" }, { cell: rows[1][2], value: "two" }])).toThrow();
+  expect(() => updateCsv(input, "|", [])).toThrow();
+});

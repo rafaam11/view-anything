@@ -37,14 +37,15 @@ export function parseCsv(source: string, delimiter = ","): CsvRows {
   return rows;
 }
 
-/** Apply non-overlapping cell changes from right to left to retain untouched bytes. */
+/** Apply non-overlapping cell changes in one pass to retain untouched text. */
 export function updateCsv(source: string, delimiter: string, changes: { cell: CsvCell; value: string }[]): string {
-  const ordered = [...changes].sort((a, b) => b.cell.start - a.cell.start);
-  let result = source; let boundary = source.length + 1;
+  if (![",", "\t", ";"].includes(delimiter)) throw new Error("지원하지 않는 구분자입니다");
+  const ordered = [...changes].sort((a, b) => a.cell.start - b.cell.start);
+  const chunks: string[] = []; let boundary = 0; let previousStart = -1;
   for (const { cell, value } of ordered) {
-    if (cell.start < 0 || cell.end < cell.start || cell.end > source.length || cell.end > boundary) throw new Error("CSV 셀 범위 오류");
+    if (!Number.isInteger(cell.start) || !Number.isInteger(cell.end) || cell.start < boundary || cell.start === previousStart || cell.end < cell.start || cell.end > source.length) throw new Error("CSV 셀 범위 오류");
     const encoded = value.includes(delimiter) || /["\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-    result = result.slice(0, cell.start) + encoded + result.slice(cell.end); boundary = cell.start;
+    chunks.push(source.slice(boundary, cell.start), encoded); boundary = cell.end; previousStart = cell.start;
   }
-  return result;
+  chunks.push(source.slice(boundary)); return chunks.join("");
 }
