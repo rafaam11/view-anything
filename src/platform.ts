@@ -24,6 +24,9 @@ export const platform = {
     body.set(expected); body.set(data, expected.length);
     return invoke<boolean>("write_file_checked", body, { headers: { "x-va-path": encodeURIComponent(path), "x-va-expected-length": String(expected.length) } });
   },
+  async writeFileNew(path: string, data: Uint8Array): Promise<void> {
+    await invoke("write_file_new", data, { headers: { "x-va-path": encodeURIComponent(path) } });
+  },
   async writeImageCopy(path: string, source: string, data: Uint8Array): Promise<void> {
     await invoke("write_image_copy", data, { headers: { "x-va-path": encodeURIComponent(path), "x-va-source": encodeURIComponent(source) } });
   },

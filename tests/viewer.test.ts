@@ -17,6 +17,13 @@ vi.mock("../src/platform", () => ({
       return b;
     },
     writeFile: async (p: string, d: Uint8Array) => void disk.set(p, d),
+    writeFileChecked: async (p: string, expected: Uint8Array, d: Uint8Array) => {
+      const current = disk.get(p);
+      if (!current || String(current) !== String(expected)) return false;
+      disk.set(p, d); return true;
+    },
+    saveDialog: async () => "D:\\q\\recovery.md",
+    writeFileNew: async (p: string, d: Uint8Array) => { if (disk.has(p)) throw new Error("exists"); disk.set(p, d); },
     assetUrl: (a: string) => "asset://" + a,
     setWindowTitle: async () => {},
     confirm: vi.fn(async () => true),
@@ -116,4 +123,20 @@ test("leaving edit mode re-reads the file from disk before rendering", async () 
   await settle();
   expect(v.toggle.textContent).toBe("편집");
   expect(v.article.textContent).toContain("changed by agent");
+});
+
+test("missing original is not recreated and edited markdown can be saved as a copy", async () => {
+  const path = "D:\\q\\missing.md";
+  disk.delete("D:\\q\\recovery.md");
+  const v = await mount(path, "# old\n");
+  v.toggle.click(); await settle();
+  editorText = "# new\n";
+  disk.delete(path);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+  await settle();
+  expect(disk.has(path)).toBe(false);
+  const copy = [...v.el.querySelectorAll("button")].find(b => b.textContent === "다른 이름으로 저장")!;
+  copy.click(); await settle();
+  expect(new TextDecoder().decode(disk.get("D:\\q\\recovery.md"))).toContain("new");
+  expect(disk.has(path)).toBe(false);
 });

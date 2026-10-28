@@ -61,6 +61,45 @@ async fn write_file_checked(request: tauri::ipc::Request<'_>) -> Result<bool, St
         .await.map_err(|e| e.to_string())?
 }
 
+/// Save a new file without ever replacing an existing directory entry.
+fn write_new(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    static COPY_SEQ: AtomicUsize = AtomicUsize::new(0);
+    let name = path.file_name().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a file path"))?;
+    let (tmp, mut file) = loop {
+        let mut temp_name = std::ffi::OsString::from(".");
+        temp_name.push(name);
+        temp_name.push(format!(".va-copy-{}-{}", std::process::id(), COPY_SEQ.fetch_add(1, Ordering::Relaxed)));
+        let temp = path.with_file_name(temp_name);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&temp) {
+            Ok(file) => break (temp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    };
+    let result = (|| {
+        file.write_all(data)?;
+        file.sync_all()?;
+        drop(file);
+        // The link operation is atomic and fails if the target already exists. Filesystems
+        // without hard-link support fail safely, leaving both source and target untouched.
+        std::fs::hard_link(&tmp, path)
+    })();
+    let _ = std::fs::remove_file(tmp);
+    result
+}
+
+#[tauri::command]
+async fn write_file_new(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let path = decode_path_header(request.headers().get("x-va-path").map(|v| v.as_bytes()))?;
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(data) => data.to_vec(),
+        _ => return Err("raw bytes required".into()),
+    };
+    tauri::async_runtime::spawn_blocking(move || write_new(Path::new(&path), &data).map_err(|e| format!("{path}: {e}")))
+        .await.map_err(|e| e.to_string())?
+}
+
 /// Raw bytes for large files: a `Response` skips the JSON number-array encoding of `read_file`.
 /// Async so a big read runs off the main thread.
 #[tauri::command]
@@ -297,6 +336,7 @@ pub fn run() {
             read_file_raw,
             write_file_raw,
             write_file_checked,
+            write_file_new,
             write_image_copy,
             modifier_shift,
             path_exists,
@@ -320,6 +360,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_file_save_preserves_existing_target_and_removes_temporary_file() {
+        let dir = std::env::temp_dir().join(format!("va-new-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("copy.csv");
+        write_new(&target, b"first").unwrap();
+        assert!(write_new(&target, b"second").is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), b"first");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn checked_writes_from_two_windows_only_commit_once() {

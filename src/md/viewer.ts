@@ -9,12 +9,13 @@ import { classifyLink } from "./links";
 import { renderMermaid, watchTheme } from "./mermaid";
 import { buildToc } from "./toc";
 import { splitFrontmatter } from "./splice";
-import { beforeWrite, bytesEqual, createRunner, planSave, shouldConfirmLeave, shouldReloadOnFocus, type Mode } from "./viewer-state";
+import { bytesEqual, createRunner, planSave, shouldConfirmLeave, shouldReloadOnFocus, type Mode } from "./viewer-state";
+import { saveCopy } from "../data/save-copy";
 import type { Editor } from "./editor";
 
 const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
 const REWRITE_MESSAGE = "원문 보존 불가 — 전체 재작성으로 저장할까요?";
-const CONFLICT_MESSAGE = "다른 프로그램이 파일을 변경했습니다. 덮어쓸까요?";
+const CONFLICT_MESSAGE = "파일이 변경되었거나 읽을 수 없습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 읽기 모드에서 다시 여세요.";
 
 function dirOf(path: string): string {
   return path.replace(/[\\/][^\\/]*$/, "");
@@ -125,7 +126,9 @@ const viewer: Viewer = {
     toggle.className = "md-toggle";
     toggle.textContent = "편집";
     toggle.title = "편집 모드 (Ctrl+E)";
-    actions.append(toggle);
+    const copy = document.createElement("button");
+    copy.type = "button"; copy.className = "md-toggle"; copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
+    actions.append(toggle, copy);
     bar.append(title, actions);
     root.append(bar);
 
@@ -257,6 +260,7 @@ const viewer: Viewer = {
       baseline = editor.getMarkdown();
       discardApproved = false;
       mode = "edit";
+      copy.hidden = false;
       toggle.textContent = "읽기";
       toggle.title = "읽기 모드 (Ctrl+E)";
     };
@@ -272,6 +276,7 @@ const viewer: Viewer = {
       editorHost.hidden = true;
       body.hidden = false;
       mode = "read";
+      copy.hidden = true;
       setDirty(false);
       toggle.textContent = "편집";
       // adopt() above may have made the file read-only; keep its explanation.
@@ -291,15 +296,18 @@ const viewer: Viewer = {
         tasks.dropQueuedSave(); // a Ctrl+S queued behind the dialog would only ask the same again
         return;
       }
-      if (
-        beforeWrite(known, await readDisk()) === "confirm-overwrite" &&
-        !(await platform.confirmDanger(CONFLICT_MESSAGE, "덮어쓰기"))
-      ) {
+      const onDisk = await readDisk();
+      if (!onDisk || !bytesEqual(known, onDisk)) {
+        await platform.alert(CONFLICT_MESSAGE);
         tasks.dropQueuedSave();
-        return; // stays dirty: the edits are kept in the editor
+        return;
       }
       const bytes = encodeText(plan.text, meta);
-      await platform.writeFile(path, bytes);
+      if (!await platform.writeFileChecked(path, known, bytes)) {
+        await platform.alert(CONFLICT_MESSAGE);
+        tasks.dropQueuedSave();
+        return;
+      }
       known = bytes;
       original = plan.text;
       baseline = edited;
@@ -310,6 +318,13 @@ const viewer: Viewer = {
       if (mode !== "edit") return;
       tasks.save(save);
     };
+    copy.addEventListener("click", () => tasks.user(async () => {
+      if (!editor) return;
+      const plan = planSave(original, baseline, editor.getMarkdown());
+      if (plan.kind === "rewrite" && !(await platform.confirm(REWRITE_MESSAGE))) return;
+      const text = plan.kind === "unchanged" ? original : plan.text;
+      if (await saveCopy(path, encodeText(text, meta))) await platform.notice("복사본을 저장했습니다. 원본 편집 내용은 그대로 유지합니다.");
+    }));
     // Decided when it runs: a queued toggle acts on the mode and read-only state at that time.
     const toggleMode = () => {
       tasks.user(async () => {

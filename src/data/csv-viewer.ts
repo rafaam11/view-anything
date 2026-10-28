@@ -5,6 +5,7 @@ import type { Viewer } from "../registry";
 import { parseCsv, updateCsv, type CsvCell } from "./csv";
 import { decodeDataText, encodeDataText } from "./text";
 import { FileDocument } from "./document";
+import { saveCopy } from "./save-copy";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_CELLS = 100_000;
@@ -20,8 +21,10 @@ const viewer: Viewer = {
     const title = document.createElement("strong"); title.textContent = name;
     const edit = document.createElement("button"); edit.textContent = "편집";
     const save = document.createElement("button"); save.textContent = "저장"; save.hidden = true;
+    const copy = document.createElement("button"); copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
+    const reload = document.createElement("button"); reload.textContent = "다시 읽기"; reload.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status");
-    bar.append(title, edit, save, status);
+    bar.append(title, edit, save, copy, reload, status);
     const body = document.createElement("div"); body.className = "data-table-wrap";
     root.append(bar, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false;
@@ -69,7 +72,7 @@ const viewer: Viewer = {
         if (editing && !await confirmLeave()) return;
         if (editing && dirty()) { doc.reset(await read()); }
         else if (!editing) await doc.reload();
-        editing = !editing; edit.textContent = editing ? "읽기" : "편집"; save.hidden = !editing;
+        editing = !editing; edit.textContent = editing ? "읽기" : "편집"; save.hidden = copy.hidden = !editing; reload.hidden = true;
         render();
       } finally { busy = false; }
     })().catch(report); };
@@ -78,12 +81,25 @@ const viewer: Viewer = {
       busy = true; save.disabled = true;
       try {
         const result = await doc.save();
-        if (result === "conflict") await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다.");
+        if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
         else if (result === "saved") { status.textContent = "저장됨"; if (!dirty()) render(); }
         refresh();
-      } finally { busy = false; save.disabled = false; }
+      } catch (error) { reload.hidden = false; throw error; }
+      finally { busy = false; save.disabled = false; }
     };
     save.onclick = () => { void doSave().catch(report); };
+    copy.onclick = () => { void (async () => {
+      if (!editing || busy || invalid) return; busy = true;
+      try { if (await saveCopy(path, doc.bytes)) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
+      finally { busy = false; }
+    })().catch(report); };
+    reload.onclick = () => { void (async () => {
+      if (!editing || busy) return; busy = true;
+      try {
+        if (dirty() && !await platform.confirmDiscard("편집 내용을 버리고 파일을 다시 읽을까요?")) return;
+        doc.reset(await read()); render(); reload.hidden = true;
+      } finally { busy = false; }
+    })().catch(report); };
     window.addEventListener("keydown", e => {
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); if (!e.repeat) void doSave().catch(report); }
       else if (editing && (e.key === "F5" || e.key === "BrowserBack" || e.key === "BrowserForward" || e.key === "BrowserRefresh" || (e.ctrlKey && e.key.toLowerCase() === "r") || (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")))) {

@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { expect, test, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ disk: new Uint8Array(), close: async () => true, alerts: [] as string[] }));
+const state = vi.hoisted(() => ({ disk: new Uint8Array(), copy: new Uint8Array(), close: async () => true, alerts: [] as string[] }));
 vi.mock("../src/platform", () => ({ platform: {
   fileSize: async () => state.disk.length,
   readFileRaw: async () => state.disk.slice().buffer,
   writeFileChecked: async (_path: string, expected: Uint8Array, bytes: Uint8Array) => { if (String(state.disk) !== String(expected)) return false; state.disk = bytes.slice(); return true; },
+  saveDialog: async () => "copy.csv", writeFileNew: async (_path: string, bytes: Uint8Array) => { state.copy = bytes.slice(); },
   setWindowTitle: async () => {},
   onCloseRequested: async (fn: () => Promise<boolean>) => { state.close = fn; },
   confirmDiscard: async () => false,
@@ -34,5 +35,8 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
   expect(state.disk).toEqual(encode("external\n"));
   expect(edited.value).toBe("local");
   expect(state.alerts).toHaveLength(1);
+  buttons[2].click(); await settle();
+  expect(state.copy).toEqual(encode('\ufeff"name",value\r\nlocal,1\n'));
+  expect(state.disk).toEqual(encode("external\n"));
   expect(await state.close()).toBe(false);
 });
