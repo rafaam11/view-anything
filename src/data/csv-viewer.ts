@@ -2,13 +2,14 @@ import "./data.css";
 import { platform } from "../platform";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
-import { parseCsv, updateCsv, type CsvCell } from "./csv";
+import { parseCsv, updateCsv, type CsvCell, type CsvRows } from "./csv";
 import { decodeDataText, encodeDataText } from "./text";
 import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_CELLS = 100_000;
+const PAGE_ROWS = 100;
 
 const viewer: Viewer = {
   async mount(el, path) {
@@ -26,31 +27,32 @@ const viewer: Viewer = {
     const status = document.createElement("span"); status.setAttribute("role", "status");
     bar.append(title, edit, save, copy, reload, status);
     const body = document.createElement("div"); body.className = "data-table-wrap";
-    root.append(bar, body); el.replaceChildren(root);
+    const pages = document.createElement("nav"); pages.setAttribute("aria-label", "CSV 페이지");
+    const previous = document.createElement("button"); previous.textContent = "이전 페이지";
+    const next = document.createElement("button"); next.textContent = "다음 페이지";
+    const pageLabel = document.createElement("span"); pages.append(previous, pageLabel, next);
+    root.append(bar, pages, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false;
     let source = "", meta = decodeDataText(doc.bytes), changes = new Map<CsvCell, string>();
-    const dirty = () => doc.dirty || invalid;
+    let rows: CsvRows = [], page = 0, editRevision = 0;
+    const dirty = () => doc.dirty || changes.size > 0 || invalid;
     const refresh = () => {
       title.textContent = (dirty() ? "● " : "") + name;
       void platform.setWindowTitle(title.textContent).catch(() => {});
     };
-    const render = () => {
-      meta = decodeDataText(doc.bytes); source = meta.text; changes = new Map(); invalid = false;
-      const rows = parseCsv(source, ",", MAX_CELLS);
+    const editBytes = () => encodeDataText({ ...meta, text: updateCsv(source, ",", [...changes].map(([cell, value]) => ({ cell, value }))) });
+    const showPage = () => {
       const table = document.createElement("table"); table.className = "data-table";
-      for (const row of rows) {
+      for (const row of rows.slice(page * PAGE_ROWS, (page + 1) * PAGE_ROWS)) {
         const tr = document.createElement("tr");
         for (const cell of row) {
           const td = document.createElement("td");
           if (editing) {
-            const input = document.createElement("textarea"); input.value = cell.value; input.rows = 1;
+            const input = document.createElement("textarea"); input.value = changes.get(cell) ?? cell.value; input.rows = 1;
             input.setAttribute("aria-label", "CSV 셀");
             input.addEventListener("input", () => {
               if (input.value === cell.value) changes.delete(cell); else changes.set(cell, input.value);
-              try {
-                const text = updateCsv(source, ",", [...changes].map(([cell, value]) => ({ cell, value })));
-                doc.edit(encodeDataText({ ...meta, text })); invalid = false; status.textContent = ""; refresh();
-              } catch (error) { invalid = true; status.textContent = String(error); refresh(); }
+              editRevision++; invalid = false; status.textContent = ""; refresh();
             });
             td.append(input);
           } else td.textContent = cell.value;
@@ -59,7 +61,16 @@ const viewer: Viewer = {
         table.append(tr);
       }
       body.replaceChildren(table); refresh();
+      const count = Math.max(1, Math.ceil(rows.length / PAGE_ROWS));
+      pageLabel.textContent = ` ${page + 1} / ${count} `;
+      previous.disabled = page === 0; next.disabled = page + 1 >= count;
     };
+    const render = () => {
+      meta = decodeDataText(doc.bytes); source = meta.text; changes = new Map(); invalid = false;
+      rows = parseCsv(source, ",", MAX_CELLS); page = 0; showPage();
+    };
+    previous.onclick = () => { if (page > 0) { page--; showPage(); } };
+    next.onclick = () => { if ((page + 1) * PAGE_ROWS < rows.length) { page++; showPage(); } };
     const report = (error: unknown) => { void platform.alert(String(error)).catch(() => {}); };
     const confirmLeave = async () => {
       if (approved || !dirty()) return true;
@@ -80,9 +91,15 @@ const viewer: Viewer = {
       if (!editing || busy || invalid) return;
       busy = true; save.disabled = true;
       try {
+        const revision = editRevision;
+        doc.edit(editBytes());
         const result = await doc.save();
         if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
-        else if (result === "saved") { status.textContent = "저장됨"; if (!dirty()) render(); }
+        else if (result === "saved" || result === "unchanged") {
+          status.textContent = "저장됨";
+          if (editRevision === revision) render();
+          else doc.edit(editBytes());
+        }
         refresh();
       } catch (error) { reload.hidden = false; throw error; }
       finally { busy = false; save.disabled = false; }
@@ -90,7 +107,7 @@ const viewer: Viewer = {
     save.onclick = () => { void doSave().catch(report); };
     copy.onclick = () => { void (async () => {
       if (!editing || busy || invalid) return; busy = true;
-      try { if (await saveCopy(path, doc.bytes)) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
+      try { if (await saveCopy(path, editBytes())) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
       finally { busy = false; }
     })().catch(report); };
     reload.onclick = () => { void (async () => {

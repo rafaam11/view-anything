@@ -40,3 +40,18 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
   expect(state.disk).toEqual(encode("external\n"));
   expect(await state.close()).toBe(false);
 });
+
+test("edits survive page navigation and save together", async () => {
+  state.disk = encode(Array.from({ length: 101 }, (_, i) => `row${i},value`).join("\r\n"));
+  const root = document.createElement("div"); await viewer.mount(root, "pages.csv");
+  const buttons = root.querySelectorAll("button"); buttons[0].click(); await settle();
+  expect(root.querySelectorAll("textarea")).toHaveLength(200);
+  const first = root.querySelectorAll("textarea")[0]; first.value = "first"; first.dispatchEvent(new Event("input"));
+  buttons[5].click();
+  expect(root.querySelectorAll("textarea")).toHaveLength(2);
+  const last = root.querySelectorAll("textarea")[0]; last.value = "last"; last.dispatchEvent(new Event("input"));
+  buttons[1].click(); await settle();
+  const text = new TextDecoder().decode(state.disk);
+  expect(text.startsWith("first,value\r\n")).toBe(true);
+  expect(text.endsWith("last,value")).toBe(true);
+});
