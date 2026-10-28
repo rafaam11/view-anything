@@ -3,9 +3,9 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { Group, Matrix4, PerspectiveCamera } from "three";
 import type { CloudMeta } from "../src/three/cloud/types";
 import type { CloudHost } from "../src/three/cloud/controller";
-const mocks = vi.hoisted(() => ({ request: vi.fn(), build: vi.fn(), close: vi.fn(), confirm: vi.fn(), closeGuard: null as null | (() => Promise<boolean>), save: vi.fn(), exists: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), register: vi.fn(), build: vi.fn(), close: vi.fn(), confirm: vi.fn(), closeGuard: null as null | (() => Promise<boolean>), save: vi.fn(), exists: vi.fn() }));
 vi.mock("../src/three/cloud/client", () => ({
-  CloudClient: class { job = null; request = mocks.request; close = mocks.close; cancel = vi.fn(); }, buildCloud: mocks.build,
+  CloudClient: class { job = null; request = mocks.request; register = mocks.register; close = mocks.close; cancel = vi.fn(); }, buildCloud: mocks.build,
 }));
 vi.mock("../src/platform", () => ({ platform: {
   onCloseRequested: async (fn: () => Promise<boolean>) => { mocks.closeGuard = fn; }, confirmDiscard: mocks.confirm,
@@ -25,6 +25,22 @@ async function setup() { const h = host(); const c = new CloudController(h, docu
 function click(text: string) { const b = [...document.querySelectorAll("button")].find((b) => b.textContent === text)!; b.click(); }
 test("cloud panels open without changing the original and clean close needs no prompt", async () => {
   const { c } = await setup(); expect(c.root.hidden).toBe(false); expect(c.dirty()).toBe(false); expect(await mocks.closeGuard!()).toBe(true); expect(mocks.confirm).not.toHaveBeenCalled();
+});
+test("registration preview is protected and applied alignment is sent to save", async () => {
+  const h = host(), groups = new Map([["f1", new Group()], ["f2", new Group()]]);
+  h.file = (id) => ({ id, name: id, sourceFrame: "as-is", sourceUnit: "as-is" } as ReturnType<CloudHost["file"]>);
+  h.built = (id) => ({ group: groups.get(id)!, nodes: new Map(), renderables: [], triangles: 0 });
+  h.stage.setObjectFrame = (group) => { group.matrixAutoUpdate = false; group.matrix.fromArray(group.userData.vaBase); group.updateMatrixWorld(true); };
+  const c = new CloudController(h, document.body);
+  await c.open("f1", "a.pcd", new AbortController().signal);
+  mocks.request.mockResolvedValueOnce({ ...meta, id: "c1" }); await c.open("f2", "b.pcd", new AbortController().signal);
+  const choice = c.root.querySelector<HTMLSelectElement>('[aria-label="처리할 클라우드"]')!; choice.value = "f1"; choice.dispatchEvent(new Event("change"));
+  mocks.register.mockResolvedValue({ matrix: new Matrix4().makeTranslation(1, 2, 3).toArray(), pairs: 2, rmse: 0, iterations: 2 });
+  click("정합 미리보기"); await vi.waitFor(() => expect(c.hasRegistrationPreview()).toBe(true));
+  expect(c.dirty()).toBe(true); expect(c.lockExport()).toBe(false); expect(await c.canRemove("f1")).toBe(false);
+  click("정합 적용"); expect(c.hasRegistrationPreview()).toBe(false); expect(c.dirty()).toBe(true);
+  mocks.save.mockResolvedValue("copy.pcd"); mocks.exists.mockResolvedValue(false); mocks.request.mockResolvedValue({ ...meta });
+  click("다른 이름으로 저장…"); await vi.waitFor(() => expect(mocks.request).toHaveBeenLastCalledWith(expect.objectContaining({ type: "save", matrix: new Matrix4().makeTranslation(1,2,3).toArray() }), expect.anything(), expect.any(Function)));
 });
 test("preview is protected on close/update and only explicit apply makes it the working copy", async () => {
   const { c, h } = await setup(); mocks.request.mockResolvedValue({ ...meta, revision: 1, preview: true, count: 1 });

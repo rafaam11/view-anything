@@ -159,7 +159,11 @@ pub fn read<R: Read + Seek + Send + Sync + 'static>(
         return Err("점 개수 한도를 초과합니다".into());
     }
     let per_point = std::mem::size_of::<las::Point>()
-        .checked_add(header.point_format().extra_bytes as usize)
+        .checked_add(
+            (header.point_format().extra_bytes as usize)
+                .checked_mul(2)
+                .ok_or("메모리 한도 오류")?,
+        )
         .and_then(|n| n.checked_add(320))
         .ok_or("메모리 한도 오류")?;
     let estimated = count.checked_mul(per_point).ok_or("메모리 한도 오류")?;

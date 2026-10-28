@@ -337,7 +337,7 @@ export class ThreeViewer {
       this.banner.show("내보낼 표시 중인 모델이 없습니다.");
       return;
     }
-    if (this.clouds && !this.clouds.lockExport()) { this.banner.show("포인트클라우드 화면을 복구한 뒤 내보내세요."); return; }
+    if (this.clouds && !this.clouds.lockExport()) { this.banner.show("포인트클라우드 미리보기를 적용·취소하거나 화면을 복구한 뒤 내보내세요."); return; }
     this.exporting = true;
     try {
       if (this.clouds?.entries.size) {
