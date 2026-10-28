@@ -10,9 +10,9 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MD_VIEWER = "src/md/viewer.ts";
-const FORBIDDEN = /three|occt|plugin-updater|plugin-process/i;
+const FORBIDDEN = /three|occt|pdfjs|plugin-updater|plugin-process/i;
 // `window.__THREE__ = REVISION` (three.core.js) and emscripten's default wasm file name.
-const CODE_MARKERS = /__THREE__|occt-import-js\.wasm|plugin:updater\||plugin:process\|/;
+const CODE_MARKERS = /__THREE__|occt-import-js\.wasm|pdfjsLib|pdfjsWorker|plugin:updater\||plugin:process\|/;
 
 function label(key, chunk) {
   return `${key} (${chunk?.file ?? "?"})`;

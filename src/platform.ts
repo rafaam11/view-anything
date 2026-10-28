@@ -52,7 +52,7 @@ export const platform = {
       directory: false,
       filters: opts.only3d
         ? [models]
-        : [{ name: "Markdown", extensions: ["md", "markdown"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
+        : [{ name: "Markdown", extensions: ["md", "markdown"] }, { name: "PDF", extensions: ["pdf"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
     });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];

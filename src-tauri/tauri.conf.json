@@ -59,6 +59,11 @@
     ],
     "fileAssociations": [
       {
+        "ext": ["pdf"],
+        "name": "PDF",
+        "role": "Viewer"
+      },
+      {
         "ext": ["csv"],
         "name": "CSV",
         "role": "Viewer"
