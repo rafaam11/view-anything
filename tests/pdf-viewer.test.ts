@@ -1,6 +1,6 @@
 ﻿// @vitest-environment happy-dom
 import { beforeEach, expect, test, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ mode: 'ok', size: 10, destroy: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mode: 'ok', size: 10, text1: 'alpha', destroy: vi.fn() }));
 vi.mock('../src/platform', () => ({ platform: { fileSize: async () => mocks.size, readFileRaw: async () => new ArrayBuffer(10) } }));
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/worker.mjs' }));
 vi.mock('pdfjs-dist', () => ({
@@ -21,7 +21,7 @@ vi.mock('pdfjs-dist', () => ({
   })() : ({
     promise: mocks.mode === 'ok' ? Promise.resolve({
       numPages: 2,
-      getPage: async (n: number) => ({ getViewport: () => ({ width: 100, height: 100 }), render: () => ({ promise: Promise.resolve(), cancel() {} }), getTextContent: async () => ({ items: [{ str: n === 1 ? 'alpha' : 'needle' }] }) }),
+      getPage: async (n: number) => ({ getViewport: () => ({ width: 100, height: 100 }), render: () => ({ promise: Promise.resolve(), cancel() {} }), getTextContent: async () => ({ items: [{ str: n === 1 ? mocks.text1 : 'needle' }] }) }),
       getOutline: async () => [{ title: 'Second', dest: [1], items: [] }],
     }) : Promise.reject(Object.assign(new Error('invalid'), { name: mocks.mode === 'password' ? 'PasswordException' : 'InvalidPDFException' })),
     destroy: mocks.destroy,
@@ -29,7 +29,7 @@ vi.mock('pdfjs-dist', () => ({
 }));
 import viewer from '../src/pdf/viewer';
 const find = (root: HTMLElement, label: string) => [...root.querySelectorAll('button')].find(b => b.textContent === label)!;
-beforeEach(() => { mocks.mode = 'ok'; mocks.size = 10; mocks.destroy.mockClear(); vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D); });
+beforeEach(() => { mocks.mode = 'ok'; mocks.size = 10; mocks.text1 = 'alpha'; mocks.destroy.mockClear(); vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D); });
 test('navigates, searches text and follows outline destinations', async () => {
   const root = document.createElement('div'); await viewer.mount(root, 'test.pdf');
   const page = root.querySelector<HTMLInputElement>('input[type=number]')!;
@@ -47,6 +47,11 @@ test('rejects oversized, encrypted and damaged PDFs', async () => {
   mocks.size = 10; mocks.mode = 'password'; await expect(viewer.mount(root, 'locked.pdf')).rejects.toThrow('암호');
   mocks.mode = 'broken'; await expect(viewer.mount(root, 'broken.pdf')).rejects.toThrow('PDF를 읽을 수 없습니다');
   expect(mocks.destroy).toHaveBeenCalledTimes(2);
+});
+test('search highlights literal punctuation at correct offsets after Unicode text', async () => {
+  mocks.text1 = 'İ before [x]'; const root = document.createElement('div'); await viewer.mount(root, 'test.pdf');
+  root.querySelector<HTMLInputElement>('input[type=search]')!.value = '[x]'; find(root, '다음 결과').click();
+  await vi.waitFor(() => expect(root.querySelector('.textLayer mark')?.textContent).toBe('[x]'));
 });
 test('password prompt permits retry and cancellation without retaining the password', async () => {
   mocks.mode = 'challenge'; const root = document.createElement('div'); document.body.append(root);

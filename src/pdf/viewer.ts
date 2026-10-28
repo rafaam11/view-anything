@@ -8,6 +8,15 @@ GlobalWorkerOptions.workerSrc = workerUrl;
 const MAX_BYTES = 100 * 1024 * 1024;
 const MAX_PIXELS = 20_000_000;
 
+/** Literal, case-insensitive matches retain UTF-16 offsets even when case folding changes length. */
+function matchRanges(text: string, query: string): Array<[number, number]> {
+  if (!query) return [];
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
+  const ranges: Array<[number, number]> = [];
+  for (const match of text.matchAll(pattern)) { ranges.push([match.index!, match.index! + match[0].length]); if (ranges.length >= 10000) break; }
+  return ranges;
+}
+
 type OutlineItem = { title: string; dest: string | unknown[] | null; items: OutlineItem[] };
 const button = (label: string) => { const b = document.createElement('button'); b.textContent = label; return b; };
 
@@ -60,10 +69,9 @@ const viewer: Viewer = {
     let pageText: string[] = [], separators: string[] = [];
     const markMatches = () => {
       if (!textLayer) return;
-      const query = searchInput.value.trim().toLocaleLowerCase();
-      const divs = textLayer.textDivs, joined = pageText.map((s, i) => s + (separators[i] ?? '')).join('').toLocaleLowerCase();
-      const ranges: Array<[number, number]> = [];
-      if (query) for (let pos = joined.indexOf(query); pos >= 0 && ranges.length < 10000; pos = joined.indexOf(query, pos + Math.max(1, query.length))) ranges.push([pos, pos + query.length]);
+      const query = searchInput.value.trim();
+      const divs = textLayer.textDivs, joined = pageText.map((s, i) => s + (separators[i] ?? '')).join('');
+      const ranges = matchRanges(joined, query);
       let offset = 0, first = 0, selected: HTMLElement | null = null;
       for (let i = 0; i < divs.length; i++) {
         const div = divs[i], text = pageText[i] ?? ''; div.replaceChildren();
@@ -113,7 +121,7 @@ const viewer: Viewer = {
     zoomOut.onclick = () => { scale = Math.max(0.25, Math.round((scale - 0.25) * 100) / 100); void render(); };
     zoomIn.onclick = () => { scale = Math.min(3, Math.round((scale + 0.25) * 100) / 100); void render(); };
     const find = async (direction: 1 | -1) => {
-      const query = searchInput.value.trim().toLocaleLowerCase(), id = ++searchGeneration;
+      const query = searchInput.value.trim(), id = ++searchGeneration;
       if (!query) { status.textContent = '검색어를 입력하세요.'; return; }
       status.textContent = '검색 중…';
       try {
@@ -122,8 +130,8 @@ const viewer: Viewer = {
           const n = ((start - 1 + direction * offset) % doc.numPages + doc.numPages) % doc.numPages + 1;
           const page = await doc.getPage(n); const text = await page.getTextContent();
           if (id !== searchGeneration) return;
-          const value = text.items.map(item => 'str' in item ? item.str + (item.hasEOL ? ' ' : '') : '').join('').toLocaleLowerCase();
-          const matches: number[] = []; for (let pos = value.indexOf(query); pos >= 0 && matches.length < 10000; pos = value.indexOf(query, pos + Math.max(1, query.length))) matches.push(pos);
+          const value = text.items.map(item => 'str' in item ? item.str + (item.hasEOL ? ' ' : '') : '').join('');
+          const matches = matchRanges(value, query);
           const current = query === lastQuery && n === lastFoundPage && offset === 0 ? lastFoundIndex : direction > 0 ? -1 : matches.length;
           const index = current + direction;
           if (index >= 0 && index < matches.length) { lastQuery = query; lastFoundPage = n; lastFoundIndex = index; status.textContent = `${n}페이지 ${index + 1}/${matches.length}`; if (n !== pageNumber) go(n); else markMatches(); return; }
