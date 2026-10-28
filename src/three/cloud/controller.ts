@@ -11,7 +11,8 @@ import { CloudClient, buildCloud } from "./client";
 import { editedPath, type Action, type CloudDisplay, type CloudMeta, type Operation, type Region } from "./types";
 import { pickCloud } from "./pick";
 
-interface Entry { meta: CloudMeta; path: string; display: CloudDisplay; size: number; alignment: Matrix4; savedAlignment: Matrix4; stale?: boolean }
+type History = { kind: "filter" } | { kind: "alignment"; before: Matrix4; after: Matrix4 };
+interface Entry { meta: CloudMeta; path: string; display: CloudDisplay; size: number; alignment: Matrix4; savedAlignment: Matrix4; undo: History[]; redo: History[]; stale?: boolean }
 export interface CloudHost {
   stage: Stage; tools: ViewTools;
   file(id: string): SceneFile | undefined;
@@ -94,7 +95,7 @@ export class CloudController {
     const radius = this.number("반경 (원본 단위)", "", .000000001), min = this.number("최소 이웃 수 (자신 제외)", "5", 1);
     this.editBody.append(this.button("반경 필터 미리보기", () => void this.filter({ type: "radius", radius: radius.valueAsNumber, min: min.valueAsNumber })));
     this.applyButton = this.button("결과 적용", () => void this.act({ type: "apply" })); this.rejectButton = this.button("미리보기 취소", () => void this.act({ type: "discardPreview" }));
-    this.undoButton = this.button("실행 취소", () => void this.act({ type: "undo" })); this.redoButton = this.button("다시 실행", () => void this.act({ type: "redo" }));
+    this.undoButton = this.button("실행 취소", () => void this.history("undo")); this.redoButton = this.button("다시 실행", () => void this.history("redo"));
     this.saveButton = this.button("다른 이름으로 저장…", () => void this.save());
     this.editBody.append(this.applyButton, this.rejectButton, this.undoButton, this.redoButton, this.saveButton);
     this.targetChoice.setAttribute("aria-label", "정합 기준 클라우드"); this.label("정합 기준", this.targetChoice);
@@ -110,8 +111,8 @@ export class CloudController {
       if (e.key === "Escape" && this.mode !== "none") { e.preventDefault(); e.stopImmediatePropagation(); this.stopSelection(); }
       if ((e.target as HTMLElement)?.closest("input,select,textarea,[contenteditable]")) return;
       if (e.ctrlKey && e.code === "KeyS") { e.preventDefault(); void this.save(); }
-      if (e.ctrlKey && e.code === "KeyZ") { e.preventDefault(); void this.act({ type: e.shiftKey ? "redo" : "undo" }); }
-      if (e.ctrlKey && e.code === "KeyY") { e.preventDefault(); void this.act({ type: "redo" }); }
+      if (e.ctrlKey && e.code === "KeyZ") { e.preventDefault(); void this.history(e.shiftKey ? "redo" : "undo"); }
+      if (e.ctrlKey && e.code === "KeyY") { e.preventDefault(); void this.history("redo"); }
     }, true);
     host.stage.onCameraChange(() => { if (this.mode === "polygon") this.stopSelection(); });
     window.addEventListener("resize", () => { if (this.mode === "polygon") this.stopSelection(); });
@@ -146,7 +147,7 @@ export class CloudController {
       signal.throwIfAborted();
       if (this.cancelled) throw new DOMException("작업을 취소했습니다", "AbortError");
       this.buildAbort = new AbortController();
-      const e: Entry = { meta, path, display: { mode: meta.hasRgb ? "rgb" : "solid", color: [180, 188, 198], height: [0, 0, 1, 0], range: [0, 1] }, size: 2, alignment: new Matrix4(), savedAlignment: new Matrix4() };
+      const e: Entry = { meta, path, display: { mode: meta.hasRgb ? "rgb" : "solid", color: [180, 188, 198], height: [0, 0, 1, 0], range: [0, 1] }, size: 2, alignment: new Matrix4(), savedAlignment: new Matrix4(), undo: [], redo: [] };
       const built = await buildCloud(meta, id, e.display, 2, this.buildAbort.signal);
       if (signal.aborted || this.cancelled) { disposeObject(built.group); throw new DOMException("작업을 취소했습니다", "AbortError"); }
       this.entries.set(id, e); this.selected = id;
@@ -171,10 +172,11 @@ export class CloudController {
     this.registrationButton.disabled = !!this.registrationPreview || this.entries.size < 2;
     this.acceptRegistration.disabled = this.rejectRegistration.disabled = !this.registrationPreview;
     const e = this.entry(); if (!e) return;
+    this.registrationButton.disabled ||= !e.meta.editable || e.meta.preview;
     this.color.value = e.display.mode; this.size.value = String(e.size); this.rangeMin.value = String(e.display.range[0]); this.rangeMax.value = String(e.display.range[1]);
     for (const o of this.color.options) o.disabled = (o.value === "rgb" && !e.meta.hasRgb) || (o.value === "intensity" && !e.meta.hasIntensity);
     this.summary.textContent = `${(e.meta.count - e.meta.invalid).toLocaleString()}점 · 선택 ${e.meta.selected.toLocaleString()} · ${e.meta.preview || this.registrationPreview ? "미리보기" : e.meta.dirty || !e.alignment.equals(e.savedAlignment) ? "미저장 작업본" : "저장됨"}`;
-    this.editBody.disabled = !e.meta.editable || !!this.registrationPreview; this.undoButton.disabled = !e.meta.canUndo; this.redoButton.disabled = !e.meta.canRedo;
+    this.editBody.disabled = !e.meta.editable || !!this.registrationPreview; this.undoButton.disabled = !e.undo.length || e.meta.preview; this.redoButton.disabled = !e.redo.length || e.meta.preview;
     this.applyButton.disabled = this.rejectButton.disabled = !e.meta.preview; this.saveButton.disabled = e.meta.preview;
   }
   private async rebuild(id: string, e: Entry): Promise<void> {
@@ -206,10 +208,30 @@ export class CloudController {
       const meta = await this.client.request(action, e.meta, (t) => this.status.textContent = t);
       if (!meta) throw new Error("세션 응답 누락"); e.meta = meta;
       this.committed = true;
+      if (action.type === "apply") this.recordHistory(e, { kind: "filter" });
       if (action.type !== "save") await this.rebuild(id, e); else e.savedAlignment.copy(e.alignment);
       this.status.textContent = action.type === "save" ? "저장 완료" : "완료";
     } catch (error) { this.status.textContent = String(error); this.host.notice(String(error)); }
     finally { this.busy = false; this.committed = false; this.buildAbort = null; this.sync(); }
+  }
+  private recordHistory(e: Entry, item: History): void { e.undo.push(item); if (e.undo.length > 20) e.undo.shift(); e.redo = []; }
+  private async history(direction: "undo" | "redo"): Promise<void> {
+    const id = this.selected, e = this.entry(); if (!id || !e || this.isBusy() || e.stale || e.meta.preview || this.registrationPreview) return;
+    const from = direction === "undo" ? e.undo : e.redo, to = direction === "undo" ? e.redo : e.undo, item = from[from.length - 1]; if (!item) return;
+    this.stopSelection(); this.busy = true; this.cancelled = false; this.sync();
+    try {
+      if (item.kind === "filter") {
+        const meta = await this.client.request({ type: direction }, e.meta, (t) => this.status.textContent = t);
+        if (!meta) throw new Error("세션 응답 누락"); e.meta = meta; this.committed = true;
+        from.pop(); to.push(item); await this.rebuild(id, e);
+      } else {
+        const matrix = direction === "undo" ? item.before : item.after;
+        this.setAlignment(id, matrix); e.alignment.copy(matrix); from.pop(); to.push(item);
+      }
+      this.status.textContent = direction === "undo" ? "실행 취소 완료" : "다시 실행 완료";
+    } catch (error) { this.status.textContent = String(error); this.host.notice(String(error)); }
+    finally { this.busy = false; this.committed = false; this.buildAbort = null; this.sync(); }
+    if (item.kind === "alignment" && e.display.mode === "height") await this.framesChanged(id);
   }
   private async filter(operation: Operation) { await this.act({ type: "filter", operation }); }
   private async save() {
@@ -238,7 +260,7 @@ export class CloudController {
   }
   private async register(): Promise<void> {
     const id = this.selected, source = this.entry(), targetId = this.targetChoice.value, target = this.entries.get(targetId);
-    if (!id || !source || !target || id === targetId || this.isBusy() || this.registrationPreview || source.stale || target.stale || source.meta.preview || target.meta.preview) return;
+    if (!id || !source || !target || id === targetId || this.isBusy() || this.registrationPreview || !source.meta.editable || source.stale || target.stale || source.meta.preview || target.meta.preview) return;
     const sourceWorld = this.sourceToWorld(id), targetWorld = this.sourceToWorld(targetId), distance = this.registrationDistance.valueAsNumber;
     if (!sourceWorld || !targetWorld || !Number.isFinite(distance) || distance <= 0) { this.host.notice("대응 거리를 확인하세요"); return; }
     const base = sourceWorld.clone().multiply(source.alignment.clone().invert());
@@ -259,7 +281,7 @@ export class CloudController {
     const preview = this.registrationPreview; if (!preview || this.isBusy()) return;
     const entry = this.entries.get(preview.id); if (!entry) return;
     try {
-      if (accept) entry.alignment.copy(preview.after); else this.setAlignment(preview.id, preview.before);
+      if (accept) { entry.alignment.copy(preview.after); this.recordHistory(entry, { kind: "alignment", before: preview.before.clone(), after: preview.after.clone() }); } else this.setAlignment(preview.id, preview.before);
       this.registrationPreview = null; this.status.textContent = accept ? "정합을 적용했습니다. 다른 이름으로 저장하세요." : "정합을 취소했습니다.";
       if (accept && entry.display.mode === "height") void this.framesChanged(preview.id);
     } catch (error) { this.host.notice(String(error)); }

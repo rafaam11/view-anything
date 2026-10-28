@@ -39,6 +39,16 @@ test("registration preview is protected and applied alignment is sent to save", 
   click("정합 미리보기"); await vi.waitFor(() => expect(c.hasRegistrationPreview()).toBe(true));
   expect(c.dirty()).toBe(true); expect(c.lockExport()).toBe(false); expect(await c.canRemove("f1")).toBe(false);
   click("정합 적용"); expect(c.hasRegistrationPreview()).toBe(false); expect(c.dirty()).toBe(true);
+  mocks.request.mockResolvedValueOnce({ ...meta, revision: 1, preview: true });
+  click("선택 부분 남기기"); await vi.waitFor(() => expect(c.entries.get("f1")!.meta.preview).toBe(true)); await vi.waitFor(() => expect(c.isBusy()).toBe(false));
+  mocks.request.mockResolvedValueOnce({ ...meta, revision: 2, dirty: true, canUndo: true });
+  click("결과 적용"); await vi.waitFor(() => expect(c.entries.get("f1")!.undo.length).toBe(2)); await vi.waitFor(() => expect(c.isBusy()).toBe(false));
+  mocks.request.mockResolvedValueOnce({ ...meta, revision: 3, canRedo: true });
+  click("실행 취소"); await vi.waitFor(() => expect(c.entries.get("f1")!.undo.length).toBe(1)); await vi.waitFor(() => expect(c.isBusy()).toBe(false));
+  click("실행 취소"); await vi.waitFor(() => expect(c.entries.get("f1")!.alignment.equals(new Matrix4())).toBe(true)); expect(c.dirty()).toBe(false);
+  click("다시 실행"); await vi.waitFor(() => expect(c.entries.get("f1")!.alignment.elements[12]).toBe(1));
+  mocks.request.mockResolvedValueOnce({ ...meta, revision: 4, dirty: true, canUndo: true });
+  click("다시 실행"); await vi.waitFor(() => expect(c.entries.get("f1")!.meta.revision).toBe(4)); await vi.waitFor(() => expect(c.isBusy()).toBe(false));
   mocks.save.mockResolvedValue("copy.pcd"); mocks.exists.mockResolvedValue(false); mocks.request.mockResolvedValue({ ...meta });
   click("다른 이름으로 저장…"); await vi.waitFor(() => expect(mocks.request).toHaveBeenLastCalledWith(expect.objectContaining({ type: "save", matrix: new Matrix4().makeTranslation(1,2,3).toArray() }), expect.anything(), expect.any(Function)));
 });
