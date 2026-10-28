@@ -33,8 +33,7 @@ const viewer: Viewer = {
     };
     const render = () => {
       meta = decodeDataText(doc.bytes); source = meta.text; changes = new Map(); invalid = false;
-      const rows = parseCsv(source);
-      if (rows.reduce((n, row) => n + row.length, 0) > MAX_CELLS) throw new Error("CSV 셀이 100,000개를 초과합니다.");
+      const rows = parseCsv(source, ",", MAX_CELLS);
       const table = document.createElement("table"); table.className = "data-table";
       for (const row of rows) {
         const tr = document.createElement("tr");

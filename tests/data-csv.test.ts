@@ -1,6 +1,12 @@
 import { expect, test } from "vitest";
 import { parseCsv, updateCsv } from "../src/data/csv";
 
+test("cell limit rejects excess fields during parsing, including a trailing empty field", () => {
+  expect(parseCsv("a,b", ",", 2)).toHaveLength(1);
+  expect(() => parseCsv("a,b,", ",", 2)).toThrow(/초과/);
+  expect(() => parseCsv(",".repeat(100_000), ",", 2)).toThrow(/초과/);
+});
+
 test("preserves untouched CSV quoting, mixed line endings, and quoted newlines", () => {
   const input = 'id,"label",value\r\n001,"hello\nworld",00042\n2,"a""b",3';
   const rows = parseCsv(input);
