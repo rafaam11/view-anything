@@ -55,3 +55,16 @@ test("edits survive page navigation and save together", async () => {
   expect(text.startsWith("first,value\r\n")).toBe(true);
   expect(text.endsWith("last,value")).toBe(true);
 });
+
+test("very wide CSV rows are paged by column and keep changes across pages", async () => {
+  state.disk = encode(Array.from({ length: 25 }, (_, i) => `v${i}`).join(","));
+  const root = document.createElement("div"); await viewer.mount(root, "wide.csv");
+  const buttons = root.querySelectorAll("button"); buttons[0].click(); await settle();
+  expect(root.querySelectorAll("textarea")).toHaveLength(10);
+  const first = root.querySelectorAll("textarea")[0]; first.value = "changed"; first.dispatchEvent(new Event("input"));
+  buttons[7].click();
+  expect(root.querySelectorAll("textarea")).toHaveLength(10);
+  expect(root.querySelectorAll("textarea")[0].value).toBe("v10");
+  buttons[1].click(); await settle();
+  expect(new TextDecoder().decode(state.disk).startsWith("changed,v1,")).toBe(true);
+});

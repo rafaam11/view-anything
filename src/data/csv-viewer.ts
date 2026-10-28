@@ -10,6 +10,7 @@ import { saveCopy } from "./save-copy";
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_CELLS = 100_000;
 const PAGE_ROWS = 100;
+const PAGE_COLUMNS = 10;
 
 const viewer: Viewer = {
   async mount(el, path) {
@@ -30,11 +31,14 @@ const viewer: Viewer = {
     const pages = document.createElement("nav"); pages.setAttribute("aria-label", "CSV 페이지");
     const previous = document.createElement("button"); previous.textContent = "이전 페이지";
     const next = document.createElement("button"); next.textContent = "다음 페이지";
-    const pageLabel = document.createElement("span"); pages.append(previous, pageLabel, next);
+    const pageLabel = document.createElement("span");
+    const previousColumns = document.createElement("button"); previousColumns.textContent = "이전 열";
+    const nextColumns = document.createElement("button"); nextColumns.textContent = "다음 열";
+    const columnLabel = document.createElement("span"); pages.append(previous, pageLabel, next, previousColumns, columnLabel, nextColumns);
     root.append(bar, pages, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false;
     let source = "", meta = decodeDataText(doc.bytes), changes = new Map<CsvCell, string>();
-    let rows: CsvRows = [], page = 0, editRevision = 0;
+    let rows: CsvRows = [], page = 0, columnPage = 0, columnCount = 0, editRevision = 0;
     const dirty = () => doc.dirty || changes.size > 0 || invalid;
     const refresh = () => {
       title.textContent = (dirty() ? "● " : "") + name;
@@ -45,7 +49,7 @@ const viewer: Viewer = {
       const table = document.createElement("table"); table.className = "data-table";
       for (const row of rows.slice(page * PAGE_ROWS, (page + 1) * PAGE_ROWS)) {
         const tr = document.createElement("tr");
-        for (const cell of row) {
+        for (const cell of row.slice(columnPage * PAGE_COLUMNS, (columnPage + 1) * PAGE_COLUMNS)) {
           const td = document.createElement("td");
           if (editing) {
             const input = document.createElement("textarea"); input.value = changes.get(cell) ?? cell.value; input.rows = 1;
@@ -64,13 +68,19 @@ const viewer: Viewer = {
       const count = Math.max(1, Math.ceil(rows.length / PAGE_ROWS));
       pageLabel.textContent = ` ${page + 1} / ${count} `;
       previous.disabled = page === 0; next.disabled = page + 1 >= count;
+      const columns = Math.max(1, Math.ceil(columnCount / PAGE_COLUMNS));
+      columnLabel.textContent = ` 열 ${columnPage + 1} / ${columns} `;
+      previousColumns.disabled = columnPage === 0; nextColumns.disabled = columnPage + 1 >= columns;
     };
     const render = () => {
       meta = decodeDataText(doc.bytes); source = meta.text; changes = new Map(); invalid = false;
-      rows = parseCsv(source, ",", MAX_CELLS); page = 0; showPage();
+      rows = parseCsv(source, ",", MAX_CELLS); page = columnPage = 0;
+      columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0); showPage();
     };
     previous.onclick = () => { if (page > 0) { page--; showPage(); } };
     next.onclick = () => { if ((page + 1) * PAGE_ROWS < rows.length) { page++; showPage(); } };
+    previousColumns.onclick = () => { if (columnPage > 0) { columnPage--; showPage(); } };
+    nextColumns.onclick = () => { if ((columnPage + 1) * PAGE_COLUMNS < columnCount) { columnPage++; showPage(); } };
     const report = (error: unknown) => { void platform.alert(String(error)).catch(() => {}); };
     const confirmLeave = async () => {
       if (approved || !dirty()) return true;
