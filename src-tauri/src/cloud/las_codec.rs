@@ -1,11 +1,126 @@
-//! LAS/LAZ attributed-point codec. Not yet exposed through the viewer.
+//! LAS/LAZ attributed-point codec.
 use super::codec::{MAX_BYTES, MAX_POINTS, Result};
 use std::io::{Read, Seek, Write};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LasCloud {
     pub header: las::Header,
     pub points: Vec<las::Point>,
+}
+
+/// Materialize display records without discarding the original attributed LAS points.
+pub fn into_cloud(las: LasCloud) -> Result<super::codec::Cloud> {
+    use super::codec::{Cloud, Field, Format, Scalar};
+    let format = *las.header.point_format();
+    let mut fields = vec![];
+    for name in ["x", "y", "z"] {
+        fields.push(Field {
+            name: name.into(),
+            scalar: Scalar::F64,
+            count: 1,
+            list: None,
+        });
+    }
+    fields.push(Field {
+        name: "intensity".into(),
+        scalar: Scalar::U16,
+        count: 1,
+        list: None,
+    });
+    for name in [
+        "return_number",
+        "number_of_returns",
+        "classification",
+        "user_data",
+    ] {
+        fields.push(Field {
+            name: name.into(),
+            scalar: Scalar::U8,
+            count: 1,
+            list: None,
+        });
+    }
+    if format.has_gps_time {
+        fields.push(Field {
+            name: "gps_time".into(),
+            scalar: Scalar::F64,
+            count: 1,
+            list: None,
+        });
+    }
+    if format.has_color {
+        for name in ["red", "green", "blue"] {
+            fields.push(Field {
+                name: name.into(),
+                scalar: Scalar::U16,
+                count: 1,
+                list: None,
+            });
+        }
+    }
+    if format.extra_bytes > 0 {
+        fields.push(Field {
+            name: "extra_bytes".into(),
+            scalar: Scalar::U8,
+            count: format.extra_bytes as usize,
+            list: None,
+        });
+    }
+    let len = las.points.len();
+    let stride = 30usize
+        + if format.has_gps_time { 8 } else { 0 }
+        + if format.has_color { 6 } else { 0 }
+        + format.extra_bytes as usize;
+    let size = len
+        .checked_mul(stride)
+        .filter(|v| *v <= MAX_BYTES)
+        .ok_or("LAS/LAZ 디코딩 데이터 한도를 초과합니다")?;
+    let mut bytes = Vec::with_capacity(size);
+    let mut offsets = Vec::with_capacity(len + 1);
+    let mut positions = Vec::with_capacity(len);
+    for point in &las.points {
+        offsets.push(u32::try_from(bytes.len()).map_err(|_| "LAS/LAZ 오프셋 한도 오류")?);
+        positions.push([point.x, point.y, point.z]);
+        for n in [point.x, point.y, point.z] {
+            bytes.extend_from_slice(&n.to_le_bytes());
+        }
+        bytes.extend_from_slice(&point.intensity.to_le_bytes());
+        bytes.extend_from_slice(&[
+            point.return_number,
+            point.number_of_returns,
+            u8::from(point.classification),
+            point.user_data,
+        ]);
+        if format.has_gps_time {
+            bytes.extend_from_slice(
+                &point
+                    .gps_time
+                    .ok_or("LAS GPS 시간이 누락되었습니다")?
+                    .to_le_bytes(),
+            );
+        }
+        if format.has_color {
+            let c = point.color.ok_or("LAS 색상 정보가 누락되었습니다")?;
+            for value in [c.red, c.green, c.blue] {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        if point.extra_bytes.len() != format.extra_bytes as usize {
+            return Err("LAS 추가 속성 크기가 다릅니다".into());
+        }
+        bytes.extend_from_slice(&point.extra_bytes);
+    }
+    offsets.push(u32::try_from(bytes.len()).map_err(|_| "LAS/LAZ 오프셋 한도 오류")?);
+    Ok(Cloud {
+        format: Format::Las(Box::new(las)),
+        fields,
+        comments: vec![],
+        bytes,
+        offsets,
+        positions,
+        editable: true,
+        warning: None,
+    })
 }
 
 #[allow(dead_code)]
@@ -18,6 +133,26 @@ pub fn read<R: Read + Seek + Send + Sync + 'static>(
     let header = reader.header().clone();
     if header.point_format().has_waveform {
         return Err("파형 데이터가 포함된 LAS/LAZ는 보존 저장할 수 없습니다".into());
+    }
+    let transforms = header.transforms();
+    for t in [transforms.x, transforms.y, transforms.z] {
+        let max_coordinate = t.offset.abs() + t.scale.abs() * (i32::MAX as f64 + 1.);
+        if !t.scale.is_finite()
+            || t.scale <= 0.
+            || !t.offset.is_finite()
+            || !max_coordinate.is_finite()
+            || max_coordinate * f64::EPSILON * 2. >= t.scale
+        {
+            return Err("LAS 좌표의 정밀도를 보존할 수 없습니다".into());
+        }
+    }
+    if header
+        .vlrs()
+        .iter()
+        .chain(header.evlrs())
+        .any(|v| v.user_id.eq_ignore_ascii_case("copc"))
+    {
+        return Err("COPC 계층 정보는 보존 저장할 수 없습니다".into());
     }
     let count = usize::try_from(header.number_of_points()).map_err(|_| "점 개수가 너무 큽니다")?;
     if count > MAX_POINTS {
@@ -111,6 +246,9 @@ mod tests {
             let mut cursor = writer.into_inner().unwrap();
             cursor.set_position(0);
             let cloud = read(cursor, 1_000_000, &mut |_, _| Ok(())).unwrap();
+            let display = into_cloud(cloud.clone()).unwrap();
+            assert_eq!(display.value(1, "red"), Some(65535.));
+            assert_eq!(display.rgb(1), Some([255, 116, 1]));
             let mut output =
                 write(&cloud, &[1], Cursor::new(Vec::new()), &mut |_, _| Ok(())).unwrap();
             output.set_position(0);

@@ -92,6 +92,8 @@
           "obj",
           "ply",
           "pcd",
+          "las",
+          "laz",
           "gltf",
           "glb",
           "step",

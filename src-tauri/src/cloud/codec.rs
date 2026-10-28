@@ -118,6 +118,7 @@ pub enum Format {
         viewpoint: String,
     },
     Ply,
+    Las(Box<super::las_codec::LasCloud>),
 }
 pub struct Cloud {
     pub format: Format,
@@ -134,7 +135,17 @@ impl Cloud {
         self.positions.len()
     }
     pub fn memory(&self) -> usize {
-        self.bytes.capacity() + self.offsets.capacity() * 4 + self.positions.capacity() * 24
+        let las = match &self.format {
+            Format::Las(c) => {
+                c.points.capacity() * std::mem::size_of::<las::Point>()
+                    + c.points
+                        .iter()
+                        .map(|p| p.extra_bytes.capacity())
+                        .sum::<usize>()
+            }
+            _ => 0,
+        };
+        self.bytes.capacity() + self.offsets.capacity() * 4 + self.positions.capacity() * 24 + las
     }
     pub fn record(&self, id: u32) -> &[u8] {
         &self.bytes[self.offsets[id as usize] as usize..self.offsets[id as usize + 1] as usize]
@@ -175,7 +186,12 @@ impl Cloud {
                 _ => continue,
             };
             if b.len() == f.scalar.size() {
-                rgb[channel] = f.scalar.number(b).clamp(0., 255.) as u8;
+                let value = f.scalar.number(b);
+                rgb[channel] = if matches!(self.format, Format::Las(_)) && f.scalar == Scalar::U16 {
+                    (value / 257.).clamp(0., 255.) as u8
+                } else {
+                    value.clamp(0., 255.) as u8
+                };
                 found |= 1 << channel;
             }
         }
@@ -718,6 +734,7 @@ pub fn write<W: Write>(
             }
             writeln!(w, "end_header").map_err(io)?;
         }
+        Format::Las(_) => return Err("LAS/LAZ에는 전용 저장기가 필요합니다".into()),
     }
     for (i, &id) in ids.iter().enumerate() {
         if i % 16384 == 0 {

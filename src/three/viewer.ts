@@ -463,7 +463,7 @@ export class ThreeViewer {
       let root: TreeNode;
       let built: BuiltFile;
       let cloud: BuiltFile | null = null;
-      if (format === "pcd" || format === "ply") {
+      if (format === "pcd" || format === "ply" || format === "las" || format === "laz") {
         onProgress("read", 0, 0);
         cloud = await (await this.cloudController()).open(id, path, signal);
       }

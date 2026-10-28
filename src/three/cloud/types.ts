@@ -13,7 +13,7 @@ export type Action = { type: "open"; path: string } | { type: "filter"; operatio
   | { type: "save"; path: string; overwrite: boolean };
 export interface CloudDisplay { mode: "rgb" | "solid" | "height" | "intensity"; color: [number, number, number]; height: number[]; range: [number, number] }
 export const CLOUD_CHUNK = 25_000;
-export function editedPath(path: string): string { return path.replace(/\.(pcd|ply)$/i, "_edited.$1"); }
+export function editedPath(path: string): string { return path.replace(/\.(pcd|ply|las|laz)$/i, "_edited.$1"); }
 
 const linear = Array.from({ length: 256 }, (_, v) => { const s = v / 255; return s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; });
 /** Bounded 500KB packets: xyz f32 LE, RGB u8, selection u8, source point ID u32 LE. */

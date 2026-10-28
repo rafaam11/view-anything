@@ -269,14 +269,26 @@ pub async fn cloud_request(
                 .values()
                 .map(|s| s.lock().unwrap().estimate())
                 .sum::<usize>();
-            let cloud = match codec::read_budget(
-                std::io::BufReader::new(f),
-                &ext,
-                APP_BYTES.saturating_sub(used),
-                &mut check,
-            )? {
-                Parsed::Cloud(c) => c,
-                Parsed::Mesh => return Ok(None),
+            let cloud = if ext == "las" || ext == "laz" {
+                let las = super::las_codec::read(
+                    std::io::BufReader::new(f),
+                    APP_BYTES.saturating_sub(used),
+                    &mut check,
+                )?;
+                if las.header.point_format().is_compressed != (ext == "laz") {
+                    return Err("파일 확장자와 LAS 압축 형식이 다릅니다".into());
+                }
+                super::las_codec::into_cloud(las)?
+            } else {
+                match codec::read_budget(
+                    std::io::BufReader::new(f),
+                    &ext,
+                    APP_BYTES.saturating_sub(used),
+                    &mut check,
+                )? {
+                    Parsed::Cloud(c) => c,
+                    Parsed::Mesh => return Ok(None),
+                }
             };
             let loaded = state
                 .sessions
@@ -479,9 +491,16 @@ fn save(
     if same {
         return Err("원본 파일에는 덮어쓸 수 없습니다".into());
     }
-    let ext = match cloud.format {
+    let ext = match &cloud.format {
         codec::Format::Pcd { .. } => "pcd",
         codec::Format::Ply => "ply",
+        codec::Format::Las(c) => {
+            if c.header.point_format().is_compressed {
+                "laz"
+            } else {
+                "las"
+            }
+        }
     };
     if !target
         .extension()
@@ -506,7 +525,11 @@ fn save(
     let result = (|| {
         use std::io::Write;
         let mut writer = std::io::BufWriter::new(f);
-        codec::write(cloud, ids, &mut writer, check)?;
+        if let codec::Format::Las(las) = &cloud.format {
+            writer = super::las_codec::write(las, ids, writer, check)?;
+        } else {
+            codec::write(cloud, ids, &mut writer, check)?;
+        }
         writer.flush().map_err(|e| e.to_string())?;
         writer.get_ref().sync_all().map_err(|e| e.to_string())?;
         drop(writer);
@@ -707,6 +730,84 @@ pub async fn cloud_point(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn las_save_keeps_source_and_selected_attributes() {
+        let dir = std::env::temp_dir().join(format!(
+            "va-las-save-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        for ext in ["las", "laz"] {
+            let mut builder = las::Builder::from((1, 4));
+            builder.point_format.is_compressed = ext == "laz";
+            let source = dir.join(format!("source.{ext}"));
+            let mut w = las::Writer::from_path(&source, builder.into_header().unwrap()).unwrap();
+            w.write_point(las::Point {
+                x: 1.,
+                intensity: 123,
+                return_number: 1,
+                number_of_returns: 1,
+                ..Default::default()
+            })
+            .unwrap();
+            w.write_point(las::Point {
+                x: 4.,
+                intensity: 456,
+                return_number: 1,
+                number_of_returns: 1,
+                ..Default::default()
+            })
+            .unwrap();
+            w.close().unwrap();
+            drop(w);
+            let source = source.canonicalize().unwrap();
+            let original = std::fs::read(&source).unwrap();
+            let las = super::super::las_codec::read(
+                std::io::BufReader::new(std::fs::File::open(&source).unwrap()),
+                1_000_000,
+                &mut |_, _| Ok(()),
+            )
+            .unwrap();
+            let cloud = super::super::las_codec::into_cloud(las).unwrap();
+            let target = dir.join(format!("edited.{ext}"));
+            assert!(
+                save(
+                    &cloud,
+                    &[0],
+                    &source,
+                    &source,
+                    true,
+                    "original",
+                    &mut |_, _| Ok(())
+                )
+                .is_err()
+            );
+            save(
+                &cloud,
+                &[1],
+                &source,
+                &target,
+                false,
+                "selected",
+                &mut |_, _| Ok(()),
+            )
+            .unwrap();
+            let saved = super::super::las_codec::read(
+                std::io::BufReader::new(std::fs::File::open(&target).unwrap()),
+                1_000_000,
+                &mut |_, _| Ok(()),
+            )
+            .unwrap();
+            assert_eq!(saved.points.len(), 1);
+            assert_eq!(saved.points[0].intensity, 456);
+            assert_eq!(std::fs::read(&source).unwrap(), original);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn atomic_save_preserves_source_and_existing_target_on_error_or_cancel() {
         let unique = std::time::SystemTime::now()

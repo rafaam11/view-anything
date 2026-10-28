@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 import { THREE_D_EXTENSIONS, formatOf, isBinaryStl, isThreeD } from "../src/three/formats";
 
-test("all v0.3 extensions are listed", () => {
-  expect([...THREE_D_EXTENSIONS].sort()).toEqual(["glb", "gltf", "iges", "igs", "obj", "pcd", "ply", "step", "stl", "stp"]);
+test("all 3D extensions are listed", () => {
+  expect([...THREE_D_EXTENSIONS].sort()).toEqual(["glb", "gltf", "iges", "igs", "las", "laz", "obj", "pcd", "ply", "step", "stl", "stp"]);
 });
 
 test("formatOf is case-insensitive and folds aliases", () => {
@@ -10,6 +10,8 @@ test("formatOf is case-insensitive and folds aliases", () => {
   expect(formatOf("a.Obj")).toBe("obj");
   expect(formatOf("a.ply")).toBe("ply");
   expect(formatOf("a.PCD")).toBe("pcd");
+  expect(formatOf("a.LAS")).toBe("las");
+  expect(formatOf("a.LAZ")).toBe("laz");
   expect(formatOf("a.GLTF")).toBe("gltf");
   expect(formatOf("a.glb")).toBe("glb");
   expect(formatOf("a.step")).toBe("step");

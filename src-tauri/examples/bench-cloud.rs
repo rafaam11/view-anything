@@ -1,6 +1,8 @@
 //! Synthetic data only, written to the OS temporary directory. Never uses private user files.
 #[path = "../src/cloud/codec.rs"]
 mod codec;
+#[path = "../src/cloud/las_codec.rs"]
+mod las_codec;
 #[path = "../src/cloud/process.rs"]
 mod process;
 use std::io::{BufReader, BufWriter, Write};
