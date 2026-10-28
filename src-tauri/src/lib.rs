@@ -35,7 +35,8 @@ fn write_bytes(path: &str, data: &[u8]) -> Result<(), String> {
 /// Async so a big read runs off the main thread.
 #[tauri::command]
 async fn read_file_raw(path: String) -> Result<tauri::ipc::Response, String> {
-    read_raw(&path).map(tauri::ipc::Response::new)
+    tauri::async_runtime::spawn_blocking(move || read_raw(&path).map(tauri::ipc::Response::new))
+        .await.map_err(|e| e.to_string())?
 }
 
 /// The `x-va-path` header value: a percent-encoded UTF-8 path (headers cannot carry it raw).
@@ -110,15 +111,23 @@ fn write_target(path: &Path) -> PathBuf {
 /// Unix), so a crash or a full disk never leaves a half-written file behind.
 fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
+    static TEMP_SEQ: AtomicUsize = AtomicUsize::new(0);
     let name = path
         .file_name()
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a file path"))?;
-    let mut tmp_name = std::ffi::OsString::from(".");
-    tmp_name.push(name);
-    tmp_name.push(format!(".va-tmp-{}", std::process::id()));
-    let tmp = path.with_file_name(tmp_name);
+    let (tmp, f) = loop {
+        let mut tmp_name = std::ffi::OsString::from(".");
+        tmp_name.push(name);
+        tmp_name.push(format!(".va-tmp-{}-{}", std::process::id(), TEMP_SEQ.fetch_add(1, Ordering::Relaxed)));
+        let tmp = path.with_file_name(tmp_name);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+            Ok(f) => break (tmp, f),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    };
     let result = (|| {
-        let mut f = std::fs::File::create(&tmp)?;
+        let mut f = f;
         f.write_all(data)?;
         f.sync_all()?;
         drop(f);
@@ -260,6 +269,30 @@ mod tests {
     fn write_atomic_fails_cleanly_for_missing_directory() {
         let target = std::env::temp_dir().join("va-no-such-dir-xyz").join("a.md");
         assert!(write_atomic(&target, b"x").is_err());
+    }
+
+    #[test]
+    fn concurrent_atomic_writes_never_mix_contents() {
+        let dir = std::env::temp_dir().join(format!("va-concurrent-write-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("data.md");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let threads: Vec<_> = (0..8u8).map(|value| {
+            let path = target.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let data = vec![value; 128 * 1024];
+                barrier.wait();
+                write_atomic(&path, &data).unwrap();
+            })
+        }).collect();
+        for thread in threads { thread.join().unwrap(); }
+        let data = std::fs::read(&target).unwrap();
+        assert_eq!(data.len(), 128 * 1024);
+        assert!(data.iter().all(|b| *b == data[0]));
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_file(target).unwrap();
+        std::fs::remove_dir(dir).unwrap();
     }
 
     #[test]
