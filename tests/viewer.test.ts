@@ -38,12 +38,12 @@ vi.mock("../src/platform", () => ({
   },
 }));
 vi.mock("../src/md/mermaid", () => ({ renderMermaid: async () => {}, watchTheme: () => {} }));
-vi.mock("../src/md/editor", () => ({
+const editorFixture = {
   createEditor: async (host: HTMLElement, md: string) => {
     host.dataset.testEditor = md;
     return { getMarkdown: () => host.dataset.testEditor!, destroy: () => {} };
   },
-}));
+};
 
 const settle = async () => {
   for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
@@ -51,7 +51,8 @@ const settle = async () => {
 
 async function mount(path: string, text: string) {
   disk.set(path, enc(text));
-  const { default: viewer } = await import("../src/md/viewer");
+  const { createViewer } = await import("../src/md/viewer");
+  const viewer = createViewer(async () => editorFixture);
   const el = document.createElement("div");
   document.body.append(el);
   await viewer.mount(el, path);
@@ -63,7 +64,7 @@ async function mount(path: string, text: string) {
 
 beforeAll(async () => {
   // Preload the viewer and the (mocked) editor so the first test does not pay for module loading.
-  await Promise.all([import("../src/md/viewer"), import("../src/md/editor")]);
+  await import("../src/md/viewer");
 });
 
 beforeEach(() => {

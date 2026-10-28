@@ -93,7 +93,8 @@ function isKey(e: KeyboardEvent, key: string): boolean {
   return e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === key;
 }
 
-const viewer: Viewer = {
+export function createViewer(loadEditor: () => Promise<Pick<typeof import("./editor"), "createEditor">> = () => import("./editor")): Viewer {
+return {
   async mount(el, path) {
     /** The file bytes as last read or written; external changes are detected against them. */
     let known = await platform.readFile(path);
@@ -235,7 +236,7 @@ const viewer: Viewer = {
         await render(true);
         if (d.readOnlyReason) return;
       }
-      const { createEditor } = await import("./editor");
+      const { createEditor } = await loadEditor();
       editorHost.hidden = false;
       body.hidden = true;
       try {
@@ -396,4 +397,5 @@ const viewer: Viewer = {
     });
   },
 };
-export default viewer;
+}
+export default createViewer();
