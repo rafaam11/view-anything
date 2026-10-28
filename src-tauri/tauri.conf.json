@@ -69,6 +69,11 @@
         "role": "Viewer"
       },
       {
+        "ext": ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"],
+        "name": "Image",
+        "role": "Viewer"
+      },
+      {
         "ext": [
           "md",
           "markdown"

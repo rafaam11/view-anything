@@ -10,6 +10,11 @@ test("CSV uses a separate lazy viewer", () => {
   expect(resolveViewer("C:\\a\\B.CSV")).not.toBeNull();
   expect(resolveViewer("a.csv")).not.toBe(resolveViewer("a.md"));
 });
+test("image extensions share a lazy viewer", () => {
+  const png = resolveViewer("a.png");
+  expect(png).not.toBeNull();
+  for (const ext of ["PNG", "jpg", "jpeg", "webp", "bmp", "gif", "svg"]) expect(resolveViewer(`a.${ext}`)).toBe(png);
+});
 test("unknown extension returns null", () => {
   expect(resolveViewer("a.xyz")).toBeNull();
   expect(resolveViewer("noext")).toBeNull();

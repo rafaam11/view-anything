@@ -19,6 +19,9 @@ export const platform = {
   async writeFileRaw(path: string, data: Uint8Array): Promise<void> {
     await invoke("write_file_raw", data, { headers: { "x-va-path": encodeURIComponent(path) } });
   },
+  async writeImageCopy(path: string, source: string, data: Uint8Array): Promise<void> {
+    await invoke("write_image_copy", data, { headers: { "x-va-path": encodeURIComponent(path), "x-va-source": encodeURIComponent(source) } });
+  },
   /** Whether Shift is held right now; null where the OS cannot tell (non-Windows). */
   async modifierShift(): Promise<boolean | null> {
     return invoke<boolean | null>("modifier_shift");
@@ -41,7 +44,7 @@ export const platform = {
       directory: false,
       filters: opts.only3d
         ? [models]
-        : [{ name: "Markdown", extensions: ["md", "markdown"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, models, { name: "모든 파일", extensions: ["*"] }],
+        : [{ name: "Markdown", extensions: ["md", "markdown"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
     });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];
@@ -59,6 +62,9 @@ export const platform = {
   /** Check file size before reading data into the webview. */
   async fileSize(path: string): Promise<number> {
     return invoke<number>("file_size", { path });
+  },
+  async siblingImages(path: string): Promise<string[]> {
+    return invoke<string[]>("sibling_images", { path });
   },
   async setWindowTitle(title: string): Promise<void> {
     document.title = title;

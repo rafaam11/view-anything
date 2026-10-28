@@ -62,6 +62,26 @@ async fn write_file_raw(request: tauri::ipc::Request<'_>) -> Result<(), String> 
     }
 }
 
+#[tauri::command]
+async fn write_image_copy(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let path = decode_path_header(request.headers().get("x-va-path").map(|v| v.as_bytes()))?;
+    let source = decode_path_header(request.headers().get("x-va-source").map(|v| v.as_bytes()))?;
+    let target = image_copy_target(Path::new(&path), Path::new(&source))?;
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(data) => write_atomic(&target, data).map_err(|e| e.to_string()),
+        tauri::ipc::InvokeBody::Json(_) => Err("raw bytes required".into()),
+    }
+}
+
+fn image_copy_target(path: &Path, source: &Path) -> Result<PathBuf, String> {
+    let source = std::fs::canonicalize(source).map_err(|e| e.to_string())?;
+    let target = write_target(path);
+    if target == source || std::fs::canonicalize(&target).ok().as_ref() == Some(&source) {
+        return Err("원본 이미지는 덮어쓸 수 없습니다".into());
+    }
+    Ok(target)
+}
+
 /// Whether Shift is held right now (drop events do not carry modifier keys). `None` where the
 /// OS offers no global key state query.
 #[tauri::command]
@@ -94,6 +114,24 @@ async fn file_size(path: String) -> Result<u64, String> {
             return Err(format!("{path}: 일반 파일이 아닙니다"));
         }
         Ok(metadata.len())
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn sibling_images(path: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = Path::new(&path).parent().ok_or("상위 폴더가 없습니다")?;
+        let mut files = Vec::new();
+        for item in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
+            let p = item.map_err(|e| e.to_string())?.path();
+            if !p.is_file() { continue; }
+            let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
+            if matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "svg") {
+                files.push(p.to_string_lossy().into_owned());
+            }
+        }
+        files.sort_by_key(|s| s.to_lowercase());
+        Ok(files)
     }).await.map_err(|e| e.to_string())?
 }
 
@@ -228,9 +266,11 @@ pub fn run() {
             write_file,
             read_file_raw,
             write_file_raw,
+            write_image_copy,
             modifier_shift,
             path_exists,
             file_size,
+            sibling_images,
             open_window,
             update::update_context,
             update::update_status,
@@ -249,6 +289,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn image_copy_refuses_the_original() {
+        let dir = std::env::temp_dir().join(format!("va-image-copy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.png");
+        std::fs::write(&source, b"original").unwrap();
+        assert!(image_copy_target(&source, &source).is_err());
+        assert!(image_copy_target(&dir.join("copy.png"), &source).is_ok());
+        assert_eq!(std::fs::read(&source).unwrap(), b"original");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn write_atomic_replaces_existing_file_without_leftovers() {
