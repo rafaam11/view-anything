@@ -10,7 +10,7 @@ export type Operation = { type: "voxel"; size: number } | { type: "sor"; k: numb
   | { type: "select"; matrix: number[]; planes: number[][]; region: Region };
 export type Action = { type: "open"; path: string } | { type: "filter"; operation: Operation }
   | { type: "crop"; keep: boolean } | { type: "apply" | "discardPreview" | "undo" | "redo" | "clearSelection" }
-  | { type: "save"; path: string; overwrite: boolean };
+  | { type: "save"; path: string; overwrite: boolean; matrix?: number[] };
 export interface CloudDisplay { mode: "rgb" | "solid" | "height" | "intensity"; color: [number, number, number]; height: number[]; range: [number, number] }
 export const CLOUD_CHUNK = 25_000;
 export function editedPath(path: string): string { return path.replace(/\.(pcd|ply|las|laz)$/i, "_edited.$1"); }

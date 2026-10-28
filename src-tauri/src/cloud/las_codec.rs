@@ -192,15 +192,32 @@ pub fn write<W: Write + Seek + Send + Sync + 'static>(
     out: W,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<W> {
+    write_transformed(cloud, ids, out, None, check)
+}
+
+pub fn write_transformed<W: Write + Seek + Send + Sync + 'static>(
+    cloud: &LasCloud,
+    ids: &[u32],
+    out: W,
+    matrix: Option<&[f64; 16]>,
+    check: &mut impl FnMut(usize, usize) -> Result<()>,
+) -> Result<W> {
     let mut writer = las::Writer::new(out, cloud.header.clone()).map_err(|e| e.to_string())?;
     for (i, id) in ids.iter().enumerate() {
         if i % 4096 == 0 {
             check(i, ids.len())?;
         }
-        let point = cloud.points.get(*id as usize).ok_or("점 ID 오류")?;
-        writer
-            .write_point(point.clone())
-            .map_err(|e| e.to_string())?;
+        let mut point = cloud.points.get(*id as usize).ok_or("점 ID 오류")?.clone();
+        if let Some(matrix) = matrix {
+            let p = super::process::transform([point.x, point.y, point.z], matrix);
+            if !p[..3].iter().all(|v| v.is_finite()) {
+                return Err("정합 좌표가 유효하지 않습니다".into());
+            }
+            point.x = p[0];
+            point.y = p[1];
+            point.z = p[2];
+        }
+        writer.write_point(point).map_err(|e| e.to_string())?;
     }
     check(ids.len(), ids.len())?;
     writer.into_inner().map_err(|e| e.to_string())
@@ -262,6 +279,26 @@ mod tests {
                     .any(|v| v.user_id == "test" && v.data == [4, 5, 6])
             );
             assert_eq!(result.header.point_format().is_compressed, compressed);
+            let mut matrix = [0.; 16];
+            matrix[0] = 1.;
+            matrix[5] = 1.;
+            matrix[10] = 1.;
+            matrix[15] = 1.;
+            matrix[12] = 2.;
+            let mut output = write_transformed(
+                &cloud,
+                &[1],
+                Cursor::new(Vec::new()),
+                Some(&matrix),
+                &mut |_, _| Ok(()),
+            )
+            .unwrap();
+            output.set_position(0);
+            let transformed = read(output, 1_000_000, &mut |_, _| Ok(())).unwrap();
+            let mut expected = mk(4.);
+            expected.x += 2.;
+            assert_eq!(transformed.points, vec![expected]);
+            assert_eq!(cloud.points[1], mk(4.));
         }
     }
 

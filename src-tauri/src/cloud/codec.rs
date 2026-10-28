@@ -666,10 +666,21 @@ fn lzf(
     Ok(out)
 }
 
+#[allow(dead_code)]
 pub fn write<W: Write>(
     cloud: &Cloud,
     ids: &[u32],
+    w: W,
+    check: &mut impl FnMut(usize, usize) -> Result<()>,
+) -> Result<()> {
+    write_transformed(cloud, ids, w, None, check)
+}
+
+pub fn write_transformed<W: Write>(
+    cloud: &Cloud,
+    ids: &[u32],
     mut w: W,
+    matrix: Option<&[f64; 16]>,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<()> {
     if !cloud.editable {
@@ -684,6 +695,16 @@ pub fn write<W: Write>(
             height,
             viewpoint,
         } => {
+            if matrix.is_some() {
+                let values = viewpoint
+                    .split_whitespace()
+                    .map(|v| v.parse::<f64>())
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(|_| "VIEWPOINT 오류")?;
+                if values != [0., 0., 0., 1., 0., 0., 0.] {
+                    return Err("센서 VIEWPOINT가 있는 PCD는 정합 저장을 지원하지 않습니다".into());
+                }
+            }
             writeln!(w, "# .PCD v0.7\nVERSION 0.7").map_err(io)?;
             for c in &cloud.comments {
                 writeln!(w, "{c}").map_err(io)?;
@@ -743,7 +764,49 @@ pub fn write<W: Write>(
         if id as usize >= cloud.len() {
             return Err("점 ID 범위 오류".into());
         }
-        w.write_all(cloud.record(id)).map_err(io)?;
+        let record = cloud.record(id);
+        if let Some(matrix) = matrix {
+            let point = cloud.positions[id as usize];
+            if point.iter().all(|v| v.is_finite()) {
+                let p = super::process::transform(point, matrix);
+                let mut changed = record.to_vec();
+                let mut at = 0usize;
+                let mut found = 0u8;
+                for f in &cloud.fields {
+                    let count = if let Some(t) = f.list {
+                        let n = t.number(&changed[at..]) as usize;
+                        at += t.size();
+                        n
+                    } else {
+                        f.count
+                    };
+                    if let Some(axis) = ["x", "y", "z"].iter().position(|name| *name == f.name) {
+                        if f.list.is_some() || count != 1 || !p[axis].is_finite() {
+                            return Err("좌표 속성을 안전하게 변환할 수 없습니다".into());
+                        }
+                        let value = p[axis];
+                        let bytes: Vec<u8> = match f.scalar {
+                            Scalar::F64 => value.to_le_bytes().to_vec(),
+                            Scalar::F32 if (value as f32).is_finite() => {
+                                (value as f32).to_le_bytes().to_vec()
+                            }
+                            _ => return Err("정수 좌표의 정합 저장은 지원하지 않습니다".into()),
+                        };
+                        changed[at..at + bytes.len()].copy_from_slice(&bytes);
+                        found |= 1 << axis;
+                    }
+                    at += count * f.scalar.size();
+                }
+                if found != 7 {
+                    return Err("XYZ 좌표 속성이 없습니다".into());
+                }
+                w.write_all(&changed).map_err(io)?;
+            } else {
+                w.write_all(record).map_err(io)?;
+            }
+        } else {
+            w.write_all(record).map_err(io)?;
+        }
     }
     check(ids.len(), ids.len())?;
     Ok(())
@@ -752,6 +815,23 @@ pub fn write<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transformed_save_changes_only_xyz_fields() {
+        let input = b"VERSION .7\nFIELDS x y z intensity\nSIZE 8 8 8 2\nTYPE F F F U\nWIDTH 1\nHEIGHT 1\nPOINTS 1\nDATA ascii\n1 2 3 456\n";
+        let c = parse(input, "pcd");
+        let mut m = [0.; 16];
+        m[0] = 1.;
+        m[5] = 1.;
+        m[10] = 1.;
+        m[15] = 1.;
+        m[12] = 10.;
+        let mut out = vec![];
+        write_transformed(&c, &[0], &mut out, Some(&m), &mut |_, _| Ok(())).unwrap();
+        let result = parse(&out, "pcd");
+        assert_eq!(result.positions[0], [11., 2., 3.]);
+        assert_eq!(result.value(0, "intensity"), Some(456.));
+        assert_eq!(c.positions[0], [1., 2., 3.]);
+    }
     #[test]
     fn organized_invalid_and_empty_clouds_roundtrip() {
         let input = b"VERSION .7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\nWIDTH 1\nHEIGHT 2\nVIEWPOINT 1 2 3 1 0 0 0\nPOINTS 2\nDATA ascii\nnan inf -inf\n1 2 3\n";

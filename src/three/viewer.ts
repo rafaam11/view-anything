@@ -294,7 +294,7 @@ export class ThreeViewer {
    * does not switch the unit to m, so changing the frame never silently rescales unit-tagged files.
    */
   setDisplay(display: FramePreset, unit: Unit): void {
-    if (this.exporting || this.clouds?.isBusy()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); return; }
+    if (this.exporting || this.clouds?.isBusy() || this.clouds?.hasRegistrationPreview()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); return; }
     this.display = display;
     this.displayUnit = unit;
     this.stage.setDisplay(display, unit);
@@ -303,7 +303,7 @@ export class ThreeViewer {
 
   /** Set a file's source frame and unit (STEP/IGES keep their fixed mm), then fit all. */
   setFileFrame(fileId: string, frame: ObjectFrame): void {
-    if (this.exporting || this.clouds?.isBusy()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); const file = this.model.files.find((f) => f.id === fileId); if (file) this.panel.addFile(file); return; }
+    if (this.exporting || this.clouds?.isBusy() || this.clouds?.hasRegistrationPreview()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); const file = this.model.files.find((f) => f.id === fileId); if (file) this.panel.addFile(file); return; }
     const file = this.model.files.find((f) => f.id === fileId);
     const built = this.objects.get(fileId);
     if (!file || !built) return;

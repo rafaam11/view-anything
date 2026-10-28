@@ -81,15 +81,25 @@ pub struct Meta {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Action {
-    Open { path: String },
-    Filter { operation: Operation },
-    Crop { keep: bool },
+    Open {
+        path: String,
+    },
+    Filter {
+        operation: Operation,
+    },
+    Crop {
+        keep: bool,
+    },
     Apply,
     DiscardPreview,
     Undo,
     Redo,
     ClearSelection,
-    Save { path: String, overwrite: bool },
+    Save {
+        path: String,
+        overwrite: bool,
+        matrix: Option<[f64; 16]>,
+    },
 }
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -503,14 +513,16 @@ pub async fn cloud_request(
             Action::Save {
                 path: target,
                 overwrite,
+                matrix,
             } => {
-                save(
+                save_transformed(
                     &cloud,
                     &active,
                     &path,
                     Path::new(target),
                     *overwrite,
                     &job_id,
+                    matrix.as_ref(),
                     &mut check,
                 )?;
             }
@@ -578,6 +590,7 @@ pub async fn cloud_request(
     .map_err(|e| e.to_string())?
 }
 
+#[allow(dead_code)]
 fn save(
     cloud: &Cloud,
     ids: &[u32],
@@ -587,6 +600,29 @@ fn save(
     job: &str,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<()> {
+    save_transformed(cloud, ids, source, target, overwrite, job, None, check)
+}
+
+fn save_transformed(
+    cloud: &Cloud,
+    ids: &[u32],
+    source: &Path,
+    target: &Path,
+    overwrite: bool,
+    job: &str,
+    matrix: Option<&[f64; 16]>,
+    check: &mut impl FnMut(usize, usize) -> Result<()>,
+) -> Result<()> {
+    if let Some(m) = matrix {
+        if !m.iter().all(|v| v.is_finite())
+            || m[3] != 0.
+            || m[7] != 0.
+            || m[11] != 0.
+            || m[15] != 1.
+        {
+            return Err("저장 좌표 변환이 잘못되었습니다".into());
+        }
+    }
     let target = crate::write_target(target);
     let parent = target
         .parent()
@@ -638,9 +674,9 @@ fn save(
         use std::io::Write;
         let mut writer = std::io::BufWriter::new(f);
         if let codec::Format::Las(las) = &cloud.format {
-            writer = super::las_codec::write(las, ids, writer, check)?;
+            writer = super::las_codec::write_transformed(las, ids, writer, matrix, check)?;
         } else {
-            codec::write(cloud, ids, &mut writer, check)?;
+            codec::write_transformed(cloud, ids, &mut writer, matrix, check)?;
         }
         writer.flush().map_err(|e| e.to_string())?;
         writer.get_ref().sync_all().map_err(|e| e.to_string())?;

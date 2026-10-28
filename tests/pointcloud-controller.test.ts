@@ -55,6 +55,9 @@ test("a failed display after native commit blocks edits/export until retry witho
   click("결과 적용"); expect(mocks.request).toHaveBeenCalledTimes(calls);
   click("화면 다시 표시"); await vi.waitFor(() => expect(c.entries.get("f1")?.stale).toBe(false));
   expect(h.replace).toHaveBeenCalledTimes(1); expect(mocks.request).toHaveBeenCalledTimes(calls);
+  expect(c.lockExport()).toBe(false); // an unresolved preview must not be exported
+  mocks.request.mockResolvedValue({ ...meta, revision: 2, dirty: true });
+  click("결과 적용"); await vi.waitFor(() => expect(c.entries.get("f1")?.meta.preview).toBe(false));
   expect(c.lockExport()).toBe(true); c.unlockExport();
 });
 test("save dialog locks selection, removal and export until dismissed", async () => {

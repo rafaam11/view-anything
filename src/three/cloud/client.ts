@@ -25,6 +25,20 @@ export class CloudClient {
     } finally { unlisten(); this.job = null; }
   }
   cancel(): void { this.pendingCancel = true; if (this.job) void invoke("cloud_cancel", { jobId: this.job }).catch(() => {}); }
+  async register(source: CloudMeta, sourceMatrix: number[], target: CloudMeta, targetMatrix: number[], maxDistance: number, progress?: (text: string) => void): Promise<{ matrix: number[]; pairs: number; rmse: number; iterations: number }> {
+    if (this.job) throw new Error("작업이 진행 중입니다");
+    const job = crypto.randomUUID(); this.job = job; this.pendingCancel = false;
+    let unlisten = () => {};
+    try {
+      unlisten = await listen<{ jobId: string; loaded: number; total: number }>("va-cloud-progress", ({ payload }) => {
+        if (payload.jobId === job) progress?.(payload.total ? `정합 중 ${Math.floor(payload.loaded / payload.total * 100)}%` : "정합 중…");
+        if (this.pendingCancel) void invoke("cloud_cancel", { jobId: job }).catch(() => {});
+      });
+      const result = await invoke<{ matrix: number[]; pairs: number; rmse: number; iterations: number }>("cloud_register", { jobId: job, source: source.id, sourceRevision: source.revision, sourceMatrix, target: target.id, targetRevision: target.revision, targetMatrix, maxDistance, maxIterations: 50 });
+      if (this.pendingCancel) throw new DOMException("작업을 취소했습니다", "AbortError");
+      return result;
+    } finally { unlisten(); this.job = null; }
+  }
   close(session: string): Promise<void> { return invoke("cloud_close", { session }); }
   point(session: string, point: number): Promise<{ id: number; position: number[]; fields: Record<string, { values: string[]; count: number }> }> { return invoke("cloud_point", { session, point }); }
 }
