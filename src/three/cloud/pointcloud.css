@@ -6,7 +6,14 @@
 .va-cloud button, .va-cloud select { margin:3px 2px; font:inherit; max-width:100%; }
 .va-cloud button { padding:4px 6px; }
 .va-cloud pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:220px; overflow:auto; }
-.va-cloud-box { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; }
+.va-cloud-box { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px 6px; }
+.va-cloud-box label { display:flex; flex-direction:column; align-items:stretch; gap:0; margin:0; min-width:0; }
+.va-cloud-box label:nth-child(1) { grid-area:1 / 1; }
+.va-cloud-box label:nth-child(4) { grid-area:1 / 2; }
+.va-cloud-box label:nth-child(2) { grid-area:2 / 1; }
+.va-cloud-box label:nth-child(5) { grid-area:2 / 2; }
+.va-cloud-box label:nth-child(3) { grid-area:3 / 1; }
+.va-cloud-box label:nth-child(6) { grid-area:3 / 2; }
 .va-cloud-box input { width:100%; box-sizing:border-box; }
 .va-cloud small { display:block; }
 .va-cloud-polygon { position:absolute; inset:0; width:100%; height:100%; z-index:6; cursor:crosshair; background:#ffa00008; }

@@ -77,7 +77,7 @@ export class CloudController {
     selection.append(this.button("3D 박스", () => this.startBox()), this.button("다각형 관통 선택", () => this.startPolygon()), this.button("선택 확정", () => void this.selectRegion()));
     selection.append(this.button("박스 이동", () => this.transform?.setMode("translate")), this.button("박스 크기", () => this.transform?.setMode("scale")));
     const coordinates = el("div"); coordinates.className = "va-cloud-box";
-    for (let i = 0; i < 6; i++) { const input = el("input"); input.type = "number"; input.step = "any"; input.value = "0"; input.setAttribute("aria-label", `${"XYZ"[i % 3]} ${i < 3 ? "최소" : "최대"}`); input.onchange = () => this.updateBox(); this.boxInputs.push(input); coordinates.append(input); }
+    for (let i = 0; i < 6; i++) { const input = el("input"); const caption = `${"XYZ"[i % 3]} ${i < 3 ? "최소" : "최대"}`; input.type = "number"; input.step = "any"; input.value = "0"; input.setAttribute("aria-label", caption); input.onchange = () => this.updateBox(); this.boxInputs.push(input); const label = el("label", caption); label.append(input); coordinates.append(label); }
     selection.append(coordinates, el("small", "박스 좌표는 화면 좌표계·표시 단위 기준. 다각형은 앞뒤 관통 선택. Esc: 취소."));
     selection.append(this.button("선택 부분 남기기", () => void this.act({ type: "crop", keep: true })), this.button("선택 부분 삭제", () => void this.act({ type: "crop", keep: false })), this.button("선택 해제", () => void this.act({ type: "clearSelection" })));
     this.editBody.append(selection);
