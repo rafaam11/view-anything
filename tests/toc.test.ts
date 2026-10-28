@@ -44,3 +44,22 @@ test("tracks the app scroll container below the custom titlebar", async () => {
   expect(remove).toHaveBeenCalledWith("scroll", expect.any(Function));
   scroller.remove();
 });
+
+test("selects the final heading at the bottom even if it cannot reach the top threshold", async () => {
+  const scroller = document.createElement("main"), article = document.createElement("article");
+  article.innerHTML = '<h1 id="bottom-a">A</h1><h2 id="bottom-b">B</h2><h2 id="bottom-c">C</h2>';
+  scroller.append(article); document.body.append(scroller);
+  Object.defineProperties(scroller, { clientHeight: { value: 500 }, scrollHeight: { value: 1000 }, scrollTop: { value: 400, writable: true } });
+  vi.spyOn(scroller, "getBoundingClientRect").mockReturnValue({ top: 32 } as DOMRect);
+  const headings = [...article.querySelectorAll("h1,h2")];
+  headings.forEach((h, i) => vi.spyOn(h, "getBoundingClientRect").mockReturnValue({ top: [40, 200, 450][i] } as DOMRect));
+  const scrollIntoView = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+  const { nav, dispose } = buildToc(headings.map((h, i) => ({ id: h.id, text: h.textContent!, depth: i ? 2 : 1 })), article, scroller);
+  await Promise.resolve(); expect(nav.querySelector("a.active")?.textContent).toBe("A");
+  scroller.scrollTop = 499.5; scroller.dispatchEvent(new Event("scroll"));
+  expect(nav.querySelector("a.active")?.textContent).toBe("C");
+  expect(scrollIntoView).not.toHaveBeenCalled();
+  scroller.scrollTop = 350; scroller.dispatchEvent(new Event("scroll"));
+  expect(nav.querySelector("a.active")?.textContent).toBe("A");
+  dispose(); scroller.remove(); scrollIntoView.mockRestore();
+});

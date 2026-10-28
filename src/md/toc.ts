@@ -58,11 +58,21 @@ export function buildToc(headings: Heading[], article: HTMLElement, scroller?: H
       if (t.getBoundingClientRect().top <= top) cur = t;
       else break;
     }
+    // The last heading may never reach the top threshold when its section is short.
+    const scrollBox = scroller ?? article.ownerDocument.scrollingElement;
+    if (scrollBox && scrollBox.scrollHeight > scrollBox.clientHeight &&
+        scrollBox.scrollTop + scrollBox.clientHeight >= scrollBox.scrollHeight - 1) {
+      cur = targets[targets.length - 1];
+    }
     const next = cur ? links.get(cur.id) : undefined;
     if (next === active) return;
     active?.classList.remove("active");
     next?.classList.add("active");
-    next?.scrollIntoView({ block: "nearest" });
+    if (next && !nav.classList.contains("collapsed")) {
+      const item = next.getBoundingClientRect(), box = nav.getBoundingClientRect();
+      if (item.top < box.top) nav.scrollTop += item.top - box.top;
+      else if (item.bottom > box.bottom) nav.scrollTop += item.bottom - box.bottom;
+    }
     active = next;
   };
   const scrollTarget = scroller ?? article.ownerDocument.defaultView;
