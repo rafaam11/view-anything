@@ -45,7 +45,7 @@ const viewer: Viewer = {
   async mount(el, path) {
     if (await platform.fileSize(path) > MAX_BYTES) throw new Error("파일이 10 MiB를 초과합니다.");
     const read = async () => new Uint8Array(await platform.readFileRaw(path));
-    const doc = new FileDocument({ read, write: b => platform.writeFileRaw(path, b) }, await read());
+    const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
     const yaml = /\.ya?ml$/i.test(path), name = path.split(/[\\/]/).pop() ?? path;
     let meta = decodeDataText(doc.bytes), editing = false, invalid = false, approved = false, busy = false;
     const root = document.createElement("div"); root.className = "data-root";

@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({ disk: new Uint8Array(), close: async () => tru
 vi.mock("../src/platform", () => ({ platform: {
   fileSize: async () => state.disk.length,
   readFileRaw: async () => state.disk.slice().buffer,
-  writeFileRaw: async (_path: string, bytes: Uint8Array) => { state.disk = bytes.slice(); },
+  writeFileChecked: async (_path: string, expected: Uint8Array, bytes: Uint8Array) => { if (String(state.disk) !== String(expected)) return false; state.disk = bytes.slice(); return true; },
   setWindowTitle: async () => {},
   onCloseRequested: async (fn: () => Promise<boolean>) => { state.close = fn; },
   confirmDiscard: async () => false,

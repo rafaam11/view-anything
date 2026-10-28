@@ -14,6 +14,14 @@ test("a conflict keeps both disk and edits intact", async () => {
   expect(doc.dirty).toBe(true);
 });
 
+test("a conflict discovered during the checked write keeps local edits", async () => {
+  const doc = new FileDocument({ read: async () => bytes("old"), write: async () => false }, bytes("old"));
+  doc.edit(bytes("edit"));
+  expect(await doc.save()).toBe("conflict");
+  expect(doc.bytes).toEqual(bytes("edit"));
+  expect(doc.dirty).toBe(true);
+});
+
 test("edits made during a write remain dirty after it finishes", async () => {
   let finish!: () => void;
   const pending = new Promise<void>(resolve => { finish = resolve; });

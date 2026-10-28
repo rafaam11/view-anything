@@ -13,7 +13,7 @@ const viewer: Viewer = {
   async mount(el, path) {
     if (await platform.fileSize(path) > MAX_BYTES) throw new Error("CSV 파일이 10 MiB를 초과합니다.");
     const read = async () => new Uint8Array(await platform.readFileRaw(path));
-    const doc = new FileDocument({ read, write: bytes => platform.writeFileRaw(path, bytes) }, await read());
+    const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
     const name = path.split(/[\\/]/).pop() ?? path;
     const root = document.createElement("div"); root.className = "data-root";
     const bar = document.createElement("header"); bar.className = "data-bar";

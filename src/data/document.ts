@@ -1,7 +1,7 @@
 /** Byte-preserving document state, independent of the viewer and native I/O. */
 export interface DocumentIO {
   read(): Promise<Uint8Array>;
-  write(bytes: Uint8Array): Promise<void>;
+  write(bytes: Uint8Array, expected: Uint8Array): Promise<boolean | void>;
 }
 
 export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
@@ -53,7 +53,7 @@ export class FileDocument {
     try {
       const disk = await this.io.read();
       if (!equalBytes(this.known, disk)) return "conflict";
-      await this.io.write(snapshot);
+      if (await this.io.write(snapshot, this.known.slice()) === false) return "conflict";
       this.known = snapshot;
       this.revision++;
       return "saved";

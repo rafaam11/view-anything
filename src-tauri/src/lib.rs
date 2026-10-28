@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use args::file_arg;
 
 static WINDOW_SEQ: AtomicUsize = AtomicUsize::new(0);
+static FILE_WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[tauri::command]
 fn read_file(path: String) -> Result<Vec<u8>, String> {
@@ -27,8 +28,37 @@ fn read_raw(path: &str) -> Result<Vec<u8>, String> {
 }
 
 fn write_bytes(path: &str, data: &[u8]) -> Result<(), String> {
+    let _guard = FILE_WRITE_LOCK.lock().map_err(|e| e.to_string())?;
     let target = write_target(Path::new(path));
     write_atomic(&target, data).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Compare and replace under the process-wide write lock, so two app windows cannot both
+/// commit edits based on the same original. Returns false when the disk no longer matches.
+fn write_if_unchanged(path: &Path, expected: &[u8], data: &[u8]) -> Result<bool, String> {
+    let _guard = FILE_WRITE_LOCK.lock().map_err(|e| e.to_string())?;
+    let target = write_target(path);
+    match std::fs::read(&target) {
+        Ok(current) if current == expected => {},
+        Ok(_) => return Ok(false),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e.to_string()),
+    }
+    write_atomic(&target, data).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
+async fn write_file_checked(request: tauri::ipc::Request<'_>) -> Result<bool, String> {
+    let path = decode_path_header(request.headers().get("x-va-path").map(|v| v.as_bytes()))?;
+    let len = request.headers().get("x-va-expected-length").ok_or("missing expected length")?
+        .to_str().map_err(|e| e.to_string())?.parse::<usize>().map_err(|e| e.to_string())?;
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(data) if len <= data.len() => data.to_vec(),
+        _ => return Err("invalid checked write body".into()),
+    };
+    tauri::async_runtime::spawn_blocking(move || write_if_unchanged(Path::new(&path), &data[..len], &data[len..]))
+        .await.map_err(|e| e.to_string())?
 }
 
 /// Raw bytes for large files: a `Response` skips the JSON number-array encoding of `read_file`.
@@ -266,6 +296,7 @@ pub fn run() {
             write_file,
             read_file_raw,
             write_file_raw,
+            write_file_checked,
             write_image_copy,
             modifier_shift,
             path_exists,
@@ -289,6 +320,21 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checked_writes_from_two_windows_only_commit_once() {
+        let dir = std::env::temp_dir().join(format!("va-checked-write-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("data.csv"); std::fs::write(&path, b"original").unwrap();
+        let threads: Vec<_> = [b"first".as_slice(), b"second".as_slice()].into_iter().map(|data| {
+            let path = path.clone();
+            std::thread::spawn(move || write_if_unchanged(&path, b"original", data).unwrap())
+        }).collect();
+        let result: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+        assert_eq!(result.iter().filter(|&&v| v).count(), 1);
+        let bytes = std::fs::read(&path).unwrap(); assert!(bytes == b"first" || bytes == b"second");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn image_copy_refuses_the_original() {
