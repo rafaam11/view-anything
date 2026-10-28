@@ -1,0 +1,7 @@
+.data-root { padding: 1rem; }
+.data-bar { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+.data-bar strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-table-wrap { overflow: auto; }
+.data-table { border-collapse: collapse; }
+.data-table td { border: 1px solid var(--va-border, #888); padding: .35rem .5rem; white-space: pre-wrap; vertical-align: top; }
+.data-table textarea { min-width: 8rem; width: 100%; box-sizing: border-box; resize: vertical; color: inherit; background: transparent; }

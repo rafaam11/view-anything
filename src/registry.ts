@@ -14,6 +14,7 @@ const viewers: Record<string, () => Promise<Viewer>> = {};
 const loadMd = () => import("./md/viewer").then((m) => m.default);
 viewers["md"] = loadMd;
 viewers["markdown"] = loadMd;
+viewers["csv"] = () => import("./data/csv-viewer").then((m) => m.default);
 // three.js stays out of the entry chunk: the 3D viewer is only reached through this import.
 const load3d = () => import("./three/viewer").then((m) => m.default);
 for (const ext of THREE_D_EXTENSIONS) viewers[ext] = load3d;

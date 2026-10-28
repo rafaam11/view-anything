@@ -59,6 +59,11 @@
     ],
     "fileAssociations": [
       {
+        "ext": ["csv"],
+        "name": "CSV",
+        "role": "Viewer"
+      },
+      {
         "ext": [
           "md",
           "markdown"

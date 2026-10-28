@@ -6,6 +6,10 @@ test("md and markdown map to md viewer, case-insensitive", () => {
   expect(resolveViewer("C:\\a\\B.MD")).not.toBeNull();
   expect(resolveViewer("/x/y.markdown")).not.toBeNull();
 });
+test("CSV uses a separate lazy viewer", () => {
+  expect(resolveViewer("C:\\a\\B.CSV")).not.toBeNull();
+  expect(resolveViewer("a.csv")).not.toBe(resolveViewer("a.md"));
+});
 test("unknown extension returns null", () => {
   expect(resolveViewer("a.xyz")).toBeNull();
   expect(resolveViewer("noext")).toBeNull();

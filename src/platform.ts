@@ -41,7 +41,7 @@ export const platform = {
       directory: false,
       filters: opts.only3d
         ? [models]
-        : [{ name: "Markdown", extensions: ["md", "markdown"] }, models, { name: "모든 파일", extensions: ["*"] }],
+        : [{ name: "Markdown", extensions: ["md", "markdown"] }, { name: "CSV", extensions: ["csv"] }, models, { name: "모든 파일", extensions: ["*"] }],
     });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];

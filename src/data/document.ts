@@ -23,6 +23,13 @@ export class FileDocument {
 
   edit(bytes: Uint8Array): void { this.current = bytes.slice(); }
 
+  /** Adopt freshly read disk contents after an explicit discard. */
+  reset(bytes: Uint8Array): void {
+    if (this.saving) throw new Error("저장이 이미 진행 중입니다");
+    this.known = bytes.slice();
+    this.current = bytes.slice();
+  }
+
   /** Reload only when clean; never discard edits on focus. */
   async reload(): Promise<boolean> {
     if (this.dirty || this.saving) return false;
