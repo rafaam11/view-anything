@@ -84,6 +84,18 @@ fn path_exists(path: String) -> bool {
     Path::new(&path).exists()
 }
 
+/// Check size before allocating or sending file contents to a viewer.
+#[tauri::command]
+async fn file_size(path: String) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let metadata = std::fs::metadata(&path).map_err(|e| format!("{path}: {e}"))?;
+        if !metadata.is_file() {
+            return Err(format!("{path}: 일반 파일이 아닙니다"));
+        }
+        Ok(metadata.len())
+    }).await.map_err(|e| e.to_string())?
+}
+
 /// The file a save must replace. For a symlink that is the link's final target: renaming the
 /// temporary file over the link itself would turn it into a regular file and leave the real
 /// file stale.
@@ -209,6 +221,7 @@ pub fn run() {
             write_file_raw,
             modifier_shift,
             path_exists,
+            file_size,
             open_window,
             update::update_context,
             update::update_status,

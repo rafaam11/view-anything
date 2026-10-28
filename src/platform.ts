@@ -56,6 +56,10 @@ export const platform = {
   async pathExists(path: string): Promise<boolean> {
     return invoke<boolean>("path_exists", { path });
   },
+  /** Check file size before reading data into the webview. */
+  async fileSize(path: string): Promise<number> {
+    return invoke<number>("file_size", { path });
+  },
   async setWindowTitle(title: string): Promise<void> {
     document.title = title;
     await getCurrentWindow().setTitle(title);
