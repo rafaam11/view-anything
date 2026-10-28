@@ -38,7 +38,8 @@ export interface ExportState {
   /** X, Y, Z. */
   sections: ExportSection[];
   /** World coordinates (the runtime uses the same display frame, so the same world). */
-  camera: { position: [number, number, number]; target: [number, number, number] };
+  camera: { position: [number, number, number]; target: [number, number, number]; quaternion?: [number, number, number, number] };
+  navigation?: "arcball" | "fly";
   panelCollapsed?: boolean;
   files: ExportFile[];
 }
@@ -93,6 +94,7 @@ export function parseState(input: unknown): ExportState {
   if (!isObject(camera)) fail("camera");
   if (!Array.isArray(input.files)) fail("files");
   if (input.panelCollapsed !== undefined && typeof input.panelCollapsed !== "boolean") fail("panelCollapsed");
+  if (camera.quaternion !== undefined && (!Array.isArray(camera.quaternion) || camera.quaternion.length !== 4 || !camera.quaternion.every((n) => typeof n === "number" && Number.isFinite(n)))) fail("camera quaternion");
   const state: ExportState = {
     version: STATE_VERSION,
     title: str(input.title, "title"),
@@ -117,5 +119,7 @@ export function parseState(input: unknown): ExportState {
     }),
   };
   if (input.panelCollapsed !== undefined) state.panelCollapsed = input.panelCollapsed as boolean;
+  if (camera.quaternion !== undefined) state.camera.quaternion = camera.quaternion as [number, number, number, number];
+  if (input.navigation !== undefined) state.navigation = oneOf(input.navigation, ["arcball", "fly"] as const, "navigation");
   return state;
 }

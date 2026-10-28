@@ -2,6 +2,7 @@
 // fit (mirroring the toolbar), the scene panel toggle, and the display mode / section controls.
 import { TOOLBAR, type KeyAction } from "./keys";
 import type { MenuItem } from "./menubar";
+import type { Navigation } from "./navigation";
 
 export interface ViewMenuContext {
   run(action: KeyAction): void;
@@ -45,6 +46,18 @@ export function buildToolbar(run: (action: KeyAction) => void): HTMLElement {
     toolbar.append(b);
   }
   return toolbar;
+}
+
+export function navigationSelect(controls: Navigation): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "카메라 조작");
+  select.title = "Arcball: 마우스 회전 · Fly: 드래그 시점, W/A/S/D/Q/E 이동";
+  for (const [value, label] of [["arcball", "Arcball"], ["fly", "Fly"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = label; select.append(option);
+  }
+  select.value = controls.mode;
+  select.onchange = () => controls.setMode(select.value === "fly" ? "fly" : "arcball");
+  return select;
 }
 
 /** Give the keyboard to the 3D canvas (after a menu command), so F and 1-7 work right away. */

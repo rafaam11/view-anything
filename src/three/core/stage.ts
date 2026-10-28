@@ -10,7 +10,6 @@ import {
   Group,
   HemisphereLight,
   Matrix4,
-  MOUSE,
   PerspectiveCamera,
   type Camera,
   Scene,
@@ -21,7 +20,7 @@ import {
   type Material,
   type Object3D,
 } from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Navigation } from "./navigation";
 import { displayRootMatrix, objectMatrix, type FramePreset, type ObjectFrame, type Unit } from "./frames";
 import { fitDistance, standardViewDirection, standardViewUp, type StandardView } from "./views";
 import { batchByBudget, clipPlanes, gridSpec, minOrbitDistance, orbitDirection } from "./stage-math";
@@ -45,7 +44,7 @@ export class Stage {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(45, 1, 0.1, 1000);
-  readonly controls: OrbitControls;
+  readonly controls: Navigation;
   /** Display frame -> three.js world (Y-up). Everything shown lives under it. */
   readonly displayRoot = new Group();
   /** File objects go here (display-frame coordinates). */
@@ -101,11 +100,7 @@ export class Stage {
     key.target.position.set(0, 0, 0);
     this.camera.add(key, key.target);
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN };
-    this.controls.zoomToCursor = true;
-    this.controls.screenSpacePanning = true;
-    this.controls.addEventListener("change", () => {
+    this.controls = new Navigation(this.camera, this.renderer.domElement, () => {
       this.requestRender();
       for (const fn of this.cameraListeners) fn();
     });

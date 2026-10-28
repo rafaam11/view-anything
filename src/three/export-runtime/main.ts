@@ -13,7 +13,7 @@ import { ScenePanel } from "../core/panel";
 import { ViewTools } from "../core/view-tools";
 import { workerRunner } from "../geometry-worker";
 import { Menubar } from "../core/menubar";
-import { buildToolbar, focusCanvas, viewMenuItems } from "../core/view-menu";
+import { buildToolbar, focusCanvas, navigationSelect, viewMenuItems } from "../core/view-menu";
 import { keyAction, type KeyAction } from "../core/keys";
 import { FRAME_LABELS, FRAME_SHORT_LABELS, UNIT_LABELS } from "../core/frames";
 import { meshTriangles } from "../core/info";
@@ -100,6 +100,8 @@ class ExportedViewer {
     private readonly state: ExportState,
   ) {
     const toolbar = buildToolbar((a) => this.run(a));
+    stage.controls.setMode(state.navigation ?? "arcball");
+    toolbar.append(navigationSelect(stage.controls));
     const frame = el("span", "va3d-frame-label");
     frame.textContent = `${FRAME_SHORT_LABELS[state.display]} · ${UNIT_LABELS[state.unit]}`;
     frame.title = `좌표계 (화면 기준): ${FRAME_LABELS[state.display]}, 단위 ${UNIT_LABELS[state.unit]}`;
@@ -209,7 +211,8 @@ class ExportedViewer {
     const { camera, controls } = this.stage;
     camera.position.fromArray(this.state.camera.position);
     controls.target.fromArray(this.state.camera.target);
-    camera.lookAt(controls.target);
+    if (this.state.camera.quaternion) camera.quaternion.fromArray(this.state.camera.quaternion);
+    else camera.lookAt(controls.target);
     controls.update();
     await this.stage.reveal(pending, sizes);
     this.tools.setMode(this.state.mode);

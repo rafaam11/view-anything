@@ -141,6 +141,16 @@ test("state schema: a valid state parses; wrong versions and shapes are rejected
   expect(() => parseState(null)).toThrow();
 });
 
+test("navigation and rolled camera orientation round-trip; older exports remain valid", () => {
+  const state = sampleState();
+  state.navigation = "fly";
+  state.camera.quaternion = [0, 0, 0.5, Math.sqrt(0.75)];
+  expect(parseState(JSON.parse(JSON.stringify(state)))).toEqual(state);
+  expect(() => parseState({ ...state, navigation: "other" })).toThrow(/navigation/);
+  expect(() => parseState({ ...state, camera: { ...state.camera, quaternion: [0, 1] } })).toThrow(/quaternion/);
+  expect(parseState(sampleState()).navigation).toBeUndefined();
+});
+
 test("save dialog default: first file's folder and stem with .html", () => {
   expect(defaultHtmlPath("D:/m/a.step")).toBe("D:/m/a.html");
   expect(defaultHtmlPath("D:/m/v1.2/part.final.stl")).toBe("D:/m/v1.2/part.final.html");

@@ -91,7 +91,8 @@ export async function exportHtml(input: ExportInput): Promise<string | null> {
       unit: input.unit,
       mode: input.mode,
       sections: input.sections,
-      camera: { position: camera.position.toArray(), target: controls.target.toArray() },
+      camera: { position: camera.position.toArray(), target: controls.target.toArray(), quaternion: camera.quaternion.toArray() },
+      navigation: controls.mode,
       panelCollapsed: input.panelCollapsed,
       files: files.map(({ file }) => ({ id: file.id, name: file.name, format: file.format, sourceUnit: file.sourceUnit, tree: exportTree(file.root) })),
     };

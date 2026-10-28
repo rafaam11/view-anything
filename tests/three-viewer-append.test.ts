@@ -50,6 +50,7 @@ function fakeStage() {
     content,
     overlay: new Group(),
     camera: new PerspectiveCamera(),
+    controls: { mode: "arcball", setMode: vi.fn() },
     displayToWorld: new Matrix4(),
     onChange: vi.fn((fn: () => void) => void listeners.push(fn)),
     requestRender: vi.fn(),

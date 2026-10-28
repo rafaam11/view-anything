@@ -19,6 +19,7 @@ vi.mock("../src/three/load", () => ({
 vi.mock("../src/three/core/stage", () => {
   class Stage {
     canvas = document.createElement("canvas");
+    controls = { mode: "arcball", setMode() {} };
     onChange() {}
     requestRender() {}
     add() {}

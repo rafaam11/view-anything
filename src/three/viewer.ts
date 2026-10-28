@@ -13,7 +13,7 @@ import { ScenePanel } from "./core/panel";
 import { ViewTools } from "./core/view-tools";
 import { keyAction, type KeyAction } from "./core/keys";
 import { Menubar } from "./core/menubar";
-import { buildToolbar, focusCanvas, viewMenuItems } from "./core/view-menu";
+import { buildToolbar, focusCanvas, navigationSelect, viewMenuItems } from "./core/view-menu";
 import { formatProgress, formatStatus, progressPercent, RetryableCadError, type Phase } from "./worker/protocol";
 import { canCoarsen } from "./worker/cad-params";
 import { loadGltfFile, loadMeshFile } from "./load";
@@ -175,6 +175,7 @@ export class ThreeViewer {
 
   constructor(readonly stage: Stage, root: HTMLElement) {
     const toolbar = buildToolbar((action) => this.run(action));
+    toolbar.append(navigationSelect(stage.controls));
     toolbar.append(this.displaySelects());
     this.panel = new ScenePanel({
       toggle: (id, v) => this.setVisible(id, v),
