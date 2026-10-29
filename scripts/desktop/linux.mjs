@@ -16,7 +16,7 @@ const cmd=(route,body)=>request('POST',`/session/${session}`+route,body);
 const js=(script,...args)=>cmd('/execute/sync',{script,args});
 const asyncJs=(script,...args)=>cmd('/execute/async',{script:`const done=arguments[arguments.length-1]; Promise.resolve((async()=>{${script}})()).then(value=>done({value}),error=>done({error:String(error)}));`,args}).then(result=>{if(result.error)throw Error(result.error);return result.value;});
 const wait=expression=>until(()=>js(`return ${expression}`),expression);
-const click=label=>js('const b=[...document.querySelectorAll("button")].find(b=>(b.getAttribute("aria-label")??b.textContent)===arguments[0]);if(!b)throw Error("Button not found: "+arguments[0]);b.click();return true;',label);
+const click=label=>js('const scope=document.querySelector("dialog[open]")??document;const b=[...scope.querySelectorAll("button")].find(b=>(b.getAttribute("aria-label")??b.textContent)===arguments[0]);if(!b)throw Error("Button not found: "+arguments[0]);b.click();return true;',label);
 const key=(key,extras={})=>js('const k=arguments[0],code=/^[a-z]$/i.test(k)?"Key"+k.toUpperCase():/^[0-9]$/.test(k)?"Digit"+k:k;const e=new KeyboardEvent("keydown",{key:k,code,bubbles:true,cancelable:true,...arguments[1]});(document.activeElement??window).dispatchEvent(e);return true;',key,extras);
 // WebKitWebDriver screenshots can stall on a modal/accelerated WebView. Capture
 // the actual isolated X11 desktop, including GTK dialogs, without that RPC.
