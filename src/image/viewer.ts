@@ -5,6 +5,7 @@ import type { Viewer } from "../registry";
 import { equalBytes } from "../data/document";
 import { documentBar } from "../ui/chrome";
 import { iconButton } from "../ui/icons";
+import { ImageHistory, transformImage, type ImageState } from "./history";
 
 const MAX_BYTES = 100 * 1024 * 1024, MAX_PIXELS = 50_000_000;
 const nameOf = (p: string) => p.split(/[\\/]/).pop() ?? p;
@@ -15,6 +16,7 @@ const viewer: Viewer = {
   async mount(el, initial) {
     let path = initial, files = await platform.siblingImages(path), url = "", dirty = false, edited = false, approved = false, busy = false, scale = 1, editing = false, fitted = true;
     let original: HTMLImageElement | null = null, known = new Uint8Array();
+    let history: ImageHistory | null = null;
     const root = document.createElement("div"); root.className = "image-root va-viewer";
     const bar = document.createElement("header"); bar.className = "image-bar";
     const title = document.createElement("strong");
@@ -23,6 +25,7 @@ const viewer: Viewer = {
     const zoomOut = iconButton("축소", "minus"), zoomIn = iconButton("확대", "plus"), fit = iconButton("화면에 맞춤", "fit", "Ctrl+0");
     const rotate = iconButton("회전", "rotate"), flip = iconButton("좌우 반전", "flip"), cropToggle = iconButton("자르기", "crop");
     const copy = iconButton("이미지 복사", "copy", "Ctrl+C"), toggle = iconButton("이미지 편집", "edit"), save = button("PNG로 저장"), crop = button("자르기 적용");
+    const undo = iconButton("실행 취소", "undo", "Ctrl+Z"), redo = iconButton("다시 실행", "redo", "Ctrl+Y");
     const zoomLabel = document.createElement("span"); zoomLabel.className = "image-zoom";
     const coords = document.createElement("div"); coords.className = "image-coords va-search"; coords.hidden = true;
     const inputs = ["X", "Y", "너비", "높이"].map(label => {
@@ -33,12 +36,12 @@ const viewer: Viewer = {
     const cancelCrop = iconButton("자르기 취소", "close"); cancelCrop.onclick = () => { coords.hidden = true; }; coords.append(crop, cancelCrop);
     const area = document.createElement("div"); area.className = "image-area";
     const image = document.createElement("img"); image.alt = "이미지";
-    const canvas = document.createElement("canvas"); canvas.hidden = true;
+    let canvas = document.createElement("canvas"); canvas.hidden = true;
     const surface = document.createElement("div"); surface.className = "image-surface"; surface.append(image, canvas); area.append(surface);
     const thumbs = document.createElement("nav"); thumbs.className = "image-thumbs"; thumbs.setAttribute("aria-label", "같은 폴더 이미지");
     thumbs.hidden = true; status.className = "va-status";
     const actual = button("원본 크기 (100%)"); actual.onclick = () => setZoom(1);
-    documentBar(bar, { files:[save], controls:[prev, next, zoomOut, zoomLabel, zoomIn, fit, copy, rotate, flip, cropToggle, toggle], view:[
+    documentBar(bar, { files:[save], controls:[prev, next, zoomOut, zoomLabel, zoomIn, fit, copy, undo, redo, rotate, flip, cropToggle, toggle], view:[
       { label:"화면에 맞춤", run:() => fit.click() }, { label:"원본 크기 (100%)", run:() => actual.click() },
       { label:"썸네일", checked:() => !thumbs.hidden, run:() => { thumbs.hidden = !thumbs.hidden; applyScale(); } },
     ] });
@@ -47,8 +50,10 @@ const viewer: Viewer = {
     const refresh = () => {
       title.textContent = (dirty ? "● " : "") + nameOf(path); void platform.setWindowTitle(title.textContent).catch(() => {});
       const index = files.findIndex(f => pathKey(f) === pathKey(path)); prev.disabled = busy || index <= 0; next.disabled = busy || index < 0 || index + 1 >= files.length;
-      rotate.hidden = flip.hidden = cropToggle.hidden = save.hidden = !editing;
+      undo.hidden = redo.hidden = rotate.hidden = flip.hidden = cropToggle.hidden = save.hidden = !editing;
       for (const b of [copy, rotate, flip, cropToggle, toggle]) b.disabled = busy;
+      undo.disabled = busy || !history?.previous; redo.disabled = busy || !history?.next;
+      save.disabled = busy || !dirty;
       toggle.setAttribute("aria-pressed", String(editing));
     };
     const applyScale = () => {
@@ -66,7 +71,8 @@ const viewer: Viewer = {
       fitted = false; scale = Math.max(.01, Math.min(16, value)); applyScale();
       const after = target.getBoundingClientRect(); area.scrollLeft += after.left + u*after.width - x; area.scrollTop += after.top + v*after.height - y;
     };
-    const confirmLeave = async () => approved || !dirty || await platform.confirmDiscard("저장하지 않은 이미지 편집을 버릴까요?");
+    const confirmLeave = async () => !busy && (approved || !dirty || await platform.confirmDiscard("저장하지 않은 이미지 편집을 버릴까요?"));
+    const discard = async () => approved || !dirty || await platform.confirmDiscard("저장하지 않은 이미지 편집을 버릴까요?");
     const load = async (target: string) => {
       if (await platform.fileSize(target) > MAX_BYTES) throw new Error("이미지가 100 MiB를 초과합니다.");
       const bytes = await platform.readFileRaw(target);
@@ -78,6 +84,7 @@ const viewer: Viewer = {
       if (candidate.naturalWidth * candidate.naturalHeight > MAX_PIXELS) { URL.revokeObjectURL(nextUrl); throw new Error("이미지가 5천만 픽셀을 초과합니다."); }
       if (url) URL.revokeObjectURL(url);
       path = target; url = nextUrl; original = candidate; known = new Uint8Array(bytes); image.src = url; dirty = false; edited = false; scale = 1; status.textContent = "";
+      history = new ImageHistory(candidate.naturalWidth, candidate.naturalHeight); canvas.width = canvas.height = 0;
       fitted = true; coords.hidden = true; editing = false;
       canvas.hidden = true; image.hidden = false; inputs[0].value = "0"; inputs[1].value = "0";
       inputs[2].value = String(candidate.naturalWidth); inputs[3].value = String(candidate.naturalHeight);
@@ -85,29 +92,32 @@ const viewer: Viewer = {
     };
     const navigate = async (target: string) => {
       if (busy || target === path) return; busy = true;
-      refresh(); try { if (await confirmLeave()) await load(target); } finally { busy = false; refresh(); }
+      refresh(); try { if (await discard()) await load(target); } finally { busy = false; refresh(); }
+    };
+    const renderState = (state: ImageState) => {
+      const tmp = document.createElement("canvas"); tmp.width = state.width; tmp.height = state.height;
+      const ctx = tmp.getContext("2d"); if (!ctx) throw new Error("이미지 편집 화면을 만들 수 없습니다.");
+      ctx.setTransform(...state.matrix); ctx.drawImage(original!, 0, 0);
+      surface.replaceChild(tmp, canvas); canvas.width = canvas.height = 0; canvas = tmp;
+    };
+    const showState = () => {
+      dirty = history!.dirty; edited = !history!.original;
+      image.hidden = edited; canvas.hidden = !edited; coords.hidden = true; status.textContent = "";
+      inputs[0].value = inputs[1].value = "0"; inputs[2].value = String(history!.state.width); inputs[3].value = String(history!.state.height);
+      refresh(); applyScale();
     };
     const draw = (transform: "rotate" | "flip" | "crop") => {
-      if (!original || busy || !editing) return;
-      const src: CanvasImageSource = edited ? canvas : original;
-      const w = edited ? canvas.width : original.naturalWidth, h = edited ? canvas.height : original.naturalHeight;
-      const tmp = document.createElement("canvas");
-      if (transform === "crop") {
-        const [x, y, cw, ch] = inputs.map(i => Number(i.value));
-        if (![x, y, cw, ch].every(Number.isInteger) || x < 0 || y < 0 || cw < 1 || ch < 1 || x + cw > w || y + ch > h) throw new Error("자르기 영역이 이미지 범위를 벗어났습니다.");
-        tmp.width = cw; tmp.height = ch; tmp.getContext("2d")!.drawImage(src, x, y, cw, ch, 0, 0, cw, ch);
-      } else {
-        tmp.width = transform === "rotate" ? h : w; tmp.height = transform === "rotate" ? w : h;
-        const ctx = tmp.getContext("2d")!;
-        if (transform === "rotate") { ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
-        else { ctx.translate(w, 0); ctx.scale(-1, 1); }
-        ctx.drawImage(src, 0, 0);
-      }
-      canvas.width = tmp.width; canvas.height = tmp.height; canvas.getContext("2d")!.drawImage(tmp, 0, 0);
-      dirty = true; edited = true; image.hidden = true; canvas.hidden = false;
-      inputs[0].value = "0"; inputs[1].value = "0"; inputs[2].value = String(canvas.width); inputs[3].value = String(canvas.height);
-      coords.hidden = true; refresh(); applyScale();
+      if (!original || !history || busy || !editing) return;
+      const [x, y, width, height] = inputs.map(i => Number(i.value));
+      const state = transformImage(history.state, transform === "crop" ? { kind: "crop", x, y, width, height } : { kind: transform });
+      renderState(state); history.commit(state); showState();
     };
+    const stepHistory = (back: boolean) => {
+      if (!history || !editing || busy) return;
+      const state = back ? history.previous : history.next; if (!state) return;
+      try { renderState(state); if (back) history.undo(); else history.redo(); showState(); } catch (e) { report(e); }
+    };
+    undo.onclick = () => stepHistory(true); redo.onclick = () => stepHistory(false);
     rotate.onclick = () => { try { draw("rotate"); } catch (e) { report(e); } };
     flip.onclick = () => { try { draw("flip"); } catch (e) { report(e); } };
     crop.onclick = () => { try { draw("crop"); } catch (e) { report(e); } };
@@ -119,7 +129,7 @@ const viewer: Viewer = {
       if (busy) return;
       busy = true; refresh();
       try {
-        if (editing && dirty) { if (!await confirmLeave()) return; await load(path); }
+        if (editing && dirty) { if (!await discard()) return; await load(path); }
         else editing = !editing;
         coords.hidden = true;
       } finally { busy = false; refresh(); }
@@ -145,6 +155,8 @@ const viewer: Viewer = {
     window.addEventListener("keydown", e => {
       if (document.querySelector("dialog[open]") || (e.target as HTMLElement)?.closest?.("input,textarea,[contenteditable=true]")) return;
       if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); if (!e.repeat) copy.click(); }
+      else if (e.ctrlKey && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo.click(); else undo.click(); }
+      else if (e.ctrlKey && e.key.toLowerCase() === "y") { e.preventDefault(); redo.click(); }
       else if (e.ctrlKey && e.key === "0") { e.preventDefault(); fit.click(); }
       else if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomIn.click(); }
       else if (e.key === "-") { e.preventDefault(); zoomOut.click(); }
@@ -165,7 +177,7 @@ const viewer: Viewer = {
         if (!target) return;
         const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png"));
         await platform.writeImageCopy(target, path, new Uint8Array(await blob.arrayBuffer()));
-        dirty = false; refresh(); await platform.notice("편집 이미지를 저장했습니다.");
+        history!.markSaved(); dirty = false; refresh(); await platform.notice("편집 이미지를 저장했습니다.");
       } finally { busy = false; refresh(); }
     })().catch(report); };
     for (const file of files.slice(0, 1000)) {

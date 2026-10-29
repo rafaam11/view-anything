@@ -8,6 +8,8 @@ const paths = {
   rotate: '<path d="M4 9a8 8 0 1 1 0 7M4 3v6h6"/>',
   flip: '<path d="M12 2v20M3 6l5 6-5 6Zm18 0-5 6 5 6Z"/>',
   crop: '<path d="M6 2v16h16M2 6h16v16"/>',
+  undo: '<path d="M9 4 3 10l6 6M3 10h11a7 7 0 0 1 7 7v3"/>',
+  redo: '<path d="m15 4 6 6-6 6m6-6H10a7 7 0 0 0-7 7v3"/>',
   save: '<path d="M4 3h13l4 4v14H3V3Zm3 0v6h9V3M7 21v-7h10v7"/>',
   close: '<path d="m6 6 12 12M6 18 18 6"/>',
 } as const;
