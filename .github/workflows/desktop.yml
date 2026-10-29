@@ -1,0 +1,58 @@
+name: desktop
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm ci --prefix scripts/desktop
+      - run: node scripts/desktop/build.mjs
+      - run: node scripts/desktop/windows.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-windows-evidence
+          path: ${{ runner.temp }}/va-desktop/evidence/
+          if-no-files-found: warn
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install desktop and build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb dbus-x11 xdotool scrot xclip
+      - run: npm ci
+      - run: cargo install tauri-driver --locked
+      - run: node scripts/desktop/build.mjs
+      - run: xvfb-run -a -s '-screen 0 1280x1000x24' dbus-run-session -- node scripts/desktop/linux.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-linux-evidence
+          path: ${{ runner.temp }}/va-desktop/evidence/
+          if-no-files-found: warn

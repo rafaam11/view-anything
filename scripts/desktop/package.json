@@ -1,0 +1,6 @@
+{
+  "name": "view-anything-desktop-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "playwright": "1.64.1" }
+}
