@@ -1,4 +1,5 @@
 import { THREE_D_EXTENSIONS } from "./three/formats";
+import { TEXT_EXTENSIONS } from "./text/formats";
 
 export type Viewer = {
   mount(el: HTMLElement, path: string): Promise<void>;
@@ -11,6 +12,8 @@ export type Viewer = {
 };
 
 const viewers: Record<string, () => Promise<Viewer>> = {};
+const loadText = () => import("./text/viewer").then(m => m.default);
+for (const ext of TEXT_EXTENSIONS) viewers[ext] = loadText;
 const loadMd = () => import("./md/viewer").then((m) => m.default);
 viewers["md"] = loadMd;
 viewers["markdown"] = loadMd;

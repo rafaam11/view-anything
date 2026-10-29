@@ -34,3 +34,8 @@ test("3D loader resolves to a viewer with mount", async () => {
   const viewer = await resolveViewer("a.glb")!();
   expect(typeof viewer.mount).toBe("function");
 });
+test("text and code extensions share a viewer without replacing specialized viewers", () => {
+  const text = resolveViewer("sample.TXT"); expect(text).not.toBeNull();
+  for (const ext of ["log", "ini", "toml", "cpp", "py", "rs", "ts", "xml", "html"]) expect(resolveViewer(`file.${ext}`)).toBe(text);
+  for (const ext of ["md", "json", "yaml", "csv", "svg", "pdf", "ply"]) expect(resolveViewer(`file.${ext}`)).not.toBe(text);
+});

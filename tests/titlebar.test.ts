@@ -30,7 +30,7 @@ afterEach(() => { dispose(); vi.restoreAllMocks(); });
 
 test("theme is immediately before minimize, maximize and close; buttons never drag the window", () => {
   expect([...document.querySelectorAll(".va-titlebar button")].map((b) => (b as HTMLElement).dataset.action))
-    .toEqual(["theme", "minimize", "maximize", "close"]);
+    .toEqual(["settings", "theme", "minimize", "maximize", "close"]);
   expect(document.body.firstElementChild?.className).toBe("va-titlebar");
   expect(document.querySelector(".va-titlebar-drag")?.hasAttribute("data-tauri-drag-region")).toBe(true);
   for (const b of document.querySelectorAll(".va-titlebar button")) {

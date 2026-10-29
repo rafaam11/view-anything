@@ -7,6 +7,7 @@ type WindowControls = Pick<AppWindow, "minimize" | "toggleMaximize" | "close" | 
 // Static application icons only. File names and other external strings use textContent.
 const svg = (body: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${body}</svg>`;
 const icons = {
+  settings: svg('<circle cx="12" cy="12" r="3"/><path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 2h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-2Z"/>'),
   dark: svg('<path d="M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10Z"/>'),
   light: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'),
   system: svg('<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M12 17v4m-4 0h8"/>'),
@@ -45,6 +46,7 @@ export function mountTitlebar(host: HTMLElement = document.body, appWindow: Wind
     controls.append(b);
     return b;
   };
+  button("settings", "설정", icons.settings, async () => { (await import("./settings/dialog")).openSettings(); });
   const theme = button("theme", "테마", icons.system, () => { cycleTheme(); });
   theme.setAttribute("aria-keyshortcuts", "Control+Shift+T");
   button("minimize", "최소화", icons.minimize, () => appWindow.minimize());

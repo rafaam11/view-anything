@@ -51,6 +51,8 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - 부품 이름 같은 파일 유래 문자열은 textContent로만 표시한다.
 
 ## 이미지·데이터
+- `src/text/`는 10 MiB까지 일반 텍스트·코드를 읽고 안전 편집한다. UTF 원문/BOM/줄바꿈을 보존하며 혼합 줄바꿈은 읽기 전용이다. CP949는 명시적으로 선택하고 Rust `text_codec.rs`의 무손실 변환을 쓴다. `Ctrl+Shift+O`는 확장자와 무관한 명시적 텍스트 열기다.
+- `src/settings/`는 제목줄 설정 버튼과 `Ctrl+,`로 연다. `va.preferences.v1`에 Markdown 글꼴 프리셋·크기를 저장하고 열린 창에도 동기화한다. 본문 CSS 변수로 읽기·편집에 적용하며 원문은 바꾸지 않는다.
 - `src/image/`는 원본을 보호하고 편집 결과를 별도 PNG로 저장한다. GIF/SVG 편집은 정적 결과다.
 - `src/data/`는 JSON/YAML 원문, CSV 수정 셀, UTF-8/UTF-16과 줄바꿈을 보존한다. 저장 직전 바이트 확인과 네이티브 조건부 원자 교체를 쓰며, 외부 프로세스와의 검증·교체 사이 경쟁은 완전히 제거할 수 없다.
 - CSV는 100행 단위로 표시하고 수정은 저장 시 한 번에 적용한다. Markdown·데이터 복사본 저장은 기존 대상 교체를 거부하며 하드 링크 미지원 파일시스템에서는 실패한다.

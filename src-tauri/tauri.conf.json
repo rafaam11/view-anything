@@ -59,6 +59,11 @@
     ],
     "fileAssociations": [
       {
+        "ext": ["txt", "log", "ini", "cfg", "conf", "toml", "xml", "html", "htm", "css", "scss", "c", "h", "cc", "cpp", "cxx", "hpp", "py", "rs", "js", "jsx", "ts", "tsx", "sh", "bash", "ps1", "bat", "cmd", "sql", "java", "cs", "go", "rb", "lua"],
+        "name": "Text and Code",
+        "role": "Editor"
+      },
+      {
         "ext": ["pdf"],
         "name": "PDF",
         "role": "Viewer"

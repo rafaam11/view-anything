@@ -6,9 +6,11 @@ import { initializeTheme, cycleTheme } from "./theme";
 import { mountTitlebar } from "./titlebar";
 import { isOpenKey, OPEN_EVENT, routeDrop, type OpenEventDetail, type WindowKind } from "./open-route";
 import { isThreeD } from "./three/formats";
+import { initializePreferences } from "./settings/preferences";
 
 const app = document.getElementById("app")!;
 initializeTheme();
+initializePreferences();
 mountTitlebar();
 let file = new URLSearchParams(location.search).get("file");
 /** What the window shows; decides where dropped and picked files go. */
@@ -39,13 +41,19 @@ function message(title: string, hint?: string) {
 async function show() {
   if (!file) {
     message("파일을 끌어다 놓거나 Ctrl+O");
+    const text = document.createElement("button"); text.textContent = "텍스트로 열기… (Ctrl+Shift+O)";
+    text.onclick = () => { void pickAndOpen(false, true); }; app.querySelector(".empty")!.append(text);
     return;
   }
   // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
   void platform.setWindowTitle(file.split(/[\\/]/).pop() ?? file).catch(() => {});
-  const load = resolveViewer(file);
+  const textMode = new URLSearchParams(location.search).get("text") === "1";
+  const load = textMode ? () => import("./text/viewer").then(m => m.default) : resolveViewer(file);
   if (!load) {
     message("지원하지 않는 형식", file);
+    const text = document.createElement("button"); text.textContent = "텍스트로 열기";
+    text.onclick = () => { location.search = "?file=" + encodeURIComponent(file!) + "&text=1"; };
+    app.querySelector(".empty")!.append(text);
     return;
   }
   try {
@@ -112,18 +120,19 @@ window.addEventListener("blur", () => (shiftHeld = false));
 
 let picking = false; // one dialog at a time
 /** Ctrl+O / 파일 > 열기 (routed like a drop); `append`: 파일 > 장면에 추가 (3D files into this scene). */
-async function pickAndOpen(append = false) {
+async function pickAndOpen(append = false, text = false) {
   if (picking) return;
   picking = true;
   let paths: string[];
   try {
-    paths = await platform.pickFiles({ only3d: append });
+    paths = await platform.pickFiles({ only3d: append, text });
   } catch (e) {
     await platform.alert(String(e)).catch(() => {});
     return;
   } finally {
     picking = false; // the dialog is closed; routing below must not block the next Ctrl+O
   }
+  if (text) { for (const p of paths) await platform.openWindow(p, true); return; }
   const run = append && kind === "3d" ? appendPaths(paths) : openPaths(paths, false);
   await run.catch((e) => platform.alert(String(e)).catch(() => {}));
 }
@@ -143,7 +152,16 @@ window.addEventListener(OPEN_EVENT, (e) => {
 window.addEventListener(
   "keydown",
   (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
+    if (document.querySelector(".va-settings[open]") && e.ctrlKey && ["s", "o", "f", "r", "t", ","].includes(e.key.toLowerCase())) {
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+    if (e.ctrlKey && e.key === ",") {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (!e.repeat) void import("./settings/dialog").then(m => m.openSettings());
+    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "o") {
+      e.preventDefault(); e.stopPropagation();
+      if (!e.repeat) void pickAndOpen(false, true);
+    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
       e.preventDefault();
       e.stopPropagation();
       if (!e.repeat) cycleTheme();

@@ -1,0 +1,7 @@
+.text-root { display:flex; flex-direction:column; height:calc(100vh - var(--va-titlebar-height, 0px)); padding:12px; box-sizing:border-box; gap:8px; }
+.text-bar, .text-search { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.text-bar strong { overflow-wrap:anywhere; }
+.text-root button, .text-root input, .text-root select { color:var(--fg); background:var(--bg); border:1px solid var(--border); padding:4px 8px; font:inherit; }
+.text-source { flex:1; min-height:120px; width:100%; box-sizing:border-box; resize:none; background:var(--bg); color:var(--fg); border:1px solid var(--border); padding:12px; font:14px/1.6 "Cascadia Mono", Consolas, monospace; tab-size:4; }
+.text-root [hidden] { display:none !important; }
+.text-root [role=status] { margin:0; font-size:13px; overflow-wrap:anywhere; }

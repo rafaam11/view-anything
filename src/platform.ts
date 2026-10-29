@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message, open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { THREE_D_EXTENSIONS } from "./three/formats";
+import { TEXT_EXTENSIONS } from "./text/formats";
 
 export const platform = {
   async readFile(path: string): Promise<Uint8Array> {
@@ -41,18 +42,24 @@ export const platform = {
   assetUrl(absPath: string): string {
     return convertFileSrc(absPath);
   },
-  async openWindow(path?: string): Promise<void> {
-    await invoke("open_window", { path: path ?? null });
+  async openWindow(path?: string, text = false): Promise<void> {
+    await invoke("open_window", { path: path ?? null, text });
+  },
+  async decodeCp949(bytes: Uint8Array): Promise<string> {
+    return invoke<string>("decode_cp949", bytes);
+  },
+  async encodeCp949(text: string): Promise<Uint8Array> {
+    return new Uint8Array(await invoke<ArrayBuffer>("encode_cp949", { text }));
   },
   /** Native file-open dialog; [] when cancelled. `only3d`: 3D models only (장면에 추가). */
-  async pickFiles(opts: { only3d?: boolean } = {}): Promise<string[]> {
+  async pickFiles(opts: { only3d?: boolean; text?: boolean } = {}): Promise<string[]> {
     const models = { name: "3D 모델", extensions: [...THREE_D_EXTENSIONS] };
     const picked = await open({
       multiple: true,
       directory: false,
-      filters: opts.only3d
+      filters: opts.text ? [{ name: "텍스트로 열기", extensions: ["*"] }] : opts.only3d
         ? [models]
-        : [{ name: "Markdown", extensions: ["md", "markdown"] }, { name: "PDF", extensions: ["pdf"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
+        : [{ name: "텍스트·코드", extensions: TEXT_EXTENSIONS }, { name: "Markdown", extensions: ["md", "markdown"] }, { name: "PDF", extensions: ["pdf"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
     });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];

@@ -1,0 +1,8 @@
+.va-settings { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:24px; width:min(460px, calc(100vw - 80px)); }
+.va-settings::backdrop { background:rgba(0,0,0,.4); }
+.va-settings fieldset { border:1px solid var(--border); }
+.va-settings label { display:flex; justify-content:space-between; align-items:center; gap:16px; margin:12px 0; }
+.va-settings select, .va-settings input, .va-settings button { font:inherit; background:var(--bg); color:var(--fg); border:1px solid var(--border); padding:6px 10px; }
+.va-settings input { width:70px; }
+.va-settings button { margin-right:8px; cursor:pointer; }
+.va-settings-preview { font-family:var(--va-md-font); font-size:var(--va-md-size); line-height:1.7; }

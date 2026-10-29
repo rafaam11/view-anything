@@ -1,6 +1,7 @@
 mod args;
 mod cloud;
 mod update;
+mod text_codec;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -258,13 +259,19 @@ fn window_url(file: Option<&Path>) -> String {
 }
 
 fn create_window(app: &AppHandle, file: Option<PathBuf>) -> Result<(), String> {
+    create_window_mode(app, file, false)
+}
+
+fn create_window_mode(app: &AppHandle, file: Option<PathBuf>, text: bool) -> Result<(), String> {
     let label = format!("w{}", WINDOW_SEQ.fetch_add(1, Ordering::SeqCst));
     let title = file
         .as_deref()
         .and_then(|p| p.file_name())
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "view-anything".to_string());
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(window_url(file.as_deref()).into()))
+    let mut url = window_url(file.as_deref());
+    if text { url.push_str(if url.contains('?') { "&text=1" } else { "?text=1" }); }
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(title)
         .decorations(false)
         .inner_size(1000.0, 800.0)
@@ -300,8 +307,8 @@ fn focus_latest_window(app: &AppHandle) {
 }
 
 #[tauri::command]
-async fn open_window(app: AppHandle, path: Option<String>) -> Result<(), String> {
-    create_window(&app, path.map(PathBuf::from))
+async fn open_window(app: AppHandle, path: Option<String>, text: Option<bool>) -> Result<(), String> {
+    create_window_mode(&app, path.map(PathBuf::from), text.unwrap_or(false))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -343,6 +350,8 @@ pub fn run() {
             file_size,
             sibling_images,
             open_window,
+            text_codec::decode_cp949,
+            text_codec::encode_cp949,
             update::update_context,
             update::update_status,
             update::update_request

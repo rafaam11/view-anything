@@ -18,9 +18,9 @@
   --crepe-color-selected: var(--border);
   --crepe-color-inline-area: var(--code-bg);
 
-  --crepe-base-font-size: 16px;
-  --crepe-font-title: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
-  --crepe-font-default: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+  --crepe-base-font-size: var(--va-md-size, 16px);
+  --crepe-font-title: var(--va-md-font, system-ui);
+  --crepe-font-default: var(--va-md-font, system-ui);
   --crepe-font-code: "Cascadia Mono", "Cascadia Code", Consolas, "D2Coding", "Courier New", monospace;
 
   --crepe-shadow-1: 0 1px 3px 1px rgba(0, 0, 0, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
