@@ -14,6 +14,8 @@ test("update barrier blocks later window shortcuts and settings actions, then re
     expect(document.querySelector(".va-settings")!.hasAttribute("inert")).toBe(true);
     const key=new KeyboardEvent("keydown",{key:"s",ctrlKey:true,cancelable:true});window.dispatchEvent(key);
     (document.querySelector("#app button") as HTMLButtonElement).click();expect(save).not.toHaveBeenCalled();expect(key.defaultPrevented).toBe(true);
+    const inside = new KeyboardEvent("keydown",{key:"s",ctrlKey:true,bubbles:true,cancelable:true});
+    document.querySelector(".va-update-dialog button")!.dispatchEvent(inside);expect(inside.defaultPrevented).toBe(true);expect(save).not.toHaveBeenCalled();
     (document.querySelector(".va-update-dialog button") as HTMLButtonElement).click();expect(cancel).toHaveBeenCalledOnce();
     lockUpdateInput(false);window.dispatchEvent(new KeyboardEvent("keydown",{key:"s",ctrlKey:true}));expect(save).toHaveBeenCalledOnce();
     expect(document.querySelector("#app")!.hasAttribute("inert")).toBe(false);expect(document.querySelector(".va-settings")!.hasAttribute("inert")).toBe(false);

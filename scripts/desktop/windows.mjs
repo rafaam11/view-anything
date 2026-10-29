@@ -43,6 +43,7 @@ try {
   const text=pages.txt;await text.getByRole('button',{name:'편집',exact:true}).click();await text.getByLabel('텍스트 내용').fill('unsaved update test\n');
   await first.getByRole('button',{name:'재시작',exact:true}).click();const dialog=first.locator('.va-update-dialog');await dialog.waitFor();await dialog.getByText('저장하지 않은 변경과 진행 중인 작업은 사라집니다. 저장하려면 취소하세요.',{exact:true}).waitFor();
   assert.equal(await text.locator('#app').getAttribute('inert'),'');
+  await first.keyboard.press('Control+s');
   await text.keyboard.press('Control+s');await delay(200);assert.deepEqual(fs.readFileSync(files.txt),original);
   await text.evaluate(()=>window.dispatchEvent(new CustomEvent('va:open')));await dialog.getByRole('button',{name:'취소',exact:true}).click();await text.waitForFunction(()=>!document.getElementById('app').hasAttribute('inert'));
   assert.equal(await text.getByLabel('텍스트 내용').inputValue(),'unsaved update test\n');await text.keyboard.press('Control+s');await text.getByText('저장됨',{exact:true}).waitFor();const saved=fs.readFileSync(files.txt);assert.deepEqual(saved,Buffer.from('\ufeffunsaved update test\r\n'));

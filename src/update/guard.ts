@@ -19,7 +19,10 @@ export function lockUpdateInput(value: boolean): void {
 /** Install before titlebar/viewer shortcuts. Window capture precedes document capture. */
 export function initializeUpdateInput(): () => void {
   const block = (event: Event) => {
-    if (locked && !(event.target as Element | null)?.closest?.(".va-update-dialog")) {
+    const dialog = (event.target as Element | null)?.closest?.(".va-update-dialog");
+    const key = event as KeyboardEvent;
+    const dialogKey = ["Tab", "Enter", " ", "Escape"].includes(key.key) && !key.ctrlKey && !key.altKey && !key.metaKey;
+    if (locked && (!dialog || (event.type === "keydown" && !dialogKey))) {
       event.preventDefault(); event.stopImmediatePropagation();
     }
   };
