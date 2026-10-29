@@ -60,27 +60,32 @@
     "fileAssociations": [
       {
         "ext": ["txt", "log", "ini", "cfg", "conf", "toml", "xml", "html", "htm", "css", "scss", "c", "h", "cc", "cpp", "cxx", "hpp", "py", "rs", "js", "jsx", "ts", "tsx", "sh", "bash", "ps1", "bat", "cmd", "sql", "java", "cs", "go", "rb", "lua"],
-        "name": "Text and Code",
+        "name": "com.rafaam11.viewanything.text",
+        "description": "Text and Code",
         "role": "Editor"
       },
       {
         "ext": ["pdf"],
-        "name": "PDF",
+        "name": "com.rafaam11.viewanything.pdf",
+        "description": "PDF",
         "role": "Viewer"
       },
       {
         "ext": ["csv"],
-        "name": "CSV",
+        "name": "com.rafaam11.viewanything.csv",
+        "description": "CSV",
         "role": "Viewer"
       },
       {
         "ext": ["json", "yaml", "yml"],
-        "name": "Data",
+        "name": "com.rafaam11.viewanything.data",
+        "description": "Data",
         "role": "Viewer"
       },
       {
         "ext": ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"],
-        "name": "Image",
+        "name": "com.rafaam11.viewanything.image",
+        "description": "Image",
         "role": "Viewer"
       },
       {
@@ -88,7 +93,8 @@
           "md",
           "markdown"
         ],
-        "name": "Markdown",
+        "name": "com.rafaam11.viewanything.markdown",
+        "description": "Markdown",
         "role": "Viewer"
       },
       {
@@ -106,7 +112,8 @@
           "iges",
           "igs"
         ],
-        "name": "3D Model",
+        "name": "com.rafaam11.viewanything.model",
+        "description": "3D Model",
         "role": "Viewer"
       }
     ]

@@ -30,10 +30,16 @@ test("devCsp keeps the dev server websocket", () => {
 });
 
 test("3D extensions are registered as a file association", () => {
-  const assoc = conf.bundle.fileAssociations.find((a: { name: string }) => a.name === "3D Model");
+  const assoc = conf.bundle.fileAssociations.find((a: { ext: string[] }) => a.ext.includes("pcd"));
   expect(assoc).toBeDefined();
   expect(assoc.role).toBe("Viewer");
   expect([...assoc.ext].sort()).toEqual([...THREE_D_EXTENSIONS].sort());
-  const md = conf.bundle.fileAssociations.find((a: { name: string }) => a.name === "Markdown");
+  const md = conf.bundle.fileAssociations.find((a: { ext: string[] }) => a.ext.includes("md"));
   expect(md.ext).toEqual(["md", "markdown"]);
+});
+test("file association classes are unique to the app and have human descriptions",()=>{
+  const names = conf.bundle.fileAssociations.map((a:{name:string;description:string})=>{
+    expect(a.name.startsWith(conf.identifier+".")).toBe(true);expect(a.description.length).toBeGreaterThan(0);return a.name;
+  });
+  expect(new Set(names).size).toBe(names.length);
 });
