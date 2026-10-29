@@ -3,8 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 export const repo = path.resolve(import.meta.dirname, '../..');
+export function applicationFingerprint() {
+  const files=execFileSync('git',['ls-files','-z','src','src-tauri','assets','vendor','package.json','package-lock.json','vite.config.ts','vite.runtime.config.ts','tsconfig.json','index.html'],{cwd:repo,encoding:'utf8'}).split('\0').filter(Boolean).sort();
+  const hash=createHash('sha256');for(const file of files){hash.update(file+'\0');hash.update(fs.readFileSync(path.join(repo,file)));}return hash.digest('hex');
+}
 export function isolated() {
   assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Installation tests require a disposable GitHub-hosted runner');
   assert.equal(process.env.RUNNER_ENVIRONMENT, 'github-hosted', 'Self-hosted/user machines must not run installation tests');

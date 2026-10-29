@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { isolated, repo, run } from './common.mjs';
+import { isolated, repo, run, applicationFingerprint } from './common.mjs';
 const root = isolated(), cli = path.join(repo, 'node_modules/@tauri-apps/cli/tauri.js');
 const windows = process.platform === 'win32', config = JSON.parse(fs.readFileSync(path.join(repo, 'src-tauri/tauri.conf.json'), 'utf8'));
 const base = {
@@ -17,6 +17,7 @@ if (windows) {
   env.TAURI_SIGNING_PRIVATE_KEY = key; env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = 'desktop-test-only';
   base.plugins = { updater: { pubkey: fs.readFileSync(key + '.pub', 'utf8').trim(), endpoints: ['http://127.0.0.1:18761/latest.json'], dangerousInsecureTransportProtocol: true, windows: { installMode: 'quiet' } } };
 }
+fs.writeFileSync(path.join(root,'application.json'),JSON.stringify({fingerprint:applicationFingerprint(),platform:process.platform}));
 for (const version of windows ? ['0.0.1','0.0.2'] : ['0.0.2']) {
   const file = path.join(root, `config-${version}.json`);
   fs.writeFileSync(file, JSON.stringify({ ...base, version }, null, 2));

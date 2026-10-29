@@ -30,7 +30,7 @@ try{
   run('sudo',['dpkg','-i',deb]);const installed=run('dpkg',['-L',name],{stdio:'pipe'}).split('\n').find(p=>p.startsWith('/usr/bin/')&&fs.existsSync(p)&&fs.statSync(p).isFile());assert(installed);
   driver=spawn('tauri-driver',[],{stdio:['ignore',fs.openSync(path.join(evidence,'driver.log'),'a'),fs.openSync(path.join(evidence,'driver-errors.log'),'a')]});await until(()=>request('GET','/status'),'tauri-driver startup');
   for(const [format,binary] of [['deb',installed],['appimage',appimage]]){
-    fs.chmodSync(binary,0o755);await start(binary,files.txt);await wait('document.querySelector(".text-source")?.value.includes("원문 보존")');
+    if(format==='appimage')fs.chmodSync(binary,0o755);await start(binary,files.txt);await wait('document.querySelector(".text-source")?.value.includes("원문 보존")');
     await click('편집');await wait('document.querySelector(".text-source")?.readOnly === false');
     await js('const e=document.querySelector(".text-source");e.value="Linux edited\\nsecond line\\n";e.dispatchEvent(new Event("input",{bubbles:true}));');await key('s',{ctrlKey:true});await wait('document.querySelector("[role=status]")?.textContent==="저장됨"');
     assert.deepEqual(fs.readFileSync(files.txt),Buffer.from('\ufeffLinux edited\r\nsecond line\r\n'));fs.writeFileSync(files.txt,original);

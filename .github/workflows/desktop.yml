@@ -7,8 +7,13 @@ on:
         default: all
         options: [all, windows, linux]
         description: Disposable desktop platform to verify
+      package_run:
+        type: string
+        default: ''
+        description: Optional prior run with identical app inputs (only test scripts may differ)
 permissions:
   contents: read
+  actions: read
 jobs:
   windows:
     if: inputs.platform != 'linux'
@@ -27,7 +32,25 @@ jobs:
           cache-on-failure: true
       - run: npm ci
       - run: npm ci --prefix scripts/desktop
+      - uses: actions/download-artifact@v4
+        if: inputs.package_run != ''
+        with:
+          name: desktop-windows-packages
+          path: ${{ runner.temp }}/va-desktop
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.package_run }}
       - run: node scripts/desktop/build.mjs
+        if: inputs.package_run == ''
+      - uses: actions/upload-artifact@v4
+        if: inputs.package_run == ''
+        with:
+          name: desktop-windows-packages
+          path: |
+            ${{ runner.temp }}/va-desktop/packages/
+            ${{ runner.temp }}/va-desktop/config-*.json
+            ${{ runner.temp }}/va-desktop/application.json
+          if-no-files-found: error
+      - run: node scripts/desktop/verify-packages.mjs
       - run: node scripts/desktop/windows.mjs
       - uses: actions/upload-artifact@v4
         if: always()
@@ -58,7 +81,25 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb dbus-x11 xdotool scrot xclip
       - run: npm ci
       - run: cargo install tauri-driver --locked
+      - uses: actions/download-artifact@v4
+        if: inputs.package_run != ''
+        with:
+          name: desktop-linux-packages
+          path: ${{ runner.temp }}/va-desktop
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.package_run }}
       - run: node scripts/desktop/build.mjs
+        if: inputs.package_run == ''
+      - uses: actions/upload-artifact@v4
+        if: inputs.package_run == ''
+        with:
+          name: desktop-linux-packages
+          path: |
+            ${{ runner.temp }}/va-desktop/packages/
+            ${{ runner.temp }}/va-desktop/config-*.json
+            ${{ runner.temp }}/va-desktop/application.json
+          if-no-files-found: error
+      - run: node scripts/desktop/verify-packages.mjs
       - run: xvfb-run -a -s '-screen 0 1280x1000x24' dbus-run-session -- node scripts/desktop/linux.mjs
       - uses: actions/upload-artifact@v4
         if: always()
