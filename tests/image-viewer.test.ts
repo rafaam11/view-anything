@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-const state = vi.hoisted(() => ({ close: async () => true, copy:vi.fn(async () => {}), alert:vi.fn(async () => {}), save:vi.fn(async () => {}), notice:vi.fn(async () => {}) }));
+const state = vi.hoisted(() => ({ close: async () => true, copy:vi.fn(async () => {}), alert:vi.fn(async () => {}), save:vi.fn(async () => {}), notice:vi.fn(async () => {}), files:vi.fn(async () => ["a.png","b.jpg"]), read:vi.fn(async () => new ArrayBuffer(10)), discard:vi.fn(async () => false) }));
 vi.mock("../src/platform", () => ({platform:{
-  siblingImages:async () => ["a.png","b.jpg"], fileSize:async () => 10, readFileRaw:async () => new ArrayBuffer(10), assetUrl:(p:string) => p,
-  setWindowTitle:async () => {}, onCloseRequested:async (fn:()=>Promise<boolean>) => {state.close=fn;},
-  copyImage:state.copy, alert:state.alert, confirmDiscard:async () => false,
+  siblingImages:state.files, fileSize:async () => 10, readFileRaw:state.read, assetUrl:(p:string) => p,
+  setWindowTitle:async (title:string) => {document.title=title;}, onCloseRequested:async (fn:()=>Promise<boolean>) => {state.close=fn;},
+  copyImage:state.copy, alert:state.alert, confirmDiscard:state.discard,
   saveDialog:async () => "copy.png", writeImageCopy:state.save, notice:state.notice,
 }}));
 vi.mock("../src/update/guard", () => ({registerUpdateGuard:()=>{}}));
@@ -12,7 +12,7 @@ import viewer from "../src/image/viewer";
 const settle = async () => {for(let i=0;i<5;i++) await new Promise(r=>setTimeout(r,0));};
 const button = (label:string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 beforeEach(async () => {
-  vi.clearAllMocks(); vi.spyOn(window,"addEventListener");
+  vi.clearAllMocks(); state.files.mockResolvedValue(["a.png","b.jpg"]); state.read.mockResolvedValue(new ArrayBuffer(10)); vi.spyOn(window,"addEventListener");
   vi.stubGlobal("Image",class {naturalWidth=2000;naturalHeight=1000;src="";async decode(){}});
   vi.stubGlobal("ResizeObserver",class {observe(){} disconnect(){}});
   vi.spyOn(HTMLCanvasElement.prototype,"getContext").mockReturnValue({drawImage:vi.fn(),setTransform:vi.fn()} as unknown as CanvasRenderingContext2D);
@@ -80,4 +80,42 @@ test("failed save and invalid crop keep the current image and history",async()=>
   state.save.mockRejectedValueOnce(Error("disk full"));
   window.dispatchEvent(new KeyboardEvent("keydown",{key:"s",ctrlKey:true})); await settle();
   expect(await state.close()).toBe(false); button("실행 취소").click(); expect(await state.close()).toBe(true);
+});
+test("focus refreshes added/deleted siblings while preserving dirty image history",async()=>{
+  button("이미지 편집").click(); await settle(); button("회전").click();
+  state.files.mockResolvedValue(["00.png","c.jpg"]); state.read.mockRejectedValueOnce(Error("source deleted"));
+  window.dispatchEvent(new Event("focus")); await settle();
+  expect(button("이전 이미지").disabled).toBe(false); expect(button("다음 이미지").disabled).toBe(false);
+  expect(document.querySelector("canvas")!.width).toBe(1000); expect(await state.close()).toBe(false);
+  expect(document.querySelector("[role=status]")!.textContent).toContain("유지");
+  button("실행 취소").click(); expect(await state.close()).toBe(true);
+  button("다음 이미지").click(); await settle(); expect(document.title).toBe("c.jpg"); expect(button("다시 실행").disabled).toBe(true);
+});
+test("F5 rebuilds visible thumbnails, including cache refresh and current image marker",async()=>{
+  const show = [...document.querySelectorAll<HTMLElement>(".va3d-menu-item")].find(b=>b.textContent?.includes("썸네일"))!;
+  show.click(); const old = document.querySelector<HTMLImageElement>(".image-thumbs img")!.src;
+  state.files.mockResolvedValue(["a.png","new.jpg"]);
+  const key=new KeyboardEvent("keydown",{key:"F5",cancelable:true}); window.dispatchEvent(key); await settle();
+  expect(key.defaultPrevented).toBe(true); expect(button("new.jpg")).not.toBeNull();
+  expect(document.querySelector<HTMLImageElement>(".image-thumbs img")!.src).not.toBe(old);
+  expect(button("a.png").getAttribute("aria-current")).toBe("true"); expect(document.title).toBe("a.png");
+});
+test("folder and decode failures retain the previous list, image and unsaved edits",async()=>{
+  button("이미지 편집").click(); await settle(); button("회전").click();
+  const current=document.querySelector("canvas");
+  state.files.mockRejectedValueOnce(Error("folder denied"));
+  window.dispatchEvent(new Event("focus")); await settle();
+  expect(document.querySelector("[role=status]")!.textContent).toContain("이전 목록");
+  expect(button("다음 이미지").disabled).toBe(false);
+  state.discard.mockResolvedValueOnce(true); vi.spyOn(Image.prototype,"decode").mockRejectedValueOnce(Error("bad PNG"));
+  button("다음 이미지").click(); await settle();
+  expect(document.title).toContain("a.png"); expect(document.querySelector("canvas")).toBe(current);
+  expect(state.alert).toHaveBeenCalled(); expect(await state.close()).toBe(false);
+  button("실행 취소").click(); expect(await state.close()).toBe(true);
+});
+test("a denied directory does not prevent the initial image from opening",async()=>{
+  state.files.mockRejectedValueOnce(Error("folder denied")); await viewer.mount(document.body,"a.png");
+  expect(document.querySelector<HTMLImageElement>(".image-area img")!.hidden).toBe(false);
+  expect(document.querySelector("[role=status]")!.textContent).toContain("현재 이미지");
+  expect(button("이미지 복사").disabled).toBe(false);
 });

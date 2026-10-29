@@ -14,7 +14,7 @@ const button = (text: string) => { const b = document.createElement("button"); b
 
 const viewer: Viewer = {
   async mount(el, initial) {
-    let path = initial, files = await platform.siblingImages(path), url = "", dirty = false, edited = false, approved = false, busy = false, scale = 1, editing = false, fitted = true;
+    let path = initial, files: string[] = [], available: string[] = [], url = "", dirty = false, edited = false, approved = false, busy = true, scale = 1, editing = false, fitted = true;
     let original: HTMLImageElement | null = null, known = new Uint8Array();
     let history: ImageHistory | null = null;
     const root = document.createElement("div"); root.className = "image-root va-viewer";
@@ -43,7 +43,8 @@ const viewer: Viewer = {
     const actual = button("원본 크기 (100%)"); actual.onclick = () => setZoom(1);
     documentBar(bar, { files:[save], controls:[prev, next, zoomOut, zoomLabel, zoomIn, fit, copy, undo, redo, rotate, flip, cropToggle, toggle], view:[
       { label:"화면에 맞춤", run:() => fit.click() }, { label:"원본 크기 (100%)", run:() => actual.click() },
-      { label:"썸네일", checked:() => !thumbs.hidden, run:() => { thumbs.hidden = !thumbs.hidden; applyScale(); } },
+      { label:"썸네일", checked:() => !thumbs.hidden, run:() => { thumbs.hidden = !thumbs.hidden; renderThumbs(); applyScale(); } },
+      { label:"목록 새로고침", shortcut:"F5", run:() => { void refreshSources(true); }, disabled:() => busy },
     ] });
     root.append(bar, coords, area, thumbs, status); el.replaceChildren(root);
     const report = (e: unknown) => { void platform.alert(String(e)).catch(() => {}); };
@@ -55,6 +56,9 @@ const viewer: Viewer = {
       undo.disabled = busy || !history?.previous; redo.disabled = busy || !history?.next;
       save.disabled = busy || !dirty;
       toggle.setAttribute("aria-pressed", String(editing));
+      for (const b of thumbs.querySelectorAll<HTMLButtonElement>("button")) {
+        b.disabled = busy; b.setAttribute("aria-current", String(pathKey(b.dataset.path!) === pathKey(path)));
+      }
     };
     const applyScale = () => {
       const target = edited ? canvas : image, w = edited ? canvas.width : original?.naturalWidth ?? 0, h = edited ? canvas.height : original?.naturalHeight ?? 0;
@@ -76,6 +80,7 @@ const viewer: Viewer = {
     const load = async (target: string) => {
       if (await platform.fileSize(target) > MAX_BYTES) throw new Error("이미지가 100 MiB를 초과합니다.");
       const bytes = await platform.readFileRaw(target);
+      if (bytes.byteLength > MAX_BYTES) throw new Error("이미지가 100 MiB를 초과합니다.");
       const ext = target.split(".").pop()?.toLowerCase();
       const mime = ext === "svg" ? "image/svg+xml" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : `image/${ext}`;
       const nextUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
@@ -88,10 +93,10 @@ const viewer: Viewer = {
       fitted = true; coords.hidden = true; editing = false;
       canvas.hidden = true; image.hidden = false; inputs[0].value = "0"; inputs[1].value = "0";
       inputs[2].value = String(candidate.naturalWidth); inputs[3].value = String(candidate.naturalHeight);
-      refresh(); applyScale();
+      syncNavigation(); refresh(); applyScale();
     };
     const navigate = async (target: string) => {
-      if (busy || target === path) return; busy = true;
+      if (busy || pathKey(target) === pathKey(path)) return; busy = true;
       refresh(); try { if (await discard()) await load(target); } finally { busy = false; refresh(); }
     };
     const renderState = (state: ImageState) => {
@@ -153,6 +158,7 @@ const viewer: Viewer = {
       } finally { busy = false; refresh(); }
     })().catch(report); };
     window.addEventListener("keydown", e => {
+      if (e.key === "F5") { e.preventDefault(); if (!document.querySelector("dialog[open]") && !e.repeat) void refreshSources(true); return; }
       if (document.querySelector("dialog[open]") || (e.target as HTMLElement)?.closest?.("input,textarea,[contenteditable=true]")) return;
       if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); if (!e.repeat) copy.click(); }
       else if (e.ctrlKey && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo.click(); else undo.click(); }
@@ -178,30 +184,59 @@ const viewer: Viewer = {
         const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png"));
         await platform.writeImageCopy(target, path, new Uint8Array(await blob.arrayBuffer()));
         history!.markSaved(); dirty = false; refresh(); await platform.notice("편집 이미지를 저장했습니다.");
+        await refreshFolder().catch(() => { status.textContent = "이미지는 저장했지만 폴더 목록을 갱신할 수 없습니다."; });
       } finally { busy = false; refresh(); }
     })().catch(report); };
-    for (const file of files.slice(0, 1000)) {
-      const b = button(""); b.title = nameOf(file); b.setAttribute("aria-label", nameOf(file));
-      const thumb = document.createElement("img"); thumb.loading = "lazy"; thumb.src = platform.assetUrl(file); thumb.alt = ""; b.append(thumb);
-      b.onclick = () => { void navigate(file).catch(report); }; thumbs.append(b);
-    }
+    const syncNavigation = () => {
+      files = available.slice();
+      // Keep a virtual position for a deleted source so either neighbor is still reachable.
+      if (!files.some(f => pathKey(f) === pathKey(path))) {
+        const key = pathKey(path).toLowerCase();
+        const i = files.findIndex(f => pathKey(f).toLowerCase() > key);
+        files.splice(i < 0 ? files.length : i, 0, path);
+      }
+    };
+    let thumbRevision = 0;
+    const renderThumbs = () => {
+      thumbs.replaceChildren();
+      if (thumbs.hidden) return;
+      for (const file of available.slice(0, 1000)) {
+        const b = button(""); b.title = nameOf(file); b.setAttribute("aria-label", nameOf(file)); b.dataset.path = file;
+        const thumb = document.createElement("img"); thumb.loading = "lazy";
+        const asset = platform.assetUrl(file); thumb.src = `${asset}${asset.includes("?") ? "&" : "?"}va-refresh=${thumbRevision}`; thumb.alt = ""; b.append(thumb);
+        b.onclick = () => { void navigate(file).catch(report); }; thumbs.append(b);
+      }
+      refresh();
+    };
+    const refreshFolder = async () => {
+      available = await platform.siblingImages(path); syncNavigation(); thumbRevision++; renderThumbs(); refresh();
+    };
+    const refreshSources = async (manual = false) => {
+      if (busy) return; busy = true; refresh();
+      const notes: string[] = [];
+      try {
+        try { await refreshFolder(); } catch { notes.push("폴더 목록을 갱신할 수 없습니다. 이전 목록을 유지합니다."); }
+        try {
+          if (await platform.fileSize(path) > MAX_BYTES) throw new Error("변경된 이미지가 100 MiB를 초과합니다.");
+          const disk = new Uint8Array(await platform.readFileRaw(path));
+          if (disk.byteLength > MAX_BYTES) throw new Error("변경된 이미지가 100 MiB를 초과합니다.");
+          if (!equalBytes(known, disk)) {
+            if (dirty) notes.push("원본이 외부에서 변경됨 · 편집 내용 유지");
+            else await load(path);
+          }
+        } catch { notes.push("원본을 다시 읽을 수 없습니다. 표시 중인 이미지와 편집 내용은 유지합니다."); }
+        status.textContent = notes.join(" · ") || (manual ? "이미지 목록을 갱신했습니다." : "");
+      } finally { busy = false; refresh(); }
+    };
     registerUpdateGuard(() => dirty || busy, value => { approved = value; });
     await platform.onCloseRequested(confirmLeave);
-    window.addEventListener("focus", () => {
-      if (busy) return;
-      busy = true; refresh();
-      void (async () => {
-        if (await platform.fileSize(path) > MAX_BYTES) throw new Error("변경된 이미지가 100 MiB를 초과합니다.");
-        const disk = new Uint8Array(await platform.readFileRaw(path));
-        if (!equalBytes(known, disk)) {
-          if (dirty) status.textContent = "원본이 외부에서 변경됨 · 편집 내용 유지";
-          else await load(path);
-        }
-      })().catch(() => { status.textContent = "원본을 다시 읽을 수 없습니다."; }).finally(() => { busy = false; refresh(); });
-    });
-    window.addEventListener("beforeunload", e => { if (!approved && dirty) e.preventDefault(); });
+    window.addEventListener("focus", () => { void refreshSources(); });
+    window.addEventListener("beforeunload", e => { if (!approved && (dirty || busy)) e.preventDefault(); });
     window.addEventListener("unload", () => { resize.disconnect(); cancelAnimationFrame(resizeFrame); if (url) URL.revokeObjectURL(url); });
-    await load(initial);
+    try {
+      await load(initial);
+      await refreshFolder().catch(() => { status.textContent = "폴더 목록을 읽을 수 없습니다. 현재 이미지는 열었습니다."; });
+    } finally { busy = false; refresh(); }
   },
 };
 export default viewer;
