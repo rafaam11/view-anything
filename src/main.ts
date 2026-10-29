@@ -9,8 +9,10 @@ import { isOpenKey, OPEN_EVENT, routeDrop, type OpenEventDetail, type WindowKind
 import { isThreeD } from "./three/formats";
 import { initializePreferences } from "./settings/preferences";
 import { configureSettings } from "./settings/document";
+import { initializeUpdateInput, updateInputLocked } from "./update/guard";
 
 const app = document.getElementById("app")!;
+initializeUpdateInput();
 initializeTheme();
 initializePreferences();
 mountTitlebar();
@@ -124,7 +126,7 @@ window.addEventListener("blur", () => (shiftHeld = false));
 let picking = false; // one dialog at a time
 /** Ctrl+O / 파일 > 열기 (routed like a drop); `append`: 파일 > 장면에 추가 (3D files into this scene). */
 async function pickAndOpen(append = false, text = false) {
-  if (picking) return;
+  if (picking || updateInputLocked()) return;
   picking = true;
   let paths: string[];
   try {
@@ -179,7 +181,7 @@ window.addEventListener(
 
 getCurrentWebview()
   .onDragDropEvent((ev) => {
-    if (ev.payload.type !== "drop") return;
+    if (ev.payload.type !== "drop" || updateInputLocked()) return;
     const paths = ev.payload.paths;
     void shiftState()
       .then((shift) => openPaths(paths, shift))

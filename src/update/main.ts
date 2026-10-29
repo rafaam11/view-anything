@@ -3,7 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { platform } from "../platform";
-import { approveUpdateUnload, updateDirty } from "./guard";
+import { approveUpdateUnload, updateDirty, lockUpdateInput } from "./guard";
 import { confirmRestart, updateBadge } from "./badge";
 import { ATTEMPT_KEY, AUTO_KEY, failedAttempt, UpdateController, type UpdateStatus } from "./model";
 
@@ -27,22 +27,16 @@ export async function startUpdater(): Promise<void> {
   const context = () => invoke<Context>("update_context");
   function thaw() {
     frozen = null;
-    document.getElementById("app")?.removeAttribute("inert");
+    lockUpdateInput(false);
     approveUpdateUnload(false);
   }
-  // Capture before editor/app shortcuts while other windows await the restart decision.
-  document.addEventListener("keydown", (event) => {
-    if (frozen && !(event.target as Element | null)?.closest(".va-update-dialog")) {
-      event.preventDefault(); event.stopImmediatePropagation();
-    }
-  }, true);
   await listen<Probe>("va-update-probe", async ({ payload }) => {
     if (payload.phase === "unlock") { if (frozen?.id === payload.id) thaw(); return; }
     let ok = true, dirty = false;
     try {
       if (payload.phase === "prepare") {
         frozen = payload;
-        document.getElementById("app")?.setAttribute("inert", "");
+        lockUpdateInput(true);
         dirty = updateDirty();
       } else {
         ok = frozen?.id === payload.id;
