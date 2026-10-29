@@ -3,7 +3,7 @@
 .text-bar { justify-content:space-between; }
 .text-root button, .text-root input { color:var(--fg); background:var(--bg); border:1px solid var(--border); padding:3px 8px; font:inherit; }
 .text-bar > button { border:0; cursor:pointer; }
-.text-source { flex:1; min-height:120px; width:100%; box-sizing:border-box; resize:none; background:var(--bg); color:var(--fg); border:0; outline:none; padding:12px 16px; font:14px/1.6 "Cascadia Mono", Consolas, monospace; tab-size:4; }
+.text-root .text-source { flex:1; min-height:120px; width:100%; box-sizing:border-box; resize:none; background:var(--bg); color:var(--fg); border:0; outline:none; padding:12px 16px; font-family:var(--va-text-font, "Cascadia Mono", Consolas, monospace); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; }
 .text-root [hidden] { display:none !important; }
 .text-root [role=status] { margin:0; padding:8px 16px; font-size:13px; overflow-wrap:anywhere; }
 .text-root [role=status]:empty { display:none; }

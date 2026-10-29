@@ -7,6 +7,8 @@ import type { Viewer } from "../registry";
 import { decodeText, encodeText, normalize, lineEndings, type TextMeta } from "./codec";
 import { Menubar } from "../three/core/menubar";
 import { registerTextSettings } from "../settings/document";
+import { preferences } from "../settings/preferences";
+import { revealSelection } from "./selection";
 import "../ui/chrome.css";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -30,7 +32,10 @@ const viewer: Viewer = {
     const status = document.createElement("p"); status.setAttribute("role", "status");
     const report = (e: unknown) => { status.textContent = String(e); };
     const editor = document.createElement("textarea"); editor.className = "text-source";
-    editor.spellcheck = false; editor.wrap = "off"; editor.readOnly = true; editor.setAttribute("aria-label", "텍스트 내용");
+    editor.spellcheck = false; editor.readOnly = true; editor.setAttribute("aria-label", "텍스트 내용");
+    const display = () => { editor.wrap = preferences().textWrap ? "soft" : "off"; };
+    display(); window.addEventListener("va:preferences", display);
+    window.addEventListener("unload", () => window.removeEventListener("va:preferences", display), { once: true });
     const dirty = () => doc.dirty || (meta !== null && editor.value !== normalize(meta.text));
     const refresh = () => {
       void platform.setWindowTitle((dirty() ? "● " : "") + name).catch(() => {});
@@ -80,8 +85,7 @@ const viewer: Viewer = {
       status.textContent = at < 0 ? "검색 결과 없음" : `${at + 1}번째 문자`;
       if (at >= 0) {
         editor.focus(); editor.setSelectionRange(at, at + q.length);
-        const row = (text.slice(0, at).match(/\n/g) ?? []).length;
-        editor.scrollTop = row * parseFloat(getComputedStyle(editor).lineHeight) - editor.clientHeight / 2;
+        revealSelection(editor, at, q.length);
       }
     };
     searchBar.append(search);

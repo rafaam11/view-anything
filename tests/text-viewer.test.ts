@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { applyPreferences, DEFAULTS } from "../src/settings/preferences";
 let disk = new Uint8Array(), close: () => Promise<boolean>;
 const { platform } = vi.hoisted(() => ({ platform: {
   fileSize: vi.fn(async () => disk.length), readFileRaw: vi.fn(async () => disk.slice().buffer),
@@ -17,9 +18,22 @@ const source = () => document.querySelector("textarea")!;
 const edit = (text: string) => { source().value = text; source().dispatchEvent(new Event("input")); };
 const status = () => document.querySelector('[role="status"]')!.textContent;
 beforeEach(async () => {
-  vi.clearAllMocks(); disk = new TextEncoder().encode("한글\r\nline\r\n");
+  vi.clearAllMocks(); vi.spyOn(window,"addEventListener"); applyPreferences(DEFAULTS,false); disk = new TextEncoder().encode("한글\r\nline\r\n");
   document.body.replaceChildren();
   await viewer.mount(document.body, "test.txt");
+});
+afterEach(()=>{
+  for(const [type,listener,options] of vi.mocked(window.addEventListener).mock.calls)window.removeEventListener(type,listener,options);
+  vi.restoreAllMocks();
+});
+test("display options preserve source bytes, selection, read mode and unsaved edits",async()=>{
+  const original=disk.slice(),text=source().value;expect(source().wrap).toBe("soft");
+  source().setSelectionRange(1,3);applyPreferences({textFont:"serif",textSize:22,textWrap:false},false);
+  expect(source().wrap).toBe("off");expect(source().readOnly).toBe(true);expect(source().value).toBe(text);expect(source().selectionStart).toBe(1);
+  expect(disk).toEqual(original);expect(platform.writeFileChecked).not.toHaveBeenCalled();expect(await close()).toBe(true);
+  button("편집").click();await settle();edit("mine\n");applyPreferences({textWrap:true,textSize:16},false);
+  expect(source().wrap).toBe("soft");expect(source().value).toBe("mine\n");expect(await close()).toBe(false);
+  button("저장").click();await settle();expect(new TextDecoder().decode(disk)).toBe("mine\r\n");
 });
 test("read mode is immutable and cancelling a dirty close keeps edits", async () => {
   expect(source().readOnly).toBe(true);

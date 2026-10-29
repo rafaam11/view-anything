@@ -8,6 +8,7 @@ import { mountTitlebar } from "./titlebar";
 import { isOpenKey, OPEN_EVENT, routeDrop, type OpenEventDetail, type WindowKind } from "./open-route";
 import { isThreeD } from "./three/formats";
 import { initializePreferences } from "./settings/preferences";
+import { configureSettings } from "./settings/document";
 
 const app = document.getElementById("app")!;
 initializeTheme();
@@ -40,6 +41,8 @@ function message(title: string, hint?: string) {
 }
 
 async function show() {
+  const textMode = new URLSearchParams(location.search).get("text") === "1";
+  configureSettings(file, textMode);
   if (!file) {
     message("파일을 끌어다 놓거나 Ctrl+O");
     const text = document.createElement("button"); text.textContent = "텍스트로 열기… (Ctrl+Shift+O)";
@@ -48,7 +51,6 @@ async function show() {
   }
   // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
   void platform.setWindowTitle(file.split(/[\\/]/).pop() ?? file).catch(() => {});
-  const textMode = new URLSearchParams(location.search).get("text") === "1";
   const load = textMode ? () => import("./text/viewer").then(m => m.default) : resolveViewer(file);
   if (!load) {
     message("지원하지 않는 형식", file);
