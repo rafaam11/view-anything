@@ -46,11 +46,16 @@ try{
     await start(binary,files.pcd);await wait('document.querySelector(".va3d-status")?.textContent.includes("점 8")');await screenshot(`${format}-cloud`);await collect();await stop();results.push(`${format}: native PCD load and GPU canvas`);
     await start(binary,files.stl);await wait('document.querySelector(".va3d-status")?.textContent.includes("삼각형")');await screenshot(`${format}-mesh`);await collect();
     // Export through the real GTK file chooser in this isolated Xvfb desktop.
-    const out=path.join(root,`offline-${format}.html`);await key('E',{ctrlKey:true,shiftKey:true});
+    const out=files.stl.replace(/\.stl$/,'.html');fs.rmSync(out,{force:true});await key('E',{ctrlKey:true,shiftKey:true});
     await delay(1500);await screenshot(`${format}-native-save`);
     const chooser=run('xdotool',['getactivewindow'],{stdio:'pipe'}).trim();
-    assert(chooser,'Native save window must exist');run('xdotool',['windowfocus','--sync',chooser]);
-    run('xdotool',['key','--clearmodifiers','ctrl+l']);run('xdotool',['type','--clearmodifiers','--delay','0',out]);run('xdotool',['key','Return']);await delay(500);run('xdotool',['key','Return']);await until(()=>fs.existsSync(out),'native GTK export save',60000);
+    assert(run('xdotool',['getwindowname',chooser],{stdio:'pipe'}).includes('HTML'),'Native HTML save window must be active');
+    run('xdotool',['windowfocus','--sync',chooser]);
+    // Keep the real chooser's default source folder and cube.html name. Click its
+    // bottom-right Save button instead of treating Ctrl+L as a filename editor.
+    const geometry=Object.fromEntries(run('xdotool',['getwindowgeometry','--shell',chooser],{stdio:'pipe'}).trim().split('\n').map(line=>line.split('=')));
+    run('xdotool',['mousemove','--window',chooser,String(Number(geometry.WIDTH)-50),String(Number(geometry.HEIGHT)-28),'click','1']);
+    await until(()=>fs.existsSync(out),'native GTK export save',60000);
     await cmd('/url',{url:pathToFileURL(out).href});await wait('document.querySelector(".va3d-status")?.textContent.includes("전체")');await key('1');await delay(100);await screenshot(`${format}-offline-html`);results.push(`${format}: native save dialog and exported HTML canvas`);await stop();
   }
   run('sudo',['dpkg','--remove',name]);assert(!fs.existsSync(installed));results.push('deb uninstall removes installed binary');assert.deepEqual(errors,[]);
