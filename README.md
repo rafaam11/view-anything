@@ -39,7 +39,8 @@ npm run tauri dev
 
 ## 릴리스 노트
 
-- [v0.9.0](docs/release/v0.9.0.md) — 최신
+- [v0.10.0](docs/release/v0.10.0.md) — 최신
+- [v0.9.0](docs/release/v0.9.0.md)
 - [v0.8.0](docs/release/v0.8.0.md)
 - [v0.7.0](docs/release/v0.7.0.md)
 - [v0.6.1](docs/release/v0.6.1.md)
