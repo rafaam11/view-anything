@@ -1,10 +1,17 @@
 name: desktop
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        default: all
+        options: [all, windows, linux]
+        description: Disposable desktop platform to verify
 permissions:
   contents: read
 jobs:
   windows:
+    if: inputs.platform != 'linux'
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -17,6 +24,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
       - run: npm ci
       - run: npm ci --prefix scripts/desktop
       - run: node scripts/desktop/build.mjs
@@ -28,6 +36,7 @@ jobs:
           path: ${{ runner.temp }}/va-desktop/evidence/
           if-no-files-found: warn
   linux:
+    if: inputs.platform != 'windows'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     env:
@@ -44,6 +53,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
       - name: Install desktop and build dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb dbus-x11 xdotool scrot xclip
       - run: npm ci

@@ -7,6 +7,7 @@ const windows = process.platform === 'win32', config = JSON.parse(fs.readFileSyn
 const base = {
   productName: 'view-anything-desktop-smoke', identifier: 'com.rafaam11.viewanything.desktop-smoke',
   bundle: { createUpdaterArtifacts: windows, fileAssociations: config.bundle.fileAssociations.map((a,i) => ({ ...a, name: `com.rafaam11.viewanything.desktop-smoke.type${i}` })) },
+  plugins: { updater: { endpoints: ['http://127.0.0.1:18761/latest.json'], dangerousInsecureTransportProtocol: true } },
 };
 const env = { ...process.env };
 if (windows) {
@@ -23,6 +24,9 @@ for (const version of windows ? ['0.0.1','0.0.2'] : ['0.0.2']) {
   if (windows) fs.writeFileSync(path.join(output,'binary.sha256'),createHash('sha256').update(fs.readFileSync(path.join(repo,'src-tauri/target/release/view-anything.exe'))).digest('hex'));
   for (const format of windows ? ['nsis'] : ['deb','appimage']) {
     const built = path.join(repo, 'src-tauri/target/release/bundle', format);
-    for (const name of fs.readdirSync(built)) if (name.includes(`_${version}_`)) fs.copyFileSync(path.join(built,name), path.join(output,name));
+    for (const name of fs.readdirSync(built)) {
+      const file=path.join(built,name);
+      if (name.includes(`_${version}_`) && fs.statSync(file).isFile() && /\.(?:exe(?:\.sig)?|deb|AppImage(?:\.sig)?)$/.test(name)) fs.copyFileSync(file,path.join(output,name));
+    }
   }
 }
