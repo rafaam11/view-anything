@@ -70,6 +70,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 ## 버전·릴리스 (multi-cli-work 방식)
 - 자동 업데이트: `src/update/`(상태·배지·다중 창 저장 보호), `src-tauri/src/update.rs`(프로세스당 관리 창). updater/process JS는 lazy import한다. `scripts/make-latest-json.mjs`가 서명된 NSIS/AppImage에서 manifest를 만든다. 공개키만 설정에 넣고 비밀키·비밀번호는 레포 밖 또는 GitHub Secrets에 둔다.
 - 업데이트 입력 잠금은 `src/update/guard.ts`의 작은 모듈을 main에서 제목줄·뷰어 단축키보다 먼저 초기화한다. 잠금 중 앱 단축키·열기·드롭·설정 변경을 막고 업데이트 대화상자의 Tab/Enter/Space/Escape만 허용한다. 취소하면 기존 inert 상태와 미저장 편집을 보존해 해제한다. 파일 연결 클래스 이름은 앱 식별자로 구분하며 일반적인 전역 이름으로 바꾸지 않는다.
+- Windows NSIS의 `windows/file-associations.nsh` hook은 파일 연결 매크로만 교체한다. 업데이트 시 최초 연결 백업을 보존하고 이후 선택한 다른 앱을 유지하며, 제거 시 우리 클래스가 현재 연결인 경우에만 복원한다. 구버전 클래스 이관은 실행 명령이 동일한 경우로 제한한다. 이 경로의 회귀는 일회용 Windows 설치→서명 업데이트→제거에서 검증한다.
 - 버전 체계는 SemVer `vX.Y.Z`. 기능 추가는 minor, 수정만 있으면 patch를 올린다.
 - 버전은 `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` 세 곳에 있다. 항상 함께 올린다.
 - 버전 스크립트:

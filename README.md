@@ -43,9 +43,12 @@ npm run tauri dev
 
 설치·업데이트와 Linux 패키지 GUI 회귀는 GitHub Actions의 **desktop** workflow로 실행합니다. 일회용 GitHub-hosted 환경에서 시험용 NSIS/deb/AppImage를 만들며 운영 키와 공개 릴리스는 사용하지 않습니다. 화면·클립보드·파일 저장·설치 결과는 실행의 evidence artifact에 남깁니다. [검증 구성과 범위](docs/superpowers/plans/2026-10-29-desktop-lifecycle.md)를 참고하세요.
 
+Windows 설치·서명 업데이트·제거와 Linux deb/AppImage의 실제 WebView·네이티브 저장창·이미지 클립보드 회귀를 통과했습니다. [검증 결과와 한계](docs/superpowers/plans/2026-10-29-desktop-checklist.md)에 단위 테스트·GUI 자동 조작·물리 데스크톱 검증을 구분했습니다.
+
 ## 릴리스 노트
 
-- [v0.10.0](docs/release/v0.10.0.md) — 최신
+- [v0.11.0](docs/release/v0.11.0.md) — 최신
+- [v0.10.0](docs/release/v0.10.0.md)
 - [v0.9.0](docs/release/v0.9.0.md)
 - [v0.8.0](docs/release/v0.8.0.md)
 - [v0.7.0](docs/release/v0.7.0.md)

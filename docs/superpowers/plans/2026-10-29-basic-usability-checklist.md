@@ -35,7 +35,7 @@ GUI 시험 스크립트는 OS Temp의 `va-browser-check/usability-{history,folde
 
 ## 남은 범위
 
-- Linux 실제 GUI, 설치본 파일 연결·업데이터 설치는 미검증이다.
+- 이후 [설치·업데이트와 Linux GUI 회귀](2026-10-29-desktop-checklist.md)에서 Windows NSIS 설치/서명 업데이트/제거와 Linux deb/AppImage GUI를 검증했다. 물리 데스크톱·Wayland·Windows 기본 앱 선택 UI는 별도 범위다.
 - 폴더는 활성화/F5/저장 후 갱신하며 실시간 파일 감시는 제공하지 않는다. 썸네일은 1,000개까지 표시한다.
 - 이미지 이력은 최근 20회이며 다른 파일을 열거나 외부 변경으로 원본을 다시 읽으면 초기화한다. GIF/SVG는 정적 편집 결과다.
 - 텍스트는 10 MiB까지이며 구문 강조·대용량 로그 스트리밍은 제공하지 않는다. 외부 프로세스의 검증·파일 교체 사이 경쟁은 여전히 남는다.

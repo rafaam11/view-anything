@@ -17,8 +17,10 @@
 
 NSIS의 파일 연결 클래스는 `Image`, `PDF` 같은 전역 이름 대신 앱 식별자로 구분한다. 다른 앱의 같은 이름 클래스를 덮어쓰지 않도록 하고 파일 유형 설명은 사람이 읽는 이름으로 유지한다.
 
+Tauri 기본 NSIS 매크로는 업데이트 때 이전 연결 백업을 현재 클래스명으로 덮어썼다. `src-tauri/windows/file-associations.nsh`에서 해당 매크로만 교체해 최초 백업을 유지한다. 업데이트 중 다른 앱으로 바꾼 연결은 건드리지 않고 Open With 등록만 유지하며, 제거 시 현재 연결이 우리 클래스인 경우에만 복원한다. 구버전의 일반 이름 클래스는 실행 명령이 이 설치 경로와 같을 때만 백업을 이관한다. 이미 소실된 백업과 구버전이 덮어쓴 다른 앱 클래스 내용은 복원할 수 없다.
+
 ## 완료 기준
 
-필수 검증 5종, 일반 Windows/Linux CI와 desktop 양 OS 실제 패키지 시험을 모두 확인한다. GUI 자동 조작·실제 네이티브 파일/클립보드/설치 경로와 단위 테스트를 구분해 결과를 기록한다. 이번 단계는 공개 릴리스 발행을 포함하지 않는다.
+필수 검증 5종, 일반 Windows/Linux CI와 desktop 양 OS 실제 패키지 시험을 모두 확인한다. GUI 자동 조작·실제 네이티브 파일/클립보드/설치 경로와 단위 테스트를 구분해 결과를 기록한다. 후속 사용자 지시로 완료 후 v0.11.0 공개 배포까지 승인됐다.
 
 참고: [Tauri WebDriver 설치](https://v2.tauri.app/develop/tests/webdriver/manual-setup/), [업데이트 서명·NSIS 동작](https://v2.tauri.app/plugin/updater/), [NSIS 파일 연결 구현](https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-bundler/src/bundle/windows/nsis/FileAssociation.nsh).
