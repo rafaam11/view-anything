@@ -20,7 +20,7 @@ export type WindowKind = "empty" | "md" | "3d";
  * otherwise "열기" (same routing as Ctrl+O).
  */
 export const OPEN_EVENT = "va:open";
-export type OpenEventDetail = { append: boolean };
+export type OpenEventDetail = { append: boolean; text?: boolean };
 
 /**
  * Where dropped (or Ctrl+O-picked) files go, by what the window shows:

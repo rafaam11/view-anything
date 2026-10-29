@@ -12,7 +12,7 @@ vi.mock("../src/platform", () => ({ platform }));
 vi.mock("../src/update/guard", () => ({ registerUpdateGuard: vi.fn() }));
 import viewer from "../src/text/viewer";
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0)); };
-const button = (text: string) => [...document.querySelectorAll("button")].find(b => b.textContent === text)!;
+const button = (text: string) => [...document.querySelectorAll("button")].find(b => (b.querySelector(".va3d-menu-label")?.textContent ?? b.textContent) === text)!;
 const source = () => document.querySelector("textarea")!;
 const edit = (text: string) => { source().value = text; source().dispatchEvent(new Event("input")); };
 const status = () => document.querySelector('[role="status"]')!.textContent;
@@ -23,6 +23,9 @@ beforeEach(async () => {
 });
 test("read mode is immutable and cancelling a dirty close keeps edits", async () => {
   expect(source().readOnly).toBe(true);
+  expect(document.querySelector("select")).toBeNull();
+  expect(document.querySelector<HTMLElement>(".text-search")!.hidden).toBe(true);
+  expect(status()).toBe("");
   button("편집").click(); await settle(); edit("changed\n");
   expect(await close()).toBe(false); expect(source().value).toBe("changed\n");
 });

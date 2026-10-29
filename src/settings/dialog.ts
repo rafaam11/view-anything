@@ -1,5 +1,6 @@
 import "./settings.css";
 import { preferences, applyPreferences, DEFAULTS, type FontPreset } from "./preferences";
+import { textSettings } from "./document";
 let dialog: HTMLDialogElement | null = null;
 export function openSettings(): void {
   if (dialog?.isConnected) { if (!dialog.open) dialog.showModal(); return; }
@@ -18,6 +19,23 @@ export function openSettings(): void {
   }
   const preview = document.createElement("p"); preview.className = "va-settings-preview"; preview.textContent = "가나다 ABC 123 · Markdown 미리보기";
   const status = document.createElement("p"); status.setAttribute("role", "status");
+  const documentOptions = textSettings();
+  const textGroup = document.createElement("fieldset"); textGroup.hidden = !documentOptions;
+  const textLegend = document.createElement("legend"); textLegend.textContent = "텍스트 · 현재 파일"; textGroup.append(textLegend);
+  if (documentOptions) {
+    const encoding = document.createElement("select");
+    for (const [value, name] of [["utf", "UTF 자동"], ["cp949", "한국어 CP949"]]) {
+      const o = document.createElement("option"); o.value = value; o.textContent = name; encoding.append(o);
+    }
+    encoding.value = documentOptions.encoding();
+    const label = document.createElement("label"); label.append(document.createTextNode("문자 인코딩"), encoding); textGroup.append(label);
+    encoding.onchange = () => {
+      encoding.disabled = true;
+      void documentOptions.changeEncoding(encoding.value === "cp949" ? "cp949" : "utf")
+        .catch(e => { status.textContent = String(e); })
+        .finally(() => { encoding.value = documentOptions.encoding(); encoding.disabled = false; });
+    };
+  }
   const sync = () => { const p = preferences(); font.value = p.mdFont; size.value = String(p.mdSize); };
   const update = () => {
     if (!size.checkValidity() || !size.value) { status.textContent = "글자 크기는 12~24px의 정수로 입력하세요."; return; }
@@ -27,7 +45,7 @@ export function openSettings(): void {
   const reset = document.createElement("button"); reset.textContent = "기본값 복원";
   reset.onclick = () => { status.textContent = applyPreferences(DEFAULTS) ? "" : "설정을 저장할 수 없습니다. 이 창에만 적용됩니다."; sync(); };
   const close = document.createElement("button"); close.textContent = "닫기"; close.onclick = () => d.close();
-  d.append(title, group, preview, status, reset, close); document.body.append(d); sync();
+  d.append(title, textGroup, group, preview, status, reset, close); document.body.append(d); sync();
   window.addEventListener("va:preferences", sync);
   d.addEventListener("close", () => { window.removeEventListener("va:preferences", sync); d.remove(); dialog = null; previous?.focus(); }, { once: true });
   d.showModal();

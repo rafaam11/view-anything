@@ -145,7 +145,7 @@ async function appendPaths(paths: string[]) {
 
 window.addEventListener(OPEN_EVENT, (e) => {
   const detail = (e as CustomEvent<OpenEventDetail>).detail;
-  void pickAndOpen(detail?.append === true);
+    void pickAndOpen(detail?.append === true, detail?.text === true);
 });
 
 // Capture phase: the editor must not swallow app shortcuts.
