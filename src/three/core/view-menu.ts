@@ -3,6 +3,7 @@
 import { TOOLBAR, type KeyAction } from "./keys";
 import type { MenuItem } from "./menubar";
 import type { Navigation } from "./navigation";
+import { iconButton } from "../../ui/icons";
 
 export interface ViewMenuContext {
   run(action: KeyAction): void;
@@ -32,19 +33,13 @@ export function viewMenuItems(ctx: ViewMenuContext): MenuItem[] {
   ];
 }
 
-/** Top-right toolbar: fit and the standard views. */
+/** Common fit icon; standard views stay in 보기 and on 1–7. */
 export function buildToolbar(run: (action: KeyAction) => void): HTMLElement {
   const toolbar = document.createElement("div");
   toolbar.className = "va3d-toolbar";
   toolbar.setAttribute("role", "toolbar");
-  for (const [action, label, tip] of TOOLBAR) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = label;
-    b.title = tip;
-    b.addEventListener("click", () => run(action));
-    toolbar.append(b);
-  }
+  const fit = iconButton("전체 맞춤", "fit", "F");
+  fit.addEventListener("click", () => run({ type: "fit" })); toolbar.append(fit);
   return toolbar;
 }
 

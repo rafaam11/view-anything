@@ -6,6 +6,7 @@ import { parseCsv, updateCsv, type CsvCell, type CsvRows } from "./csv";
 import { decodeDataText, encodeDataText } from "./text";
 import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
+import { documentBar } from "../ui/chrome";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_CELLS = 100_000;
@@ -18,7 +19,7 @@ const viewer: Viewer = {
     const read = async () => new Uint8Array(await platform.readFileRaw(path));
     const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
     const name = path.split(/[\\/]/).pop() ?? path;
-    const root = document.createElement("div"); root.className = "data-root";
+    const root = document.createElement("div"); root.className = "data-root va-viewer";
     const bar = document.createElement("header"); bar.className = "data-bar";
     const title = document.createElement("strong"); title.textContent = name;
     const edit = document.createElement("button"); edit.textContent = "편집";
@@ -26,16 +27,16 @@ const viewer: Viewer = {
     const copy = document.createElement("button"); copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
     const reload = document.createElement("button"); reload.textContent = "다시 읽기"; reload.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status");
-    bar.append(title, edit, save, copy, reload, status);
+    documentBar(bar, { toggle: edit, files: [save, copy, reload] });
     const body = document.createElement("div"); body.className = "data-table-wrap";
-    const pages = document.createElement("nav"); pages.setAttribute("aria-label", "CSV 페이지");
+    const pages = document.createElement("nav"); pages.className = "data-pages"; pages.setAttribute("aria-label", "CSV 페이지");
     const previous = document.createElement("button"); previous.textContent = "이전 페이지";
     const next = document.createElement("button"); next.textContent = "다음 페이지";
     const pageLabel = document.createElement("span");
     const previousColumns = document.createElement("button"); previousColumns.textContent = "이전 열";
     const nextColumns = document.createElement("button"); nextColumns.textContent = "다음 열";
     const columnLabel = document.createElement("span"); pages.append(previous, pageLabel, next, previousColumns, columnLabel, nextColumns);
-    root.append(bar, pages, body); el.replaceChildren(root);
+    status.className = "va-status"; root.append(bar, status, pages, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false;
     let source = "", meta = decodeDataText(doc.bytes), changes = new Map<CsvCell, string>();
     let rows: CsvRows = [], page = 0, columnPage = 0, columnCount = 0, editRevision = 0;
@@ -71,6 +72,7 @@ const viewer: Viewer = {
       const columns = Math.max(1, Math.ceil(columnCount / PAGE_COLUMNS));
       columnLabel.textContent = ` 열 ${columnPage + 1} / ${columns} `;
       previousColumns.disabled = columnPage === 0; nextColumns.disabled = columnPage + 1 >= columns;
+      pages.hidden = count === 1 && columns === 1;
     };
     const render = () => {
       meta = decodeDataText(doc.bytes); source = meta.text; changes = new Map(); invalid = false;

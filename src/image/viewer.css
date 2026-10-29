@@ -1,8 +1,13 @@
 .image-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.image-bar, .image-coords { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem; }
+.image-bar { flex:none; }
+.image-coords { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .image-bar strong { overflow: hidden; text-overflow: ellipsis; max-width: 15rem; white-space: nowrap; }
 .image-coords input { width: 6rem; }
-.image-area { flex: 1; min-height: 10rem; overflow: auto; display: grid; place-items: center; }
+.image-area { flex:1; min-height:0; overflow:auto; background:color-mix(in srgb,var(--fg) 4%,var(--bg)); cursor:grab; touch-action:none; }
+.image-area.panning { cursor:grabbing; }
+.image-surface { display:grid; place-items:center; }
+.image-area img { user-select:none; -webkit-user-drag:none; }
+.image-zoom { min-width:3em; font-size:12px; text-align:center; color:var(--muted); }
 .image-area img, .image-area canvas { max-width: none; height: auto; }
 .image-thumbs { display: flex; overflow-x: auto; gap: .35rem; padding: .5rem; }
 .image-thumbs button { flex: 0 0 70px; height: 60px; padding: 2px; }

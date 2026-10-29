@@ -7,6 +7,8 @@
 // blocks (radios, sliders) are role="group" siblings outside them, so menu semantics never wrap
 // form controls.
 
+import "../../ui/menu.css";
+
 export interface MenuAction {
   label: string;
   /** Shown on the right (e.g. "Ctrl+O"); the caller handles the key itself. */
@@ -233,7 +235,7 @@ export class Menubar {
       return;
     }
     // Inside a control group (sliders, radios): arrows and Home/End belong to the control.
-    if ((e.target as HTMLElement | null)?.closest?.(".va3d-menu-block")) return;
+    if ((e.target as HTMLElement | null)?.closest?.(".va3d-menu-block") && (e.target as HTMLElement).closest("input,select,textarea,[contenteditable=true]")) return;
     const n = this.menus.length;
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();

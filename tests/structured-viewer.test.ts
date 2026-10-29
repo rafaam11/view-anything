@@ -11,6 +11,7 @@ vi.mock("../src/platform", () => ({ platform: {
 vi.mock("../src/update/guard", () => ({ registerUpdateGuard: () => {} }));
 import viewer from "../src/data/structured-viewer";
 const encode = (s: string) => new TextEncoder().encode(s);
+const controls = (root: HTMLElement) => ["편집", "저장"].map(label => [...root.querySelectorAll("button")].find(b => b.textContent === label)!);
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
 
 test("JSON tree treats content as text and refuses to save invalid edits", async () => {
@@ -18,7 +19,7 @@ test("JSON tree treats content as text and refuses to save invalid edits", async
   const root = document.createElement("div"); await viewer.mount(root, "data.json");
   expect(root.querySelector(".data-tree")?.textContent).toContain("<img src=x>");
   expect(root.querySelector("img")).toBeNull();
-  const buttons = root.querySelectorAll("button"); buttons[0].click(); await settle();
+  const buttons = controls(root); buttons[0].click(); await settle();
   const input = root.querySelector("textarea")!;
   input.value = "{"; input.dispatchEvent(new Event("input")); buttons[1].click(); await settle();
   expect(state.writes).toBe(0); expect(root.textContent).toContain("구문 오류");
@@ -30,7 +31,7 @@ test("YAML comments remain in the source when edited", async () => {
   state.disk = encode("# comment\r\na: 1\r\n"); state.writes = 0;
   const root = document.createElement("div"); await viewer.mount(root, "a.yaml");
   expect(root.textContent).toContain("a: 1");
-  const buttons = root.querySelectorAll("button"); buttons[0].click(); await settle();
+  const buttons = controls(root); buttons[0].click(); await settle();
   const input = root.querySelector("textarea")!;
   input.value = "# comment\r\na: 2\r\n"; input.dispatchEvent(new Event("input")); buttons[1].click(); await settle();
   expect(state.disk).toEqual(encode("# comment\r\na: 2\r\n"));

@@ -28,14 +28,14 @@ vi.mock('pdfjs-dist', () => ({
   }),
 }));
 import viewer from '../src/pdf/viewer';
-const find = (root: HTMLElement, label: string) => [...root.querySelectorAll('button')].find(b => b.textContent === label)!;
+const find = (root: HTMLElement, label: string) => [...root.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') ?? b.textContent) === label)!;
 beforeEach(() => { mocks.mode = 'ok'; mocks.size = 10; mocks.text1 = 'alpha'; mocks.destroy.mockClear(); vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D); });
 test('navigates, searches text and follows outline destinations', async () => {
   const root = document.createElement('div'); await viewer.mount(root, 'test.pdf');
   const page = root.querySelector<HTMLInputElement>('input[type=number]')!;
-  find(root, '다음').click(); await vi.waitFor(() => expect(page.value).toBe('2'));
+  find(root, '다음 페이지').click(); await vi.waitFor(() => expect(page.value).toBe('2'));
   find(root, 'Second').click(); await vi.waitFor(() => expect(page.value).toBe('2'));
-  find(root, '이전').click(); await vi.waitFor(() => expect(page.value).toBe('1'));
+  find(root, '이전 페이지').click(); await vi.waitFor(() => expect(page.value).toBe('1'));
   root.querySelector<HTMLInputElement>('input[type=search]')!.value = 'needle'; find(root, '다음 결과').click();
   await vi.waitFor(() => expect(page.value).toBe('2'));
   expect(root.querySelector('[role=status]')!.textContent).toContain('2페이지');

@@ -12,6 +12,7 @@ import { splitFrontmatter } from "./splice";
 import { bytesEqual, createRunner, planSave, shouldConfirmLeave, shouldReloadOnFocus, type Mode } from "./viewer-state";
 import { saveCopy } from "../data/save-copy";
 import type { Editor } from "./editor";
+import { documentBar } from "../ui/chrome";
 
 const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
 const REWRITE_MESSAGE = "원문 보존 불가 — 전체 재작성으로 저장할까요?";
@@ -113,7 +114,7 @@ return {
     let dirty = false;
 
     const root = document.createElement("div");
-    root.className = "md-root";
+    root.className = "md-root va-viewer";
 
     const bar = document.createElement("header");
     bar.className = "md-bar";
@@ -124,13 +125,13 @@ return {
     actions.className = "md-actions";
     const toggle = document.createElement("button");
     toggle.type = "button";
-    toggle.className = "md-toggle";
+    toggle.className = "md-toggle md-mode-toggle";
     toggle.textContent = "편집";
     toggle.title = "편집 모드 (Ctrl+E)";
     const copy = document.createElement("button");
     copy.type = "button"; copy.className = "md-toggle"; copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
-    actions.append(toggle, copy);
-    bar.append(title, actions);
+    const saveButton = document.createElement("button"); saveButton.textContent = "저장"; saveButton.hidden = true;
+    documentBar(bar, { toggle, files: [saveButton, copy], view: [{ label: "목차", checked: () => !root.querySelector(".toc")?.classList.contains("collapsed"), run: () => root.querySelector<HTMLButtonElement>(".toc-toggle")?.click() }] });
     root.append(bar);
 
     const banner = document.createElement("div");
@@ -262,6 +263,7 @@ return {
       discardApproved = false;
       mode = "edit";
       copy.hidden = false;
+      saveButton.hidden = false;
       toggle.textContent = "읽기";
       toggle.title = "읽기 모드 (Ctrl+E)";
     };
@@ -278,6 +280,7 @@ return {
       body.hidden = false;
       mode = "read";
       copy.hidden = true;
+      saveButton.hidden = true;
       setDirty(false);
       toggle.textContent = "편집";
       // adopt() above may have made the file read-only; keep its explanation.
@@ -319,6 +322,7 @@ return {
       if (mode !== "edit") return;
       tasks.save(save);
     };
+    saveButton.onclick = requestSave;
     copy.addEventListener("click", () => tasks.user(async () => {
       if (!editor) return;
       const plan = planSave(original, baseline, editor.getMarkdown());

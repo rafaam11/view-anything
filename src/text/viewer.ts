@@ -7,6 +7,7 @@ import type { Viewer } from "../registry";
 import { decodeText, encodeText, normalize, lineEndings, type TextMeta } from "./codec";
 import { Menubar } from "../three/core/menubar";
 import { registerTextSettings } from "../settings/document";
+import "../ui/chrome.css";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const viewer: Viewer = {
@@ -20,8 +21,8 @@ const viewer: Viewer = {
     const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
     let meta: TextMeta | null = null, editing = false, busy = false, approved = false, cp949 = false;
     const name = path.split(/[\\/]/).pop() ?? path;
-    const root = document.createElement("section"); root.className = "text-root";
-    const bar = document.createElement("header"); bar.className = "text-bar";
+    const root = document.createElement("section"); root.className = "text-root va-viewer";
+    const bar = document.createElement("header"); bar.className = "text-bar va-viewer-toolbar";
     const button = (label: string, run: () => Promise<void>) => {
       const b = document.createElement("button"); b.textContent = label;
       b.onclick = () => { void run().catch(report); }; bar.append(b); return b;
@@ -68,7 +69,7 @@ const viewer: Viewer = {
       if (!await discard()) return;
       doc.reset(await read()); cp949 = value === "cp949"; editing = false; edit.textContent = "편집"; await render();
     }) });
-    const searchBar = document.createElement("div"); searchBar.className = "text-search"; searchBar.hidden = true;
+    const searchBar = document.createElement("div"); searchBar.className = "text-search va-search"; searchBar.hidden = true;
     const search = document.createElement("input"); search.type = "search"; search.placeholder = "검색"; search.setAttribute("aria-label", "텍스트 검색");
     const find = (back = false) => {
       const q = search.value; if (!q) return;
@@ -101,7 +102,7 @@ const viewer: Viewer = {
         { label: "다른 이름으로 저장", run: run(doCopy), disabled: () => !editing || busy || !meta },
         { label: "다시 읽기", run: run(reload), disabled: () => busy },
       ] },
-      { label: "찾기", accessKey: "e", items: [{ label: "찾기…", shortcut: "Ctrl+F", run: showSearch }] },
+      { label: "보기", accessKey: "v", items: [{ label: "찾기…", shortcut: "Ctrl+F", run: showSearch }] },
     ]);
     bar.prepend(menus.root);
     root.append(bar, searchBar, status, editor); el.replaceChildren(root);

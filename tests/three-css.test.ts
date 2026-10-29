@@ -36,7 +36,7 @@ test("wide window: the banner starts right of the menubar", () => {
 const TOOLBAR_BUDGET = 470;
 const PANEL_RIGHT = 268;
 const MENUBAR_RIGHT = 112;
-const MENUBAR_HEIGHT = 26;
+const MENUBAR_HEIGHT = 36;
 
 test.each([
   [1000, "va3d-panel", "120px"],
@@ -77,11 +77,11 @@ test.each([1200, 900, 500])("menubar top left; the panel starts below it (%ipx)"
   (window as HappyWindow).happyDOM.setViewport({ width, height: 800 });
   layout("va3d-panel");
   const bar = getComputedStyle(document.querySelector<HTMLElement>(".va3d-menubar")!);
-  expect(bar.top).toBe("8px");
-  expect(bar.left).toBe("8px");
+  expect(bar.top).toBe("0px");
+  expect(bar.left).toBe("12px");
   expect(bar.height).toBe(`${MENUBAR_HEIGHT}px`);
   const panel = getComputedStyle(document.querySelector<HTMLElement>(".va3d-panel")!);
-  expect(parseFloat(panel.top)).toBeGreaterThanOrEqual(8 + MENUBAR_HEIGHT + 4);
+  expect(parseFloat(panel.top)).toBeGreaterThanOrEqual(MENUBAR_HEIGHT + 4);
   expect(panel.right).toBe("8px");
   // The menu dropdowns sit above the panel.
   expect(Number(bar.zIndex)).toBeGreaterThan(1);
@@ -91,7 +91,7 @@ test("toolbar right side unchanged; narrow wrap leaves the menubar room", () => 
   (window as HappyWindow).happyDOM.setViewport({ width: 1200, height: 800 });
   layout("va3d-panel");
   const tb = getComputedStyle(document.querySelector<HTMLElement>(".va3d-toolbar")!);
-  expect(tb.top).toBe("8px");
+  expect(tb.top).toBe("3px");
   expect(tb.right).toBe("8px");
   (window as HappyWindow).happyDOM.setViewport({ width: 600, height: 800 });
   layout("va3d-panel collapsed");

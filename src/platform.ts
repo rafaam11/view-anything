@@ -6,6 +6,10 @@ import { THREE_D_EXTENSIONS } from "./three/formats";
 import { TEXT_EXTENSIONS } from "./text/formats";
 
 export const platform = {
+  async copyImage(png: Uint8Array): Promise<void> {
+    const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    await writeImage(png);
+  },
   async readFile(path: string): Promise<Uint8Array> {
     return new Uint8Array(await invoke<number[]>("read_file", { path }));
   },

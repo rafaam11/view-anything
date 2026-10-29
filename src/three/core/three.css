@@ -9,6 +9,12 @@
 .va3d [hidden] { display: none !important; }
 .va3d-canvas { position: absolute; inset: 0; }
 .va3d-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.va3d::before { content:""; position:absolute; inset:0 0 auto; height:36px; box-sizing:border-box; background:var(--bg); border-bottom:1px solid var(--border); z-index:2; }
+.va3d .va3d-canvas { top:36px; }
+.va3d > .va3d-menubar { top:0; left:12px; height:36px; border:0; border-radius:0; padding:0; max-width:none; background:transparent; }
+.va3d > .va3d-toolbar { top:3px; border:0; padding:0; background:transparent; z-index:3; }
+.va3d-toolbar .va-icon-button { display:grid; place-items:center; width:30px; height:30px; padding:5px; }
+.va3d-toolbar .va-icon-button svg { width:20px; height:20px; }
 
 .va3d-toolbar {
   position: absolute;

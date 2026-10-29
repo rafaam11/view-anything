@@ -7,6 +7,7 @@ import { decodeDataText, encodeDataText } from "./text";
 import { FileDocument } from "./document";
 import { restoreLineEndings } from "./line-endings";
 import { saveCopy } from "./save-copy";
+import { documentBar } from "../ui/chrome";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_NODES = 20_000;
@@ -49,7 +50,7 @@ const viewer: Viewer = {
     const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
     const yaml = /\.ya?ml$/i.test(path), name = path.split(/[\\/]/).pop() ?? path;
     let meta = decodeDataText(doc.bytes), editing = false, invalid = false, approved = false, busy = false;
-    const root = document.createElement("div"); root.className = "data-root";
+    const root = document.createElement("div"); root.className = "data-root va-viewer";
     const bar = document.createElement("header"); bar.className = "data-bar";
     const title = document.createElement("strong"); title.textContent = name;
     const toggle = document.createElement("button"); toggle.textContent = "편집";
@@ -57,11 +58,11 @@ const viewer: Viewer = {
     const copy = document.createElement("button"); copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
     const reload = document.createElement("button"); reload.textContent = "다시 읽기"; reload.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status");
-    bar.append(title, toggle, save, copy, reload, status);
-    const body = document.createElement("div");
+    documentBar(bar, { toggle, files: [save, copy, reload] });
+    const body = document.createElement("div"); body.className = "data-tree-wrap";
     const editor = document.createElement("textarea"); editor.className = "data-source"; editor.hidden = true; editor.spellcheck = false;
     editor.setAttribute("aria-label", "원문 편집");
-    root.append(bar, body, editor); el.replaceChildren(root);
+    status.className = "va-status"; root.append(bar, status, body, editor); el.replaceChildren(root);
     const dirty = () => doc.dirty || invalid;
     const refresh = () => { title.textContent = (dirty() ? "● " : "") + name; void platform.setWindowTitle(title.textContent).catch(() => {}); };
     const render = () => {

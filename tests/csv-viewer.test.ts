@@ -16,13 +16,14 @@ vi.mock("../src/update/guard", () => ({ registerUpdateGuard: () => {} }));
 import viewer from "../src/data/csv-viewer";
 
 const encode = (s: string) => new TextEncoder().encode(s);
+const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으로 저장", "다시 읽기", "이전 페이지", "다음 페이지", "이전 열", "다음 열"].map(label => [...root.querySelectorAll("button")].find(b => b.textContent === label)!);
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
 
 test("CSV edits preserve untouched bytes and external conflicts retain local changes", async () => {
   state.disk = encode('\ufeff"name",value\r\nalpha,1\n'); state.alerts = [];
   const root = document.createElement("div");
   await viewer.mount(root, "test.csv");
-  const buttons = root.querySelectorAll("button");
+  const buttons = controls(root);
   buttons[0].click(); await settle();
   const cells = root.querySelectorAll("textarea");
   cells[2].value = "beta"; cells[2].dispatchEvent(new Event("input"));
@@ -44,7 +45,7 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
 test("edits survive page navigation and save together", async () => {
   state.disk = encode(Array.from({ length: 101 }, (_, i) => `row${i},value`).join("\r\n"));
   const root = document.createElement("div"); await viewer.mount(root, "pages.csv");
-  const buttons = root.querySelectorAll("button"); buttons[0].click(); await settle();
+  const buttons = controls(root); buttons[0].click(); await settle();
   expect(root.querySelectorAll("textarea")).toHaveLength(200);
   const first = root.querySelectorAll("textarea")[0]; first.value = "first"; first.dispatchEvent(new Event("input"));
   buttons[5].click();
@@ -59,7 +60,7 @@ test("edits survive page navigation and save together", async () => {
 test("very wide CSV rows are paged by column and keep changes across pages", async () => {
   state.disk = encode(Array.from({ length: 25 }, (_, i) => `v${i}`).join(","));
   const root = document.createElement("div"); await viewer.mount(root, "wide.csv");
-  const buttons = root.querySelectorAll("button"); buttons[0].click(); await settle();
+  const buttons = controls(root); buttons[0].click(); await settle();
   expect(root.querySelectorAll("textarea")).toHaveLength(10);
   const first = root.querySelectorAll("textarea")[0]; first.value = "changed"; first.dispatchEvent(new Event("input"));
   buttons[7].click();

@@ -3,6 +3,8 @@ import { getDocument, GlobalWorkerOptions, PasswordResponses, TextLayer, type PD
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { platform } from '../platform';
 import type { Viewer } from '../registry';
+import { documentBar } from '../ui/chrome';
+import { iconButton } from '../ui/icons';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const MAX_BYTES = 100 * 1024 * 1024;
@@ -47,22 +49,34 @@ const viewer: Viewer = {
       if (e instanceof Error && e.name === 'PasswordException') throw new Error('암호로 보호된 PDF는 열 수 없습니다.');
       throw new Error(`PDF를 읽을 수 없습니다: ${e instanceof Error ? e.message : String(e)}`);
     }
-    const root = document.createElement('div'); root.className = 'pdf-root';
+    const root = document.createElement('div'); root.className = 'pdf-root va-viewer';
     const toolbar = document.createElement('header'); toolbar.className = 'pdf-toolbar';
-    const prev = button('이전'); const next = button('다음');
+    const prev = iconButton('이전 페이지', 'previous'); const next = iconButton('다음 페이지', 'next');
     const pageInput = document.createElement('input'); pageInput.type = 'number'; pageInput.min = '1'; pageInput.max = String(doc.numPages); pageInput.setAttribute('aria-label', '페이지');
     const total = document.createElement('span'); total.textContent = `/ ${doc.numPages}`;
-    const zoomOut = button('축소'); const zoomLabel = document.createElement('span'); const zoomIn = button('확대');
+    const zoomOut = iconButton('축소', 'minus'); const zoomLabel = document.createElement('span'); const zoomIn = iconButton('확대', 'plus');
     const searchInput = document.createElement('input'); searchInput.type = 'search'; searchInput.maxLength = 512; searchInput.placeholder = '문서 검색'; searchInput.setAttribute('aria-label', '문서 검색');
     const search = button('다음 결과'), searchPrev = button('이전 결과'); const status = document.createElement('span'); status.setAttribute('role', 'status');
-    toolbar.append(prev, pageInput, total, next, zoomOut, zoomLabel, zoomIn, searchInput, searchPrev, search, status);
+    const searchBar = document.createElement('div'); searchBar.className = 'va-search'; searchBar.hidden = true;
+    const closeSearch = iconButton('검색 닫기', 'close'); closeSearch.onclick = () => { searchBar.hidden = true; };
+    searchBar.append(searchInput, searchPrev, search, closeSearch); status.className = 'va-status';
+    const showSearch = () => { searchBar.hidden = false; searchInput.focus(); };
     const content = document.createElement('div'); content.className = 'pdf-content';
     const outline = document.createElement('nav'); outline.className = 'pdf-outline'; outline.setAttribute('aria-label', '목차');
     const scroll = document.createElement('div'); scroll.className = 'pdf-scroll';
     const pageContainer = document.createElement('div'); pageContainer.className = 'pdf-page';
     const canvas = document.createElement('canvas'); canvas.setAttribute('aria-label', 'PDF 페이지');
     let textContainer = document.createElement('div'); textContainer.className = 'textLayer'; pageContainer.append(canvas, textContainer); scroll.append(pageContainer);
-    content.append(outline, scroll); root.append(toolbar, content); el.replaceChildren(root);
+    documentBar(toolbar, { controls:[prev, pageInput, total, next, zoomOut, zoomLabel, zoomIn], view:[
+      { label:'찾기…', shortcut:'Ctrl+F', run:showSearch },
+      { label:'목차', checked:() => !outline.hidden, run:() => { outline.hidden = !outline.hidden; } },
+    ] });
+    window.addEventListener('keydown', e => {
+      if (document.querySelector('dialog[open]')) return;
+      if (e.ctrlKey && e.key.toLowerCase() === 'f') { e.preventDefault(); showSearch(); }
+      else if (e.key === 'Escape') searchBar.hidden = true;
+    });
+    content.append(outline, scroll); root.append(toolbar, searchBar, status, content); el.replaceChildren(root);
     let pageNumber = 1, scale = 1, generation = 0, searchGeneration = 0, task: RenderTask | null = null;
     let renderBarrier: Promise<unknown> = Promise.resolve();
     let lastQuery = '', lastFoundPage = 0, lastFoundIndex = -1, textLayer: TextLayer | null = null;

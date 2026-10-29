@@ -1,0 +1,24 @@
+.va-viewer .va-viewer-toolbar { position:sticky; top:0; z-index:10; display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:36px; box-sizing:border-box; padding:2px 12px; margin:0; background:var(--bg); color:var(--fg); border-bottom:1px solid var(--border); font-size:13px; flex:none; }
+.va-viewer-controls { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.va-viewer :is(button,input,select,textarea), .va-settings :is(button,input,select), .pdf-password :is(button,input) { font-family:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:4px; box-sizing:border-box; }
+.va-viewer :is(button,input,select), .va-settings :is(button,input,select), .pdf-password :is(button,input) { font-size:13px; padding:4px 8px; }
+.va-viewer button { cursor:pointer; }
+.va-viewer button:hover:not(:disabled) { background:var(--border); }
+.va-viewer button:disabled { color:var(--muted); cursor:default; }
+.va-viewer-toolbar > button, .va-viewer-controls > button { border:0; background:transparent; }
+.va-viewer :is(button,input,select,textarea):focus-visible, .va-settings :is(button,input,select):focus-visible { outline:2px solid var(--muted); outline-offset:1px; }
+.va-viewer [hidden] { display:none !important; }
+.va-viewer [role=status]:empty { display:none; }
+.va-search { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+.va-search input { min-width:100px; flex:1; max-width:360px; }
+.va-status { margin:0; padding:6px 12px; font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+.va-viewer .va-icon-button { display:inline-grid; place-items:center; flex:none; width:30px; height:30px; padding:5px; border:0; background:transparent; }
+.va-icon-button svg { width:20px; height:20px; pointer-events:none; }
+.va-viewer .text-source, .va-viewer .data-source { font-family:"Cascadia Mono",Consolas,monospace; }
+.va-viewer .va-viewer-toolbar .va3d-menu-item { justify-content:flex-start; }
+.va-viewer .pdf-outline { border-color:var(--border); }
+.va-viewer .pdf-outline button { width:100%; border:0; background:transparent; }
+.va-settings, .pdf-password { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:24px; max-width:calc(100vw - 64px); }
+.va-settings::backdrop, .pdf-password::backdrop { background:#0006; }
+@media(max-width:600px) { .va-viewer-toolbar { padding-inline:6px; } }
+.empty button { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:6px 12px; font:13px system-ui,sans-serif; cursor:pointer; }

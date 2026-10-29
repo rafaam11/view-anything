@@ -1,4 +1,5 @@
 import "./styles.css";
+import "./ui/chrome.css";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { resolveViewer, type Viewer } from "./registry";
 import { platform } from "./platform";

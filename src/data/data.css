@@ -1,10 +1,11 @@
-.data-root { padding: 1rem; }
-.data-bar { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+.data-root { display:flex; flex-direction:column; height:100%; min-height:0; }
+.data-bar { flex:none; }
 .data-bar strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.data-table-wrap { overflow: auto; }
+.data-table-wrap, .data-tree-wrap { flex:1; min-height:0; overflow:auto; padding:12px 16px; }
+.data-pages { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 12px; font-size:13px; border-bottom:1px solid var(--border); }
 .data-table { border-collapse: collapse; }
-.data-table td { border: 1px solid var(--va-border, #888); padding: .35rem .5rem; white-space: pre-wrap; vertical-align: top; }
+.data-table td { border: 1px solid var(--border); padding:6px 10px; white-space: pre-wrap; vertical-align: top; }
 .data-table textarea { min-width: 8rem; width: 100%; box-sizing: border-box; resize: vertical; color: inherit; background: transparent; }
 .data-tree details { margin-left: 1rem; }
 .data-tree div { margin-left: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-.data-source { box-sizing: border-box; width: 100%; min-height: 70vh; font: 14px monospace; color: inherit; background: transparent; }
+.data-source { flex:1; box-sizing:border-box; width:100%; min-height:0; resize:none; padding:12px 16px; border:0 !important; border-radius:0 !important; font:14px/1.6 monospace; color:inherit; background:transparent; }

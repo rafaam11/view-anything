@@ -56,7 +56,7 @@ async function mount(path: string, text: string) {
   const el = document.createElement("div");
   document.body.append(el);
   await viewer.mount(el, path);
-  const toggle = el.querySelector<HTMLButtonElement>("button.md-toggle")!;
+  const toggle = el.querySelector<HTMLButtonElement>("button.md-mode-toggle")!;
   const article = el.querySelector("article")!;
   const editorHost = el.querySelector<HTMLElement>(".md-editor")!;
   return { el, toggle, article, editorHost };
