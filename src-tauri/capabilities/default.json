@@ -7,7 +7,6 @@
   ],
   "permissions": [
     "core:default",
-    "clipboard-manager:allow-write-image",
     "core:window:allow-set-title",
     "core:window:allow-set-theme",
     "core:window:allow-minimize",

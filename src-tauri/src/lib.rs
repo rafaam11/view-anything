@@ -3,6 +3,20 @@ mod cloud;
 mod update;
 mod text_codec;
 
+/// PNG bytes avoid a large JSON number array; decoding and clipboard I/O stay off the UI thread.
+#[tauri::command]
+async fn copy_image_raw(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) if bytes.len() <= 256 * 1024 * 1024 => bytes.to_vec(),
+        _ => return Err("클립보드 이미지가 너무 크거나 올바르지 않습니다".into()),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        let image = tauri::image::Image::from_bytes(&bytes).map_err(|e| e.to_string())?;
+        app.clipboard().write_image(&image).map_err(|e| e.to_string())
+    }).await.map_err(|e| e.to_string())?
+}
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -351,6 +365,7 @@ pub fn run() {
             file_size,
             sibling_images,
             open_window,
+            copy_image_raw,
             text_codec::decode_cp949,
             text_codec::encode_cp949,
             update::update_context,
