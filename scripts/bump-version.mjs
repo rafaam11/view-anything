@@ -1,5 +1,5 @@
 // Usage: node scripts/bump-version.mjs <X.Y.Z>
-// Updates package.json, src-tauri/Cargo.toml, src-tauri/tauri.conf.json and the
+// Updates package.json/package-lock.json, src-tauri/Cargo.toml, src-tauri/tauri.conf.json and the
 // `view-anything` entry of src-tauri/Cargo.lock. Edits text in place to keep formatting.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -21,6 +21,13 @@ function patch(file, re, version) {
 export function bumpVersion(root, version) {
   if (!SEMVER_RE.test(version)) throw new Error(`invalid version "${version}", expected X.Y.Z`);
   patch(join(root, "package.json"), JSON_VERSION_RE, version);
+  const npmLock = join(root, "package-lock.json");
+  if (existsSync(npmLock)) {
+    const lock = JSON.parse(readFileSync(npmLock, "utf8"));
+    lock.version = version;
+    if (lock.packages?.[""]) lock.packages[""].version = version;
+    writeFileSync(npmLock, JSON.stringify(lock, null, 2) + "\n");
+  }
   patch(join(root, "src-tauri", "Cargo.toml"), CARGO_VERSION_RE, version);
   patch(join(root, "src-tauri", "tauri.conf.json"), JSON_VERSION_RE, version);
   const lock = join(root, "src-tauri", "Cargo.lock");

@@ -83,4 +83,13 @@ describe("version tooling", () => {
     expect(run("bump-version.mjs", root, ["0.3.0"]).status).toBe(0);
     expect(run("check-version.mjs", root, ["v0.3.0"]).status).toBe(0);
   });
+  test("bump synchronizes npm lock metadata without changing dependencies", () => {
+    const root = fixture("0.1.0", "0.1.0", "0.1.0");
+    const file = join(root, "package-lock.json");
+    writeFileSync(file, JSON.stringify({ version: "0.1.0", packages: { "": { name: "view-anything", version: "0.1.0" }, "node_modules/example": { version: "1.2.3" } } }));
+    bumpVersion(root, "0.9.0");
+    const lock = JSON.parse(readFileSync(file, "utf8"));
+    expect(lock.version).toBe("0.9.0"); expect(lock.packages[""].version).toBe("0.9.0");
+    expect(lock.packages["node_modules/example"].version).toBe("1.2.3");
+  });
 });
