@@ -22,16 +22,22 @@ const key=(key,extras={})=>js('const k=arguments[0],code=/^[a-z]$/i.test(k)?"Key
 // the actual isolated X11 desktop, including GTK dialogs, without that RPC.
 const screenshot=async label=>{run('scrot',['-o',path.join(evidence,label+'.png')]);};
 async function start(binary,file){
+  // AppImage's extraction launcher can outlive a WebDriver session. Give every
+  // file its own owned process group, including WebKitWebDriver and the launcher.
+  driver=spawn('tauri-driver',[],{detached:true,stdio:['ignore',fs.openSync(path.join(evidence,'driver.log'),'a'),fs.openSync(path.join(evidence,'driver-errors.log'),'a')]});
+  await until(()=>request('GET','/status'),'tauri-driver startup');
   const s=await request('POST','/session',{capabilities:{alwaysMatch:{'tauri:options':{application:binary,args:[file]}}}});session=s.sessionId;
   await cmd('/timeouts',{script:60000});await wait('window.__TAURI__?.core != null');
   await js('window.__desktopErrors=[];window.addEventListener("error",e=>window.__desktopErrors.push(e.message));');
 }
-async function stop(){if(session){await request('DELETE',`/session/${session}`).catch(()=>{});session=null;}}
+async function stop(){
+  if(session){await request('DELETE',`/session/${session}`).catch(()=>{});session=null;}
+  if(driver){const owned=driver;driver=null;const exited=new Promise(resolve=>owned.once('exit',resolve));try{process.kill(-owned.pid,'SIGTERM');}catch{}if(owned.exitCode===null&&owned.signalCode===null)await exited;await delay(200);}
+}
 async function collect(){errors.push(...await js('return window.__desktopErrors??[]'));}
 try{
   wm=spawn('openbox',[],{stdio:'ignore'});await delay(500);
   run('sudo',['dpkg','-i',deb]);const installed=run('dpkg',['-L',name],{stdio:'pipe'}).split('\n').find(p=>p.startsWith('/usr/bin/')&&fs.existsSync(p)&&fs.statSync(p).isFile());assert(installed);
-  driver=spawn('tauri-driver',[],{stdio:['ignore',fs.openSync(path.join(evidence,'driver.log'),'a'),fs.openSync(path.join(evidence,'driver-errors.log'),'a')]});await until(()=>request('GET','/status'),'tauri-driver startup');
   for(const [format,binary] of [['deb',installed],['appimage',appimage]]){
     if(format==='appimage')fs.chmodSync(binary,0o755);await start(binary,files.txt);await wait('document.querySelector(".text-source")?.value.includes("원문 보존")');
     await click('편집');await wait('document.querySelector(".text-source")?.readOnly === false');
@@ -60,5 +66,5 @@ try{
   }
   run('sudo',['dpkg','--remove',name]);assert(!fs.existsSync(installed));results.push('deb uninstall removes installed binary');assert.deepEqual(errors,[]);
   fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:true,results,errors,environment:{platform:process.platform,display:process.env.DISPLAY,renderer:'WebKitGTK on Xvfb, Mesa software'},limits:['Web content controls use WebDriver JS events; GTK save/clipboard use real native paths.','No physical desktop/Wayland or default-app chooser interaction.']},null,2));console.log(results.join('\nPASS '));
-}catch(error){if(session)await screenshot('failure').catch(()=>{});fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:false,results,errors,error:String(error.stack??error)},null,2));throw error;
-}finally{await stop();driver?.kill();wm?.kill();}
+}catch(error){await screenshot('failure').catch(()=>{});fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:false,results,errors,error:String(error.stack??error)},null,2));throw error;
+}finally{await stop();wm?.kill();}
