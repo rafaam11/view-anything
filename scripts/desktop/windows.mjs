@@ -30,14 +30,21 @@ try {
   assert(binaryMatches('0.0.1'));
   spawn(exe,[],{env,windowsHide:true,stdio:'ignore'});
   browser=await until(()=>chromium.connectOverCDP('http://127.0.0.1:9239',{timeout:3000}),'WebView CDP');
-  const context=browser.contexts()[0],first=watch(context.pages()[0]);await first.waitForFunction(()=>window.__TAURI__?.core);await state(first,'error');
+  const context=await until(()=>browser.contexts().find(c=>c.pages().length>0),'initial WebView page');
+  const first=watch(context.pages()[0]);await first.waitForFunction(()=>window.__TAURI__?.core);
+  assert.equal(await first.evaluate(()=>window.__TAURI__.app.getVersion()),'0.0.1');await state(first,'error');
   // Real native updater must reject a damaged signature before reaching install-ready.
   mode='bad-signature';await first.keyboard.press('Control+Shift+u');await until(()=>downloads>0,'signed payload download');await state(first,'error');results.push('HTTP failure and invalid update signature rejected');
   mode='valid';await first.keyboard.press('Control+Shift+u');await state(first,'downloaded');
   const pages={};
   for(const ext of ['txt','png','pdf','pcd']){
     const a=config.bundle.fileAssociations.find(a=>a.ext.includes(ext));const opened=context.waitForEvent('page');ps('open',['-File',files[ext],'-Class',a.name]);const p=watch(await opened);pages[ext]=p;
-    await p.locator(({txt:'.text-source',png:'.image-area img',pdf:'.pdf-root canvas',pcd:'.va3d canvas'})[ext]).waitFor();await p.screenshot({path:path.join(evidence,`installed-${ext}.png`)});
+    await p.locator(({txt:'.text-source',png:'.image-area img',pdf:'.pdf-root canvas',pcd:'.va3d canvas'})[ext]).waitFor();
+    if(ext==='txt')assert.equal(await p.getByLabel('텍스트 내용').inputValue(),'원문 보존\nsecond line\n');
+    if(ext==='png')await p.waitForFunction(()=>document.querySelector('.image-area img')?.naturalWidth===160);
+    if(ext==='pdf')await p.getByText('needle desktop test',{exact:true}).waitFor();
+    if(ext==='pcd')await p.waitForFunction(()=>document.querySelector('.va3d-status')?.textContent.includes('점 8'));
+    await p.screenshot({path:path.join(evidence,`installed-${ext}.png`)});
   }
   results.push('ShellExecuteEx registered Open With for spaced/Korean TXT, PNG, PDF and PCD');
   const text=pages.txt;await text.getByRole('button',{name:'편집',exact:true}).click();await text.getByLabel('텍스트 내용').fill('unsaved update test\n');

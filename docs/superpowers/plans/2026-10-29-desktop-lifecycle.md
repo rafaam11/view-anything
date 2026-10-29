@@ -9,6 +9,7 @@
 - Windows 등록 명령은 실제 ShellExecuteEx의 Open With 클래스 호출로 검사한다. Windows의 사용자 기본 앱 선택(UserChoice)을 강제로 변경하지 않으며 탐색기 기본 앱 선택 화면까지 검증했다고 보고하지 않는다.
 - Linux: 실제 deb 설치본과 AppImage를 WebKitGTK/WebDriver, Xvfb, Mesa 소프트웨어 렌더러에서 실행한다. TXT 안전 저장·설정, 이미지 이력·X11 이미지 클립보드, PDF 검색, PCD/STL 표시, GTK 저장 대화상자로 HTML 내보내기와 재열기를 확인한다. 물리 데스크톱·Wayland 검증과 구분한다.
 - 실패해도 GUI 화면·도구 로그·완료한 단계/실패 이유를 artifact로 남긴다. 통과 결과만 통과로 표시한다.
+- `platform`으로 양 OS 또는 하나를 선택한다. `package_run`에 앞선 실행 번호를 지정하면 패키지를 재사용해 시험 스크립트만 다시 검사할 수 있다. 현재 src/src-tauri/vendor·버전/빌드 입력의 내용 fingerprint와 OS가 패키지 manifest와 일치하지 않으면 실행을 거부한다. packages artifact에는 공개 시험 설정·설치 파일·서명만 포함하고 임시 비밀키는 제외한다.
 
 ## 검토 중 발견한 수정
 

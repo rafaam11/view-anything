@@ -22,6 +22,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - `npm install` → `npm run tauri dev`
 - 빌드: `npm run tauri build`
 - 검증: `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run check:bundle`, `cargo test --manifest-path src-tauri/Cargo.toml`
+- `desktop` workflow는 Windows NSIS 설치·서명 업데이트·제거와 Linux deb/AppImage의 실제 WebKit GUI를 GitHub-hosted 일회용 runner에서 시험한다. `scripts/desktop/`의 별도 npm 의존성은 앱 번들에 넣지 않는다. 사용자 PC/self-hosted에서는 설치 스크립트가 거부되며 환경 변수를 위조해 우회하지 않는다. 시험 키는 RUNNER_TEMP에만 만들고 packages/evidence artifact에 넣지 않는다. `package_run`으로 기존 시험 패키지를 재사용할 때는 현재 앱 입력의 fingerprint가 일치해야 한다.
 - `npm run build:runtime`: HTML 내보내기용 뷰어 런타임(`vite.runtime.config.ts` → `build/runtime/va-runtime.js`, IIFE 한 파일)을 빌드한다. `build`와 `predev`가 먼저 실행하므로 보통 직접 돌릴 일은 없다. 앱의 내보내기 코드가 이 파일을 `?raw`로 인라인하므로 앱 빌드 전에 있어야 한다.
 - 측정 스크립트(커밋하지 않는 데이터만 만든다): `node scripts/bench-stl.mjs [삼각형 수]`(임시 폴더에 합성 바이너리 STL을 만들어 parseMesh 시간 측정), `node scripts/bench-edges.mjs [삼각형 수]`(엣지 추출 시간, three EdgesGeometry와 결과 비교).
 - 포인트클라우드 측정: `cargo run --release --manifest-path src-tauri/Cargo.toml --example bench-cloud -- 10000000`. OS 임시 폴더의 합성 XYZRGB+ring PCD만 사용한다.
@@ -68,6 +69,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 
 ## 버전·릴리스 (multi-cli-work 방식)
 - 자동 업데이트: `src/update/`(상태·배지·다중 창 저장 보호), `src-tauri/src/update.rs`(프로세스당 관리 창). updater/process JS는 lazy import한다. `scripts/make-latest-json.mjs`가 서명된 NSIS/AppImage에서 manifest를 만든다. 공개키만 설정에 넣고 비밀키·비밀번호는 레포 밖 또는 GitHub Secrets에 둔다.
+- 업데이트 입력 잠금은 `src/update/guard.ts`의 작은 모듈을 main에서 제목줄·뷰어 단축키보다 먼저 초기화한다. 잠금 중 앱 단축키·열기·드롭·설정 변경을 막고 업데이트 대화상자의 Tab/Enter/Space/Escape만 허용한다. 취소하면 기존 inert 상태와 미저장 편집을 보존해 해제한다. 파일 연결 클래스 이름은 앱 식별자로 구분하며 일반적인 전역 이름으로 바꾸지 않는다.
 - 버전 체계는 SemVer `vX.Y.Z`. 기능 추가는 minor, 수정만 있으면 patch를 올린다.
 - 버전은 `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` 세 곳에 있다. 항상 함께 올린다.
 - 버전 스크립트:
