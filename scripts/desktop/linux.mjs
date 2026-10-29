@@ -18,7 +18,9 @@ const asyncJs=(script,...args)=>cmd('/execute/async',{script:`const done=argumen
 const wait=expression=>until(()=>js(`return ${expression}`),expression);
 const click=label=>js('const b=[...document.querySelectorAll("button")].find(b=>(b.getAttribute("aria-label")??b.textContent)===arguments[0]);if(!b)throw Error("Button not found: "+arguments[0]);b.click();return true;',label);
 const key=(key,extras={})=>js('const k=arguments[0],code=/^[a-z]$/i.test(k)?"Key"+k.toUpperCase():/^[0-9]$/.test(k)?"Digit"+k:k;const e=new KeyboardEvent("keydown",{key:k,code,bubbles:true,cancelable:true,...arguments[1]});(document.activeElement??window).dispatchEvent(e);return true;',key,extras);
-const screenshot=async label=>{const png=await request('GET',`/session/${session}/screenshot`);fs.writeFileSync(path.join(evidence,label+'.png'),Buffer.from(png,'base64'));};
+// WebKitWebDriver screenshots can stall on a modal/accelerated WebView. Capture
+// the actual isolated X11 desktop, including GTK dialogs, without that RPC.
+const screenshot=async label=>{run('scrot',['-o',path.join(evidence,label+'.png')]);};
 async function start(binary,file){
   const s=await request('POST','/session',{capabilities:{alwaysMatch:{'tauri:options':{application:binary,args:[file]}}}});session=s.sessionId;
   await cmd('/timeouts',{script:60000});await wait('window.__TAURI__?.core != null');
