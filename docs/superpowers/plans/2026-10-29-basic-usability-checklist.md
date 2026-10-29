@@ -4,12 +4,13 @@
 
 ## 자동 검증
 
-각 구현 작업의 `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run check:bundle`, `cargo test --manifest-path src-tauri/Cargo.toml`을 통과했다. 최종 로컬 결과는 JS 561 passed/2 skipped, Rust 51 passed다. Unix의 심볼릭 링크 회귀는 Linux CI에서 수행한다.
+각 구현 작업의 `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run check:bundle`, `cargo test --manifest-path src-tauri/Cargo.toml`을 통과했다. 최종 로컬 결과는 JS 562 passed/2 skipped, Rust 51 passed다. Unix의 심볼릭 링크 회귀는 Linux CI에서 수행한다.
 
 - 합성 변환의 자르기 경계·회전/반전, 20회 제한, redo 분기 폐기, 저장 체크포인트.
 - 편집 모드 분리, 복사/저장 오류 후 편집과 이력 유지, 원본/폴더 갱신 오류, 썸네일 재구성.
 - 구버전 Markdown 설정 이관, TXT 옵션 검증·저장·동기화, 그룹별 초기화, 설정과 본문·선택·미저장 상태 분리.
 - 원본이 삭제된 뒤에도 다른 경로 저장 허용, 원본 경로/Windows 대소문자 별칭 저장 거부, 원본 폴더 미재생성. 끊어진 링크를 추측하지 않는 보호.
+- 긴 텍스트의 검색 위치 계산은 하드 줄 단위로 나누고 프레임 사이에 입력을 처리한다. 취소·입력·설정 변경으로 검색이 무효화되면 측정 DOM을 정리하고 뒤늦게 스크롤하지 않는다.
 
 ## 실제 Windows GUI 검증
 
@@ -27,6 +28,8 @@ Playwright CDP를 별도 Tauri 앱의 실제 WebView에 연결했고 computer-us
 | TXT 검색·저장·인코딩 취소 | 긴 줄의 줄바꿈·가로 스크롤 검색 위치, BOM·CRLF 보존 저장, 미저장 상태에서 인코딩 변경 취소 시 편집 유지 |
 | 새 프로세스 재시작 | TXT 글꼴·크기·줄바꿈 복원, 읽기 모드 유지, 파일별 인코딩은 전역 설정에 저장하지 않음 |
 | computer-use | 화면 확인 후 편집 아이콘, 회전, 실행 취소를 클릭하고 도구/미저장 표시 전환 확인 |
+| 기존 흐름 회귀 | 실제 Ctrl+휠 포인터 고정·팬·PNG/JPEG/회전 클립보드 픽셀, 공통 메뉴 높이·JSON/CSV 저장·PDF 검색, 반복 리사이즈·다크 테마·오프라인 HTML 메뉴 조작 확인 |
+| 9 MiB TXT 검색 | 22px 명조·자동 줄바꿈에서 끝 검색 위치의 스크롤이 이전 측정과 동일, 분할 계산 중 16ms 타이머 84회 진행, Esc 취소 후 지연 스크롤 없음 |
 
 GUI 시험 스크립트는 OS Temp의 `va-browser-check/usability-{history,folder,settings,restart,recovery}.mjs`, 화면은 `va-usability-*.png`에 보관했다. 합성 데이터만 사용했으며 저장 대화상자와 일부 오류/미저장 확인 응답은 시험 경로·응답으로 대체했다. 폴더 활성화는 실제 WebView의 focus 이벤트를 발생시켜 검증했고 물리적 창 전환 입력으로 간주하지 않는다. Windows PNG 디코딩, 파일 읽기/쓰기와 복구 저장 보호는 실제 네이티브 경로를 사용했다.
 
@@ -36,6 +39,7 @@ GUI 시험 스크립트는 OS Temp의 `va-browser-check/usability-{history,folde
 - 폴더는 활성화/F5/저장 후 갱신하며 실시간 파일 감시는 제공하지 않는다. 썸네일은 1,000개까지 표시한다.
 - 이미지 이력은 최근 20회이며 다른 파일을 열거나 외부 변경으로 원본을 다시 읽으면 초기화한다. GIF/SVG는 정적 편집 결과다.
 - 텍스트는 10 MiB까지이며 구문 강조·대용량 로그 스트리밍은 제공하지 않는다. 외부 프로세스의 검증·파일 교체 사이 경쟁은 여전히 남는다.
+- 9 MiB 합성 TXT의 끝 검색은 분할 측정에서 약 1.9초가 걸렸다. 측정 계산 중 최대 long task는 76ms였지만 최초 textarea 레이아웃에는 약 1.7초의 long task가 남았다(Windows 개발 빌드 단일 측정). 큰 파일의 전체 렌더링 지연은 후속 스트리밍/가상화 범위다.
 
 ## 다음 페이즈 제안
 

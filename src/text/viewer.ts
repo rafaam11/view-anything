@@ -21,7 +21,7 @@ const viewer: Viewer = {
       return bytes;
     };
     const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
-    let meta: TextMeta | null = null, editing = false, busy = false, approved = false, cp949 = false;
+    let meta: TextMeta | null = null, editing = false, busy = false, approved = false, cp949 = false, searchSequence = 0;
     const name = path.split(/[\\/]/).pop() ?? path;
     const root = document.createElement("section"); root.className = "text-root va-viewer";
     const bar = document.createElement("header"); bar.className = "text-bar va-viewer-toolbar";
@@ -33,9 +33,11 @@ const viewer: Viewer = {
     const report = (e: unknown) => { status.textContent = String(e); };
     const editor = document.createElement("textarea"); editor.className = "text-source";
     editor.spellcheck = false; editor.readOnly = true; editor.setAttribute("aria-label", "텍스트 내용");
-    const display = () => { editor.wrap = preferences().textWrap ? "soft" : "off"; };
+    const cancelSearch = () => { searchSequence++; if (status.textContent === "검색 중…") status.textContent = ""; };
+    const display = () => { cancelSearch(); editor.wrap = preferences().textWrap ? "soft" : "off"; };
     display(); window.addEventListener("va:preferences", display);
-    window.addEventListener("unload", () => window.removeEventListener("va:preferences", display), { once: true });
+    window.addEventListener("resize", cancelSearch);
+    window.addEventListener("unload", () => { cancelSearch(); window.removeEventListener("va:preferences", display); window.removeEventListener("resize", cancelSearch); }, { once: true });
     const dirty = () => doc.dirty || (meta !== null && editor.value !== normalize(meta.text));
     const refresh = () => {
       void platform.setWindowTitle((dirty() ? "● " : "") + name).catch(() => {});
@@ -43,6 +45,7 @@ const viewer: Viewer = {
       editor.readOnly = !editing || busy;
     };
     const render = async () => {
+      cancelSearch();
       meta = null; editor.value = "";
       try {
         meta = await decodeText(doc.bytes, cp949); editor.value = normalize(meta.text);
@@ -76,25 +79,29 @@ const viewer: Viewer = {
     }) });
     const searchBar = document.createElement("div"); searchBar.className = "text-search va-search"; searchBar.hidden = true;
     const search = document.createElement("input"); search.type = "search"; search.placeholder = "검색"; search.setAttribute("aria-label", "텍스트 검색");
-    const find = (back = false) => {
+    const find = async (back = false) => {
+      const sequence = ++searchSequence;
       const q = search.value; if (!q) return;
       const text = editor.value;
       const from = back ? editor.selectionStart - 1 : editor.selectionEnd;
       let at = back ? (from < 0 ? -1 : text.lastIndexOf(q, from)) : text.indexOf(q, from);
       if (at < 0) at = back ? text.lastIndexOf(q) : text.indexOf(q);
-      status.textContent = at < 0 ? "검색 결과 없음" : `${at + 1}번째 문자`;
+      status.textContent = at < 0 ? "검색 결과 없음" : "검색 중…";
       if (at >= 0) {
         editor.focus(); editor.setSelectionRange(at, at + q.length);
-        revealSelection(editor, at, q.length);
+        const current = () => sequence === searchSequence && editor.selectionStart === at && editor.selectionEnd === at + q.length;
+        if (await revealSelection(editor, at, q.length, current)) status.textContent = `${at + 1}번째 문자`;
+        else if (sequence === searchSequence) status.textContent = "";
       }
     };
     searchBar.append(search);
     for (const [label, back] of [["이전", true], ["다음", false]] as const) {
-      const b = document.createElement("button"); b.textContent = label; b.onclick = () => find(back); searchBar.append(b);
+      const b = document.createElement("button"); b.textContent = label; b.onclick = () => { void find(back).catch(report); }; searchBar.append(b);
     }
-    search.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); find(e.shiftKey); } };
+    search.oninput = cancelSearch;
+    search.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); void find(e.shiftKey).catch(report); } };
     const closeSearch = document.createElement("button"); closeSearch.textContent = "닫기";
-    closeSearch.onclick = () => { searchBar.hidden = true; editor.focus(); }; searchBar.append(closeSearch);
+    closeSearch.onclick = () => { cancelSearch(); searchBar.hidden = true; editor.focus(); }; searchBar.append(closeSearch);
     const showSearch = () => { searchBar.hidden = false; search.focus(); search.select(); };
     const run = (action: () => Promise<void>) => () => { void action().catch(report); };
     const menus = new Menubar([
@@ -117,11 +124,11 @@ const viewer: Viewer = {
       if (result === "conflict") { status.textContent = "파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽으세요."; }
       else { meta = await decodeText(doc.bytes, cp949); status.textContent = "저장됨"; }
     });
-    editor.oninput = () => { status.textContent = ""; refresh(); };
+    editor.oninput = () => { cancelSearch(); status.textContent = ""; refresh(); };
     window.addEventListener("keydown", e => {
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); if (!e.repeat) void doSave().catch(report); }
       if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); showSearch(); }
-      if (e.key === "Escape" && !searchBar.hidden) { searchBar.hidden = true; editor.focus(); }
+      if (e.key === "Escape" && !searchBar.hidden) { cancelSearch(); searchBar.hidden = true; editor.focus(); }
       if (menus.handleKey(e)) return;
       if (editing && (e.key === "F5" || e.key.startsWith("Browser") || (e.ctrlKey && e.key.toLowerCase() === "r") || (e.altKey && ["ArrowLeft", "ArrowRight"].includes(e.key)))) { e.preventDefault(); e.stopPropagation(); }
     }, true);
