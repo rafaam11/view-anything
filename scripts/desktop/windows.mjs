@@ -55,6 +55,7 @@ try {
   await text.evaluate(()=>window.dispatchEvent(new CustomEvent('va:open')));await dialog.getByRole('button',{name:'취소',exact:true}).click();await text.waitForFunction(()=>!document.getElementById('app').hasAttribute('inert'));
   assert.equal(await text.getByLabel('텍스트 내용').inputValue(),'unsaved update test\n');await text.keyboard.press('Control+s');await text.getByText('저장됨',{exact:true}).waitFor();const saved=fs.readFileSync(files.txt);assert.deepEqual(saved,Buffer.from('\ufeffunsaved update test\r\n'));
   results.push('multiwindow dirty warning, Ctrl+S/custom open blocked while frozen, cancel restores edits and saving');
+  ps('change-associations');
   await first.screenshot({path:path.join(evidence,'before-update.png')});
   await first.getByRole('button',{name:'재시작',exact:true}).click();await first.locator('.va-update-dialog').getByRole('button',{name:'재시작',exact:true}).click();
   await until(()=>!browser.isConnected(),'old app exit',60000);await browser.close().catch(()=>{});browser=null;
@@ -69,7 +70,7 @@ try {
   },'updated app relaunches as 0.0.2',120000);
   const updated=watch(browser.contexts()[0].pages()[0]);await updated.screenshot({path:path.join(evidence,'after-update.png')});assert.deepEqual(fs.readFileSync(files.txt),saved);ps('associations');
   results.push('real signed NSIS update, installed binary hash, automatic startup, instrumented relaunch version; saved source and associations retained');
-  await browser.close();browser=null;ps('uninstall');results.push('uninstall restores previous associations and removes installed binary');
+  await browser.close();browser=null;ps('uninstall');results.push('uninstall restores seeded previous handler, preserves subsequently chosen handler, migrates legacy backup and removes binary/classes/backups');
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:true,results,errors,limits:['Open With class invocation is tested; Windows UserChoice default-app UI is not changed.']},null,2));console.log(results.join('\nPASS '));
 }catch(error){
   if(browser)for(const [i,p] of browser.contexts()[0].pages().entries())await p.screenshot({path:path.join(evidence,`failure-${i}.png`)}).catch(()=>{});

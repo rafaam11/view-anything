@@ -43,6 +43,9 @@
     }
   },
   "bundle": {
+    "windows": {
+      "nsis": { "installerHooks": "windows/file-associations.nsh" }
+    },
     "createUpdaterArtifacts": true,
     "active": true,
     "targets": [

@@ -7,7 +7,7 @@ import { isolated, fixtures, until, delay, run } from './common.mjs';
 const root=isolated(),evidence=path.join(root,'evidence');fs.mkdirSync(evidence,{recursive:true});
 const files=fixtures(root),original=fs.readFileSync(files.txt),packages=path.join(root,'packages/0.0.2'),entries=fs.readdirSync(packages),deb=path.join(packages,entries.find(n=>n.endsWith('.deb'))),appimage=path.join(packages,entries.find(n=>n.endsWith('.AppImage')));
 const name=run('dpkg-deb',['--field',deb,'Package'],{stdio:'pipe'}).trim(),results=[],errors=[];
-let session,driver;
+let session,driver,wm;
 const request=async(method,route,body)=>{
   const response=await fetch('http://127.0.0.1:4444'+route,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(90000)});
   const json=await response.json();if(!response.ok||json.value?.error)throw Error(JSON.stringify(json));return json.value;
@@ -29,6 +29,7 @@ async function start(binary,file){
 async function stop(){if(session){await request('DELETE',`/session/${session}`).catch(()=>{});session=null;}}
 async function collect(){errors.push(...await js('return window.__desktopErrors??[]'));}
 try{
+  wm=spawn('openbox',[],{stdio:'ignore'});await delay(500);
   run('sudo',['dpkg','-i',deb]);const installed=run('dpkg',['-L',name],{stdio:'pipe'}).split('\n').find(p=>p.startsWith('/usr/bin/')&&fs.existsSync(p)&&fs.statSync(p).isFile());assert(installed);
   driver=spawn('tauri-driver',[],{stdio:['ignore',fs.openSync(path.join(evidence,'driver.log'),'a'),fs.openSync(path.join(evidence,'driver-errors.log'),'a')]});await until(()=>request('GET','/status'),'tauri-driver startup');
   for(const [format,binary] of [['deb',installed],['appimage',appimage]]){
@@ -47,7 +48,7 @@ try{
     // Export through the real GTK file chooser in this isolated Xvfb desktop.
     const out=path.join(root,`offline-${format}.html`);await key('E',{ctrlKey:true,shiftKey:true});
     await delay(1500);await screenshot(`${format}-native-save`);
-    const chooser=run('xdotool',['search','--onlyvisible','--name','[Ss]ave'],{stdio:'pipe'}).trim().split('\n').at(-1);
+    const chooser=run('xdotool',['getactivewindow'],{stdio:'pipe'}).trim();
     assert(chooser,'Native save window must exist');run('xdotool',['windowfocus','--sync',chooser]);
     run('xdotool',['key','--clearmodifiers','ctrl+l']);run('xdotool',['type','--clearmodifiers','--delay','0',out]);run('xdotool',['key','Return']);await delay(500);run('xdotool',['key','Return']);await until(()=>fs.existsSync(out),'native GTK export save',60000);
     await cmd('/url',{url:pathToFileURL(out).href});await wait('document.querySelector(".va3d-status")?.textContent.includes("전체")');await key('1');await delay(100);await screenshot(`${format}-offline-html`);results.push(`${format}: native save dialog and exported HTML canvas`);await stop();
@@ -55,4 +56,4 @@ try{
   run('sudo',['dpkg','--remove',name]);assert(!fs.existsSync(installed));results.push('deb uninstall removes installed binary');assert.deepEqual(errors,[]);
   fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:true,results,errors,environment:{platform:process.platform,display:process.env.DISPLAY,renderer:'WebKitGTK on Xvfb, Mesa software'},limits:['Web content controls use WebDriver JS events; GTK save/clipboard use real native paths.','No physical desktop/Wayland or default-app chooser interaction.']},null,2));console.log(results.join('\nPASS '));
 }catch(error){if(session)await screenshot('failure').catch(()=>{});fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:false,results,errors,error:String(error.stack??error)},null,2));throw error;
-}finally{await stop();driver?.kill();}
+}finally{await stop();driver?.kill();wm?.kill();}
