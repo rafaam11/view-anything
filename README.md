@@ -5,7 +5,7 @@
 Markdown, 일반 텍스트·코드, PDF, 이미지, JSON/YAML/CSV, 3D 모델과 포인트클라우드를 지원합니다. Windows와 Linux에서 사용할 수 있습니다.
 
 - **Markdown**: 렌더링된 화면으로 읽고, Typora처럼 화면에서 바로 편집합니다. Mermaid, KaTeX, 목차를 지원합니다.
-- **텍스트·코드**: TXT/LOG/INI/TOML과 C/C++·Python·Rust·JS/TS 등 주요 코드 파일을 읽고 검색·편집합니다. UTF-8, BOM이 있는 UTF-16을 보존하며, CP949는 직접 선택해 열고 저장합니다. 혼합 줄바꿈은 읽기 전용이며 파일과 편집 결과 모두 10 MiB까지 지원합니다. 코드 실행·구문 강조는 제공하지 않습니다.
+- **텍스트·코드**: TXT/LOG/INI/TOML과 C/C++·Python·Rust·JS/TS 등 주요 코드 파일을 깔끔한 본문 화면으로 읽고 편집합니다. 저장은 파일 메뉴, 검색은 `Ctrl+F`, 인코딩 선택은 설정 안에 둡니다. UTF-8, BOM이 있는 UTF-16을 보존하며 CP949도 선택할 수 있습니다. 혼합 줄바꿈은 읽기 전용이며 파일과 편집 결과 모두 10 MiB까지 지원합니다. 코드 실행·구문 강조는 제공하지 않습니다.
 - **설정**: 제목 표시줄의 설정 버튼 또는 `Ctrl+,`에서 Markdown 본문 글꼴(시스템·명조·고정폭)과 크기(12~24px)를 바꿉니다. 읽기·편집에 함께 적용하고 열린 창에 동기화합니다.
 - **3D**: STEP, IGES, STL, OBJ, PLY, glTF, GLB. 드래그로 같은 장면에 추가하고, 좌표계·단면·표시 모드를 조정하거나 단일 HTML로 공유합니다.
 - **포인트클라우드**: PCD/PLY/LAS/LAZ. 원본 RGB·높이·intensity 표시, 점 속성 조회, 박스·관통 다각형 선택, Voxel/SOR/반경 필터를 지원합니다. 원본 속성을 보존하며 같은 형식으로 다른 이름 저장합니다. 파형·COPC와 좌표 정밀도 보존이 어려운 LAS/LAZ는 열지 않습니다.
@@ -37,7 +37,8 @@ npm run tauri dev
 
 ## 릴리스 노트
 
-- [v0.8.0](docs/release/v0.8.0.md) — 최신
+- [v0.9.0](docs/release/v0.9.0.md) — 최신
+- [v0.8.0](docs/release/v0.8.0.md)
 - [v0.7.0](docs/release/v0.7.0.md)
 - [v0.6.1](docs/release/v0.6.1.md)
 - [v0.6.0](docs/release/v0.6.0.md)
