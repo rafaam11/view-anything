@@ -158,12 +158,35 @@ async fn write_image_copy(request: tauri::ipc::Request<'_>) -> Result<(), String
 }
 
 fn image_copy_target(path: &Path, source: &Path) -> Result<PathBuf, String> {
-    let source = std::fs::canonicalize(source).map_err(|e| e.to_string())?;
+    let source = image_path_identity(source).map_err(|e| e.to_string())?;
     let target = write_target(path);
-    if target == source || std::fs::canonicalize(&target).ok().as_ref() == Some(&source) {
+    let destination = image_path_identity(&target).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    let same = destination.to_string_lossy().to_lowercase() == source.to_string_lossy().to_lowercase();
+    #[cfg(not(windows))]
+    let same = destination == source;
+    if same {
         return Err("원본 이미지는 덮어쓸 수 없습니다".into());
     }
     Ok(target)
+}
+
+/// Resolve existing ancestors even when the source file/folder was deleted after loading.
+/// Do not guess through broken symlinks or permission errors: keep the edit in that case.
+fn image_path_identity(path: &Path) -> std::io::Result<PathBuf> {
+    match std::fs::canonicalize(path) {
+        Ok(path) => Ok(path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match std::fs::symlink_metadata(path) {
+                Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => {},
+                _ => return Err(error),
+            }
+            let name = path.file_name().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "파일 이름을 확인할 수 없습니다"))?;
+            let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+            Ok(image_path_identity(parent)?.join(name))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Whether Shift is held right now (drop events do not carry modifier keys). `None` where the
@@ -422,6 +445,41 @@ mod tests {
         assert!(image_copy_target(&source, &source).is_err());
         assert!(image_copy_target(&dir.join("copy.png"), &source).is_ok());
         assert_eq!(std::fs::read(&source).unwrap(), b"original");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn image_copy_recovers_deleted_sources_without_recreating_them() {
+        let dir = std::env::temp_dir().join(format!("va-image-recovery-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let folder = dir.join("gone"); std::fs::create_dir_all(&folder).unwrap();
+        let source = folder.join("source.png"); std::fs::write(&source, b"original").unwrap();
+        std::fs::remove_file(&source).unwrap();
+        assert!(image_copy_target(&source, &source).is_err());
+        assert!(image_copy_target(&folder.join(".").join("source.png"), &source).is_err());
+        #[cfg(windows)]
+        assert!(image_copy_target(&folder.join("SOURCE.PNG"), &source).is_err());
+        let target = image_copy_target(&dir.join("recovered.png"), &source).unwrap();
+        write_atomic(&target, b"edited").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"edited");
+        assert!(!source.exists());
+        std::fs::remove_dir(&folder).unwrap();
+        assert!(image_copy_target(&dir.join("folder-copy.png"), &source).is_ok());
+        assert!(image_copy_target(&source, &source).is_err());
+        assert!(!folder.exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn image_copy_protects_symlink_aliases_and_refuses_broken_links() {
+        let dir = std::env::temp_dir().join(format!("va-image-links-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.png"); std::fs::write(&source, b"original").unwrap();
+        let alias = dir.join("alias.png"); std::os::unix::fs::symlink(&source, &alias).unwrap();
+        assert!(image_copy_target(&alias, &source).is_err());
+        std::fs::remove_file(&source).unwrap();
+        assert!(image_copy_target(&dir.join("copy.png"), &alias).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
