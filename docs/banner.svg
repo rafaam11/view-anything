@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 200" width="920" height="200" role="img" aria-label="view-anything">
+  <defs>
+    <linearGradient id="va-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#110E18"/>
+      <stop offset="0.6" stop-color="#1E1336"/>
+      <stop offset="1" stop-color="#3B1A78"/>
+    </linearGradient>
+    <linearGradient id="va-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B1A78"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="va-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EDE9FE"/></linearGradient>
+    <linearGradient id="va-left" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DDD6FE"/><stop offset="1" stop-color="#C4B5FD"/></linearGradient>
+    <linearGradient id="va-right" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A78BFA"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient>
+  </defs>
+  <rect width="920" height="200" rx="18" fill="url(#va-bg)"/>
+  <rect x="0.5" y="0.5" width="919" height="199" rx="17.5" fill="none" stroke="#3A2F55"/>
+  <g stroke="#FFFFFF" stroke-opacity="0.035">
+    <path d="M620 0V200M660 0V200M700 0V200M740 0V200M780 0V200M820 0V200M860 0V200M900 0V200"/>
+    <path d="M600 40H920M600 80H920M600 120H920M600 160H920"/>
+  </g>
+
+  <!-- 로고: assets/icon.svg와 같은 등각 상자(문서 줄이 그려진 윗면), 바이올렛으로 -->
+  <g transform="translate(44,36) scale(0.125)">
+    <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#va-tile)"/>
+    <polygon points="252,400 512,550 512,850 252,700" fill="url(#va-left)"/>
+    <polygon points="512,550 772,400 772,700 512,850" fill="url(#va-right)"/>
+    <polygon points="512,250 772,400 512,550 252,400" fill="url(#va-top)"/>
+    <g stroke="#6D28D9" stroke-linecap="round" fill="none">
+      <line x1="493.8" y1="314.5" x2="649.8" y2="404.5" stroke-width="36"/>
+      <line x1="441.8" y1="344.5" x2="584.8" y2="427" stroke-width="22" stroke-opacity=".75"/>
+      <line x1="389.8" y1="374.5" x2="519.8" y2="449.5" stroke-width="22" stroke-opacity=".75"/>
+    </g>
+    <polyline points="252,400 512,550 772,400" fill="none" stroke="#FFFFFF" stroke-opacity=".9" stroke-width="8" stroke-linejoin="round"/>
+  </g>
+
+  <text x="186" y="88" font-family="Segoe UI, Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif" font-size="42" font-weight="700" fill="#F1EEF7">view-anything</text>
+  <text x="188" y="121" font-family="Segoe UI, Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif" font-size="17" fill="#B9AFD0">더블클릭하면 바로 열리는 가벼운 범용 뷰어 — 문서부터 3D · 점군까지</text>
+
+  <g font-family="Segoe UI, Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif" font-size="13" font-weight="600">
+    <rect x="188" y="142" width="74" height="25" rx="12.5" fill="#1F1730" stroke="#4C3A78"/>
+    <text x="225" y="159" fill="#C4B5FD" text-anchor="middle">Tauri 2</text>
+    <rect x="270" y="142" width="126" height="25" rx="12.5" fill="#1F1730" stroke="#4C3A78"/>
+    <text x="333" y="159" fill="#C4B5FD" text-anchor="middle">Windows · Linux</text>
+    <rect x="404" y="142" width="96" height="25" rx="12.5" fill="#1F1730" stroke="#4C3A78"/>
+    <text x="452" y="159" fill="#C4B5FD" text-anchor="middle">원본 보존</text>
+    <rect x="508" y="142" width="132" height="25" rx="12.5" fill="#1F1730" stroke="#4C3A78"/>
+    <text x="574" y="159" fill="#C4B5FD" text-anchor="middle">HTML로 3D 공유</text>
+  </g>
+</svg>

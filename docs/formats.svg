@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 380" width="920" height="380" role="img" aria-label="지원 형식 — Markdown, 텍스트·코드, 데이터, 이미지, PDF, 3D, 포인트클라우드">
+  <defs>
+    <linearGradient id="f-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#15111D"/><stop offset="1" stop-color="#110E18"/></linearGradient>
+    <linearGradient id="f-key" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B1A78"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient>
+    <style>
+      .t { font-family: Segoe UI, Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif; }
+      .m { font-family: 'Cascadia Mono', Consolas, 'SF Mono', monospace; }
+      .card { fill: #1C1628; stroke: #352B4B; }
+      .h { font-size: 17px; font-weight: 700; fill: #F1EEF7; }
+      .ext { font-size: 11.5px; font-weight: 600; fill: #C4B5FD; }
+      .d { font-size: 12.5px; fill: #A79DBE; }
+      .ic { fill: none; stroke: #A78BFA; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect width="920" height="380" rx="18" fill="url(#f-bg)"/>
+  <rect x="0.5" y="0.5" width="919" height="379" rx="17.5" fill="none" stroke="#2C2440"/>
+
+  <!-- 1행 -->
+  <g transform="translate(20,20)">
+    <rect width="208" height="160" rx="12" fill="url(#f-key)"/>
+    <text class="t" x="18" y="46" font-size="21" font-weight="800" fill="#FFFFFF">더블클릭 →</text>
+    <text class="t" x="18" y="74" font-size="21" font-weight="800" fill="#FFFFFF">그 형식의 뷰어</text>
+    <text class="t" x="18" y="110" font-size="12.5" fill="#EDE9FE">확장자로 뷰어를 고르고</text>
+    <text class="t" x="18" y="128" font-size="12.5" fill="#EDE9FE">필요한 뷰어만 그때 불러온다</text>
+  </g>
+  <g transform="translate(240,20)">
+    <rect class="card" width="208" height="160" rx="12"/>
+    <path class="ic" d="M18 18h20l8 8v24H18z M38 18v8h8 M24 34h16 M24 41h12"/>
+    <text class="t h" x="18" y="80">Markdown</text>
+    <text class="m ext" x="18" y="100">.md</text>
+    <text class="t d" x="18" y="124">읽기 · WYSIWYG 편집</text>
+    <text class="t d" x="18" y="143">고친 블록만 원문에 저장</text>
+  </g>
+  <g transform="translate(460,20)">
+    <rect class="card" width="208" height="160" rx="12"/>
+    <path class="ic" d="M26 20l-9 14 9 14 M38 20l9 14-9 14 M34 18l-4 32"/>
+    <text class="t h" x="18" y="80">텍스트 · 코드</text>
+    <text class="m ext" x="18" y="100">.txt .log .py .rs .ts …</text>
+    <text class="t d" x="18" y="124">BOM · 줄바꿈 그대로 보존</text>
+    <text class="t d" x="18" y="143">10 MiB · CP949 선택</text>
+  </g>
+  <g transform="translate(680,20)">
+    <rect class="card" width="220" height="160" rx="12"/>
+    <path class="ic" d="M17 19h30v30H17z M17 29h30 M17 39h30 M27 19v30 M37 19v30"/>
+    <text class="t h" x="18" y="80">데이터</text>
+    <text class="m ext" x="18" y="100">.json .yaml .csv</text>
+    <text class="t d" x="18" y="124">트리 · 표 · 셀 편집</text>
+    <text class="t d" x="18" y="143">수정한 셀만 원문에 반영</text>
+  </g>
+
+  <!-- 2행 -->
+  <g transform="translate(20,200)">
+    <rect class="card" width="208" height="160" rx="12"/>
+    <path class="ic" d="M17 19h30v30H17z M17 44l10-11 7 7 5-5 8 9"/><circle cx="38" cy="27" r="3" fill="#A78BFA"/>
+    <text class="t h" x="18" y="80">이미지</text>
+    <text class="m ext" x="18" y="100">.png .jpg .webp .gif .svg</text>
+    <text class="t d" x="18" y="124">Ctrl+휠 확대 · ←/→ 넘기기</text>
+    <text class="t d" x="18" y="143">편집 결과는 새 PNG로</text>
+  </g>
+  <g transform="translate(240,200)">
+    <rect class="card" width="208" height="160" rx="12"/>
+    <path class="ic" d="M20 17h18l8 8v26H20z M38 17v8h8"/><text class="m" x="22" y="45" font-size="9" font-weight="700" fill="#A78BFA">PDF</text>
+    <text class="t h" x="18" y="80">PDF</text>
+    <text class="m ext" x="18" y="100">.pdf</text>
+    <text class="t d" x="18" y="124">목차 · 검색 강조 · 텍스트 선택</text>
+    <text class="t d" x="18" y="143">읽기 전용 · 암호 문서</text>
+  </g>
+  <g transform="translate(460,200)">
+    <rect class="card" width="208" height="160" rx="12"/>
+    <path class="ic" d="M32 16l16 9v18l-16 9-16-9V25z M16 25l16 9 16-9 M32 34v18"/>
+    <text class="t h" x="18" y="80">3D</text>
+    <text class="m ext" x="18" y="100">.step .iges .stl .obj .glb …</text>
+    <text class="t d" x="18" y="124">장면에 추가 · 단면 · 엣지</text>
+    <text class="t d" x="18" y="143">HTML 한 장으로 내보내기</text>
+  </g>
+  <g transform="translate(680,200)">
+    <rect class="card" width="220" height="160" rx="12"/>
+    <g fill="#A78BFA">
+      <circle cx="20" cy="40" r="2.2"/><circle cx="27" cy="33" r="2.2"/><circle cx="33" cy="42" r="2.2"/><circle cx="40" cy="27" r="2.2"/><circle cx="46" cy="37" r="2.2"/>
+      <circle cx="24" cy="24" r="2.2"/><circle cx="36" cy="19" r="2.2"/><circle cx="42" cy="47" r="2.2"/><circle cx="17" cy="30" r="2.2"/><circle cx="30" cy="50" r="2.2"/>
+    </g>
+    <text class="t h" x="18" y="80">포인트클라우드</text>
+    <text class="m ext" x="18" y="100">.pcd .ply .las .laz</text>
+    <text class="t d" x="18" y="124">필터 · 선택 · ICP 정합</text>
+    <text class="t d" x="18" y="143">원본 속성 보존 · 다른 이름 저장</text>
+  </g>
+</svg>
