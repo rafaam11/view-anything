@@ -17,6 +17,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - `src/titlebar.ts`와 `titlebar.css`가 앱 전용 커스텀 제목 표시줄을 만든다. Rust `create_window`는 `decorations(false)`로 연다. 닫기는 `close()` 요청을 사용해 미저장 작업 확인을 거치며, 강제 `destroy()`로 바꾸지 않는다.
 - 최소화 왼쪽 테마 버튼과 `Ctrl+Shift+T`는 다크 → 라이트 → 시스템 순으로 순환한다. `va.theme`에 저장하고 열린 창에도 동기화한다.
 - `--va-titlebar-height` 아래의 `#app`이 스크롤 컨테이너다. Markdown 목차·스크롤 복원도 이 컨테이너를 따른다. 공용 3D CSS는 높이 변수의 기본값을 0으로 두어 내보낸 HTML에는 앱 제목 표시줄 공간이 생기지 않게 한다.
+- F11은 `src/main.ts`의 전역 키로 모든 뷰어에서 동작한다(`src/fullscreen.ts`). 기준은 네이티브 창 상태이고, 제목 표시줄이 마운트와 크기 변경 때 다시 읽어 `:root[data-fullscreen]`에 반영한다. 파일이 열린 창에서 다른 파일을 열면 새 창을 만드는 정책을 유지한다. 이미지 뷰어만 도구줄·상태줄·썸네일까지 숨기고 Esc로도 해제한다.
 
 ## 개발
 - `npm install` → `npm run tauri dev`
@@ -51,11 +52,18 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - 파일을 제거하면 geometry, material, texture, 엣지 선, BVH를 모두 dispose한다(`tests/three-viewer-append.test.ts`의 dispose 점검 테스트).
 - 부품 이름 같은 파일 유래 문자열은 textContent로만 표시한다.
 
+## Markdown (`src/md/`)
+- 글자 크기: `font-size.ts`. `Ctrl+휠`·`Ctrl+=`·`Ctrl+-`·`Ctrl+0`과 보기 메뉴가 설정의 `mdSize`를 바꾼다. `parsePreferences`가 범위 밖 값을 기본값으로 되돌리므로 먼저 12~24로 자른다.
+- 찾기: `find.ts`. 읽기 모드 전용이며 편집 모드의 `Ctrl+F`는 편집기에 둔다. 강조는 `<mark>` 삽입이고 `textContent`는 변하지 않는다. 블록 안의 인라인 서식을 넘어 찾되 블록 경계는 넘지 않으며 Mermaid·수식·복사 버튼은 건너뛴다. 편집 모드로 들어가면 닫는다.
+- 읽기 장식: 알림 상자는 `render.ts`의 `rehypeAlerts`로 sanitize 뒤에 만든다. 저장 splice와 공유하는 `mdProcessor`는 건드리지 않는다. 코드 복사 버튼은 `decorate.ts`가 `pre` 바깥에 두고, 텍스트는 Rust `copy_text`로 쓴다.
+- 파일 변경 반영: `file-watch.ts`가 `file_stat`을 1초마다 폴링한다. 경로 기준이라 rename 교체와 네트워크·동기화 폴더에서 안정적이고 의존성이 늘지 않는다. 숨겨진 창은 쉬고, 편집·작업 진행·본문 선택 중에는 기준값을 갱신하지 않아 끝난 뒤 다시 시도한다. 다시 그릴지는 `reloadIfChanged`의 바이트 비교가 판정한다.
+- `render(true)`는 새 DOM을 화면 밖에서 완성(Mermaid, 이미지 최대 1.5초)한 뒤 교체하고, 준비 중 사용자가 옮긴 위치로 스크롤을 복원한다. 최초 표시와 읽기 복귀는 시작 속도를 위해 바로 그린다.
+
 ## 이미지·데이터
 - 공통 뷰어 메뉴·도구줄은 `src/ui/chrome.ts`/`chrome.css`, 아이콘은 `src/ui/icons.ts`를 쓴다. 앱과 HTML의 메뉴는 `src/ui/menu.css`를 공유하며 Tauri를 참조하지 않는다. 파일명은 제목줄에만 표시하고 저장은 파일 메뉴, 검색·자르기·썸네일은 요청 시 표시한다.
 - `src/text/`는 10 MiB까지 일반 텍스트·코드를 읽고 안전 편집한다. UTF 원문/BOM/줄바꿈을 보존하며 혼합 줄바꿈은 읽기 전용이다. CP949는 명시적으로 선택하고 Rust `text_codec.rs`의 무손실 변환을 쓴다. `Ctrl+Shift+O`는 확장자와 무관한 명시적 텍스트 열기다.
-- `src/settings/`는 제목줄 설정 버튼과 `Ctrl+,`로 연다. `va.preferences.v1`에 Markdown·텍스트 각각의 글꼴 프리셋·크기와 텍스트 자동 줄바꿈을 저장하고 열린 창에도 동기화한다. 현재 뷰어에 맞는 항목만 제공하며 빈 창은 두 표시 그룹을 제공한다. 본문 CSS 변수와 textarea의 soft/off 줄바꿈으로 읽기·편집에 적용하며 원문과 편집 이력은 바꾸지 않는다. 문자 인코딩은 현재 파일에만 적용하고 표시 설정의 초기화와 분리한다.
-- `src/image/`는 원본을 보호하고 편집 결과를 별도 PNG로 저장한다. GIF/SVG 편집은 정적 결과다. 아이콘 도구줄, Ctrl+휠 포인터 기준 확대, 드래그 팬, Ctrl+0 맞춤, Ctrl+C 원본 해상도 이미지 복사를 지원한다. 클립보드에는 raw PNG IPC를 사용하고 Rust 백그라운드에서 디코딩·쓰기한다. 클립보드 읽기 권한은 부여하지 않는다. 자르기·회전은 편집 모드에서만 가능하다.
+- `src/settings/`는 제목줄 설정 버튼과 `Ctrl+,`로 연다. `va.preferences.v1`에 Markdown·텍스트 각각의 글꼴 프리셋·크기와 Markdown 본문 폭, 텍스트 자동 줄바꿈을 저장하고 열린 창에도 동기화한다. 현재 뷰어에 맞는 항목만 제공하며 빈 창은 두 표시 그룹을 제공한다. 본문 CSS 변수와 textarea의 soft/off 줄바꿈으로 읽기·편집에 적용하며 원문과 편집 이력은 바꾸지 않는다. 문자 인코딩은 현재 파일에만 적용하고 표시 설정의 초기화와 분리한다.
+- `src/image/`는 원본을 보호하고 편집 결과를 별도 PNG로 저장한다. GIF/SVG 편집은 정적 결과다. 아이콘 도구줄, Ctrl+휠 포인터 기준 확대, 드래그 팬, Ctrl+0 맞춤, Ctrl+C 원본 해상도 이미지 복사, Ctrl+Shift+C 파일 경로 복사를 지원한다. 클립보드 이미지는 raw PNG IPC를 사용하고 Rust 백그라운드에서 디코딩·쓰기하며, 텍스트는 Rust `copy_text`로 쓴다. 클립보드 읽기 권한은 부여하지 않는다. 자르기·회전·반전은 편집 모드에서만 가능하다. 드래그 자르기의 좌표 계산은 DOM 없는 `crop.ts`에 두고, 영역의 원본은 숫자 입력칸이다. 상태줄 정보는 `info.ts`가 만들며 편집 중에는 원본 파일 용량을 표시하지 않는다. 체커보드는 CSS 배경이라 저장·복사 결과에 들어가지 않고, 400% 이상의 픽셀 표시는 SVG에 적용하지 않는다.
 - `src/data/`는 JSON/YAML 원문, CSV 수정 셀, UTF-8/UTF-16과 줄바꿈을 보존한다. 저장 직전 바이트 확인과 네이티브 조건부 원자 교체를 쓰며, 외부 프로세스와의 검증·교체 사이 경쟁은 완전히 제거할 수 없다.
 - CSV는 100행 단위로 표시하고 수정은 저장 시 한 번에 적용한다. Markdown·데이터 복사본 저장은 기존 대상 교체를 거부하며 하드 링크 미지원 파일시스템에서는 실패한다.
 - 3D 조작은 `core/navigation.ts`의 Arcball/Fly를 앱과 HTML이 공유한다. 장면 트리와 앱 점군 도구는 오른쪽 통합 패널에 둔다.
