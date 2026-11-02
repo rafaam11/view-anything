@@ -17,6 +17,15 @@ async fn copy_image_raw(app: tauri::AppHandle, request: tauri::ipc::Request<'_>)
     }).await.map_err(|e| e.to_string())?
 }
 
+/// Write-only, like `copy_image_raw`: the app never gets clipboard read access.
+#[tauri::command]
+async fn copy_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        app.clipboard().write_text(text).map_err(|e| e.to_string())
+    }).await.map_err(|e| e.to_string())?
+}
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -224,6 +233,28 @@ async fn file_size(path: String) -> Result<u64, String> {
     }).await.map_err(|e| e.to_string())?
 }
 
+/// What the Markdown file watcher compares between polls.
+#[derive(serde::Serialize, Debug, PartialEq)]
+struct FileStat {
+    len: u64,
+    modified_ms: Option<u64>,
+}
+
+fn stat_file(path: &Path) -> std::io::Result<FileStat> {
+    let metadata = std::fs::metadata(path)?;
+    let modified_ms = metadata.modified().ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64);
+    Ok(FileStat { len: metadata.len(), modified_ms })
+}
+
+/// Cheap change detection: no file contents cross the IPC on every poll.
+#[tauri::command]
+async fn file_stat(path: String) -> Result<FileStat, String> {
+    tauri::async_runtime::spawn_blocking(move || stat_file(Path::new(&path)).map_err(|e| format!("{path}: {e}")))
+        .await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn sibling_images(path: String) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -386,9 +417,11 @@ pub fn run() {
             modifier_shift,
             path_exists,
             file_size,
+            file_stat,
             sibling_images,
             open_window,
             copy_image_raw,
+            copy_text,
             text_codec::decode_cp949,
             text_codec::encode_cp949,
             update::update_context,
@@ -408,6 +441,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_stat_reports_length_and_fails_on_missing_files() {
+        let dir = std::env::temp_dir().join(format!("va-file-stat-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.md");
+        std::fs::write(&file, b"hello").unwrap();
+        let stat = stat_file(&file).unwrap();
+        assert_eq!(stat.len, 5);
+        assert!(stat.modified_ms.is_some());
+        assert!(stat_file(&dir.join("missing.md")).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn new_file_save_preserves_existing_target_and_removes_temporary_file() {

@@ -9,6 +9,9 @@ export const platform = {
   async copyImage(png: Uint8Array): Promise<void> {
     await invoke("copy_image_raw", png);
   },
+  async copyText(text: string): Promise<void> {
+    await invoke("copy_text", { text });
+  },
   async readFile(path: string): Promise<Uint8Array> {
     return new Uint8Array(await invoke<number[]>("read_file", { path }));
   },
@@ -80,6 +83,13 @@ export const platform = {
   /** Check file size before reading data into the webview. */
   async fileSize(path: string): Promise<number> {
     return invoke<number>("file_size", { path });
+  },
+  /** Length and modification time, for cheap change polling. Rejects when the file is missing. */
+  async fileStat(path: string): Promise<{ len: number; modified_ms: number | null }> {
+    return invoke("file_stat", { path });
+  },
+  async setFullscreen(on: boolean): Promise<void> {
+    await getCurrentWindow().setFullscreen(on);
   },
   async siblingImages(path: string): Promise<string[]> {
     return invoke<string[]>("sibling_images", { path });

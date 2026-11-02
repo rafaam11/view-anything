@@ -5,6 +5,7 @@ import { resolveViewer, type Viewer } from "./registry";
 import { platform } from "./platform";
 import { initializeTheme, cycleTheme } from "./theme";
 import { mountTitlebar } from "./titlebar";
+import { toggleFullscreen } from "./fullscreen";
 import { isOpenKey, OPEN_EVENT, routeDrop, type OpenEventDetail, type WindowKind } from "./open-route";
 import { isThreeD } from "./three/formats";
 import { initializePreferences } from "./settings/preferences";
@@ -159,6 +160,13 @@ window.addEventListener(
   (e) => {
     if (document.querySelector(".va-settings[open]") && e.ctrlKey && ["s", "o", "f", "r", "t", ","].includes(e.key.toLowerCase())) {
       e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+    // Every viewer handles F11: opening another format reloads the page, and a window without
+    // its titlebar must stay escapable from whatever it shows next.
+    if (e.key === "F11") {
+      e.preventDefault(); e.stopPropagation();
+      if (!e.repeat && !document.querySelector("dialog[open]")) void toggleFullscreen().catch((err) => platform.alert(String(err)).catch(() => {}));
+      return;
     }
     if (e.ctrlKey && e.key === ",") {
       e.preventDefault(); e.stopImmediatePropagation();

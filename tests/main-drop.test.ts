@@ -18,6 +18,7 @@ const platform = {
   pickFiles: vi.fn(async (): Promise<string[]> => []),
   alert: vi.fn(async () => {}),
   setWindowTitle: vi.fn(async () => {}),
+  setFullscreen: vi.fn(async (_on: boolean) => {}),
 };
 vi.mock("../src/platform", () => ({ platform }));
 const cycleTheme = vi.fn();
@@ -76,6 +77,38 @@ test("theme shortcut cycles once and ignores auto-repeat", async () => {
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true }));
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true, repeat: true }));
   expect(cycleTheme).toHaveBeenCalledTimes(1);
+});
+
+const f11 = (init: KeyboardEventInit = {}) => {
+  const event = new KeyboardEvent("keydown", { key: "F11", cancelable: true, ...init });
+  window.dispatchEvent(event);
+  return event;
+};
+
+test("F11 leaves full screen from any viewer, once per press, but not over an open dialog", async () => {
+  await start(MD);
+  expect(f11().defaultPrevented).toBe(true);
+  expect(platform.setFullscreen).toHaveBeenLastCalledWith(true);
+  expect(document.documentElement.dataset.fullscreen).toBe("true");
+  f11({ repeat: true });
+  expect(platform.setFullscreen).toHaveBeenCalledTimes(1);
+  const dialog = document.body.appendChild(document.createElement("dialog"));
+  dialog.setAttribute("open", "");
+  f11();
+  expect(platform.setFullscreen).toHaveBeenCalledTimes(1);
+  dialog.remove();
+  f11();
+  expect(platform.setFullscreen).toHaveBeenLastCalledWith(false);
+  expect(document.documentElement.dataset.fullscreen).toBeUndefined();
+});
+
+test("a failed F11 keeps the page in step with the window and reports it", async () => {
+  await start(TXT);
+  platform.setFullscreen.mockRejectedValueOnce(new Error("denied"));
+  f11();
+  await settle();
+  expect(document.documentElement.dataset.fullscreen).toBeUndefined();
+  expect(platform.alert).toHaveBeenCalledWith("Error: denied");
 });
 
 test("md window: every dropped file opens a new window (v0.1), shift or not", async () => {

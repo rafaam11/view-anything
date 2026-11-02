@@ -11,6 +11,7 @@ const controls = {
   toggleMaximize: vi.fn(async () => {}),
   close: vi.fn(async () => {}),
   isMaximized: vi.fn(async () => false),
+  isFullscreen: vi.fn(async () => false),
   onResized: vi.fn(async (cb: () => void) => { resized = cb; return unlisten; }),
   setTheme: vi.fn(async () => {}),
 };
@@ -21,6 +22,8 @@ const button = (action: string) => document.querySelector<HTMLButtonElement>(`[d
 beforeEach(() => {
   vi.clearAllMocks();
   controls.isMaximized.mockResolvedValue(false);
+  controls.isFullscreen.mockResolvedValue(false);
+  delete document.documentElement.dataset.fullscreen;
   document.body.innerHTML = '<main id="app"></main>';
   document.title = "모델.step";
   applyTheme("system");
@@ -74,6 +77,25 @@ test("minimize and close call native requests, and maximize tracks external chan
   expect(button("maximize").title).toBe("최대화");
 });
 
+test("full screen follows the native window on mount and on resize", async () => {
+  await settle();
+  expect(document.documentElement.dataset.fullscreen).toBeUndefined();
+  controls.isFullscreen.mockResolvedValue(true);
+  resized();
+  await settle();
+  expect(document.documentElement.dataset.fullscreen).toBe("true");
+  // A page reload (another format opened while in full screen) mounts a new titlebar.
+  dispose();
+  delete document.documentElement.dataset.fullscreen;
+  dispose = mountTitlebar(document.body, controls);
+  await settle();
+  expect(document.documentElement.dataset.fullscreen).toBe("true");
+  controls.isFullscreen.mockResolvedValue(false);
+  resized();
+  await settle();
+  expect(document.documentElement.dataset.fullscreen).toBeUndefined();
+});
+
 test("reflects dirty file titles as text, not markup", async () => {
   document.title = "● <img src=x onerror=alert(1)>.md";
   await settle();
@@ -94,7 +116,7 @@ test("disposes resize and DOM observers", async () => {
 
 test("every native window control has an explicit capability", () => {
   const capability = JSON.parse(readFileSync("src-tauri/capabilities/default.json", "utf8"));
-  for (const name of ["minimize", "toggle-maximize", "start-dragging", "close", "set-theme"]) {
+  for (const name of ["minimize", "toggle-maximize", "start-dragging", "close", "set-theme", "set-fullscreen"]) {
     expect(capability.permissions).toContain(`core:window:allow-${name}`);
   }
   const rust = readFileSync("src-tauri/src/lib.rs", "utf8");

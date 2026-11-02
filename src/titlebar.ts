@@ -1,8 +1,9 @@
 import { getCurrentWindow, type Window as AppWindow } from "@tauri-apps/api/window";
+import { reflectFullscreen } from "./fullscreen";
 import { currentMode, cycleTheme, nextMode, type ThemeMode } from "./theme";
 import "./titlebar.css";
 
-type WindowControls = Pick<AppWindow, "minimize" | "toggleMaximize" | "close" | "isMaximized" | "onResized" | "setTheme">;
+type WindowControls = Pick<AppWindow, "minimize" | "toggleMaximize" | "close" | "isMaximized" | "isFullscreen" | "onResized" | "setTheme">;
 
 // Static application icons only. File names and other external strings use textContent.
 const svg = (body: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${body}</svg>`;
@@ -52,7 +53,7 @@ export function mountTitlebar(host: HTMLElement = document.body, appWindow: Wind
   button("minimize", "최소화", icons.minimize, () => appWindow.minimize());
   const maximize = button("maximize", "최대화", icons.maximize, async () => {
     await appWindow.toggleMaximize();
-    await updateMaximized();
+    await syncWindowState();
   });
   // close(), not destroy(): the existing unsaved-edit guards must be allowed to veto.
   button("close", "닫기", icons.close, () => appWindow.close());
@@ -61,10 +62,11 @@ export function mountTitlebar(host: HTMLElement = document.body, appWindow: Wind
 
   let disposed = false;
   let resizeVersion = 0;
-  async function updateMaximized() {
+  async function syncWindowState() {
     const version = ++resizeVersion;
-    const max = await appWindow.isMaximized();
+    const [max, full] = await Promise.all([appWindow.isMaximized(), appWindow.isFullscreen()]);
     if (disposed || version !== resizeVersion) return;
+    reflectFullscreen(full);
     maximize.title = max ? "이전 크기로 복원" : "최대화";
     maximize.setAttribute("aria-label", maximize.title);
     maximize.innerHTML = max ? icons.restore : icons.maximize;
@@ -89,9 +91,9 @@ export function mountTitlebar(host: HTMLElement = document.body, appWindow: Wind
   const themeObserver = new MutationObserver(updateTheme);
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   updateTheme();
-  void updateMaximized().catch(report);
+  void syncWindowState().catch(report);
   let unlisten: (() => void) | undefined;
-  void appWindow.onResized(() => { void updateMaximized().catch(report); }).then((stop) => {
+  void appWindow.onResized(() => { void syncWindowState().catch(report); }).then((stop) => {
     if (disposed) stop();
     else unlisten = stop;
   }).catch(report);
