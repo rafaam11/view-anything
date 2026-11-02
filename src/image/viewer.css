@@ -6,9 +6,27 @@
 .image-area { flex:1; min-height:0; overflow:auto; background:color-mix(in srgb,var(--fg) 4%,var(--bg)); cursor:grab; touch-action:none; }
 .image-area.panning { cursor:grabbing; }
 .image-surface { display:grid; place-items:center; }
+.image-frame { position:relative; line-height:0; --check-a:color-mix(in srgb,var(--fg) 7%,var(--bg)); --check-b:color-mix(in srgb,var(--fg) 15%,var(--bg)); }
+/* A CSS background only: never part of what is saved or copied. */
+.image-frame > :is(img,canvas) { display:block; background:conic-gradient(var(--check-a) 25%,var(--check-b) 0 50%,var(--check-a) 0 75%,var(--check-b) 0) 0 0 / 16px 16px; }
+.image-pixelated > :is(img,canvas) { image-rendering:pixelated; }
+.image-crop { position:absolute; inset:0; pointer-events:none; }
+.image-crop-shade { position:absolute; inset:0; background:#0009; }
+.image-crop-box { position:absolute; box-sizing:border-box; border:1px solid #fff; outline:1px solid #0008; }
+.image-crop-box span { position:absolute; box-sizing:border-box; width:9px; height:9px; margin:-5px; background:#fff; border:1px solid #000; }
+.image-crop-box .nw, .image-crop-box .n, .image-crop-box .ne { top:0; }
+.image-crop-box .w, .image-crop-box .e { top:50%; }
+.image-crop-box .sw, .image-crop-box .s, .image-crop-box .se { top:100%; }
+.image-crop-box .nw, .image-crop-box .w, .image-crop-box .sw { left:0; }
+.image-crop-box .n, .image-crop-box .s { left:50%; }
+.image-crop-box .ne, .image-crop-box .e, .image-crop-box .se { left:100%; }
 .image-area img { user-select:none; -webkit-user-drag:none; }
 .image-zoom { min-width:3em; font-size:12px; text-align:center; color:var(--muted); }
 .image-area img, .image-area canvas { max-width: none; height: auto; }
+.image-footer { flex:none; display:flex; align-items:center; gap:12px; }
+.image-footer .va-status { padding-block:3px; }
+.image-footer .image-info { margin-left:auto; white-space:nowrap; }
+:root[data-fullscreen="true"] .image-root > :is(.image-bar,.image-thumbs,.image-footer) { display:none; }
 .image-thumbs { display: flex; overflow-x: auto; gap: .35rem; padding: .5rem; }
 .image-thumbs button { flex: 0 0 70px; height: 60px; padding: 2px; }
 .image-thumbs button[aria-current=true] { outline:2px solid var(--muted); outline-offset:-2px; }

@@ -5,12 +5,14 @@ export interface ImageState {
   height: number;
   matrix: [number, number, number, number, number, number];
 }
-export type ImageEdit = { kind: "rotate" } | { kind: "flip" } | { kind: "crop"; x: number; y: number; width: number; height: number };
+export type ImageEdit = { kind: "rotate" } | { kind: "rotate-left" } | { kind: "flip" } | { kind: "flip-vertical" } | { kind: "crop"; x: number; y: number; width: number; height: number };
 
 export function transformImage(state: ImageState, edit: ImageEdit): ImageState {
   const { width: w, height: h, matrix: [a, b, c, d, e, f] } = state;
   if (edit.kind === "rotate") return { width: h, height: w, matrix: [-b, a, -d, c, h - f, e] };
+  if (edit.kind === "rotate-left") return { width: h, height: w, matrix: [b, -a, d, -c, f, w - e] };
   if (edit.kind === "flip") return { width: w, height: h, matrix: [-a, b, -c, d, w - e, f] };
+  if (edit.kind === "flip-vertical") return { width: w, height: h, matrix: [a, -b, c, -d, e, h - f] };
   const { x, y, width, height } = edit;
   if (![x, y, width, height].every(Number.isInteger) || x < 0 || y < 0 || width < 1 || height < 1 || x + width > w || y + height > h) {
     throw new Error("자르기 영역이 이미지 범위를 벗어났습니다.");

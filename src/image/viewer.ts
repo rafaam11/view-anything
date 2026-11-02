@@ -5,9 +5,18 @@ import type { Viewer } from "../registry";
 import { equalBytes } from "../data/document";
 import { documentBar } from "../ui/chrome";
 import { iconButton } from "../ui/icons";
+import { isFullscreen, toggleFullscreen } from "../fullscreen";
+import { dragRect, fitRect, hitTest, toImagePoint, type CropDrag, type Handle, type Point, type Rect } from "./crop";
 import { ImageHistory, transformImage, type ImageState } from "./history";
+import { describeImage, imageFormat } from "./info";
 
 const MAX_BYTES = 100 * 1024 * 1024, MAX_PIXELS = 50_000_000;
+const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+/** On-screen grab distance around crop edges, and the movement below which a press is only a click. */
+const GRAB_PX = 6, DRAG_PX = 3;
+/** Sharp pixels from this zoom up; photos look broken if nearest-neighbour starts at 200-300%. */
+const PIXEL_SCALE = 4;
+const CROP_CURSOR: Record<CropDrag, string> = { new:"crosshair", move:"move", n:"ns-resize", s:"ns-resize", e:"ew-resize", w:"ew-resize", ne:"nesw-resize", sw:"nesw-resize", nw:"nwse-resize", se:"nwse-resize" };
 const nameOf = (p: string) => p.split(/[\\/]/).pop() ?? p;
 const pathKey = (p: string) => { const normalized = p.replace(/\\/g, "/"); return /^(?:[a-z]:|\/\/)/i.test(normalized) ? normalized.toLowerCase() : normalized; };
 const button = (text: string) => { const b = document.createElement("button"); b.textContent = text; return b; };
@@ -23,7 +32,7 @@ const viewer: Viewer = {
     const status = document.createElement("span"); status.setAttribute("role", "status");
     const prev = iconButton("이전 이미지", "previous", "ArrowLeft"), next = iconButton("다음 이미지", "next", "ArrowRight");
     const zoomOut = iconButton("축소", "minus"), zoomIn = iconButton("확대", "plus"), fit = iconButton("화면에 맞춤", "fit", "Ctrl+0");
-    const rotate = iconButton("회전", "rotate"), flip = iconButton("좌우 반전", "flip"), cropToggle = iconButton("자르기", "crop");
+    const rotate = iconButton("오른쪽으로 회전", "rotate"), rotateLeft = iconButton("왼쪽으로 회전", "rotate-left"), flip = iconButton("좌우 반전", "flip"), flipVertical = iconButton("상하 반전", "flip-vertical"), cropToggle = iconButton("자르기", "crop");
     const copy = iconButton("이미지 복사", "copy", "Ctrl+C"), toggle = iconButton("이미지 편집", "edit"), save = button("PNG로 저장"), crop = button("자르기 적용");
     const undo = iconButton("실행 취소", "undo", "Ctrl+Z"), redo = iconButton("다시 실행", "redo", "Ctrl+Y");
     const zoomLabel = document.createElement("span"); zoomLabel.className = "image-zoom";
@@ -33,29 +42,70 @@ const viewer: Viewer = {
       const input = document.createElement("input"); input.type = "number"; input.min = "0"; input.value = "0";
       wrap.append(input); coords.append(wrap); return input;
     });
-    const cancelCrop = iconButton("자르기 취소", "close"); cancelCrop.onclick = () => { coords.hidden = true; }; coords.append(crop, cancelCrop);
+    const cancelCrop = iconButton("자르기 취소", "close"); cancelCrop.onclick = () => setCropping(false); coords.append(crop, cancelCrop);
     const area = document.createElement("div"); area.className = "image-area";
     const image = document.createElement("img"); image.alt = "이미지";
     let canvas = document.createElement("canvas"); canvas.hidden = true;
-    const surface = document.createElement("div"); surface.className = "image-surface"; surface.append(image, canvas); area.append(surface);
+    // The frame shrinks to the shown image, so the percent-positioned crop overlay needs no zoom math.
+    const cropLayer = document.createElement("div"); cropLayer.className = "image-crop"; cropLayer.hidden = true;
+    const cropShade = document.createElement("div"); cropShade.className = "image-crop-shade";
+    const cropBox = document.createElement("div"); cropBox.className = "image-crop-box";
+    for (const handle of HANDLES) { const s = document.createElement("span"); s.className = handle; cropBox.append(s); }
+    cropLayer.append(cropShade, cropBox);
+    const frame = document.createElement("div"); frame.className = "image-frame"; frame.append(image, canvas, cropLayer);
+    const surface = document.createElement("div"); surface.className = "image-surface"; surface.append(frame); area.append(surface);
     const thumbs = document.createElement("nav"); thumbs.className = "image-thumbs"; thumbs.setAttribute("aria-label", "같은 폴더 이미지");
     thumbs.hidden = true; status.className = "va-status";
+    const info = document.createElement("span"); info.className = "va-status image-info";
+    const footer = document.createElement("footer"); footer.className = "image-footer"; footer.append(status, info);
     const actual = button("원본 크기 (100%)"); actual.onclick = () => setZoom(1);
-    documentBar(bar, { files:[save], controls:[prev, next, zoomOut, zoomLabel, zoomIn, fit, copy, undo, redo, rotate, flip, cropToggle, toggle], view:[
+    const copyPathItem = button("파일 경로 복사 (Ctrl+Shift+C)"); copyPathItem.onclick = () => { menus.close(); copyPath(); };
+    const menus = documentBar(bar, { files:[save, copyPathItem], controls:[prev, next, zoomOut, zoomLabel, zoomIn, fit, copy, undo, redo, rotateLeft, rotate, flip, flipVertical, cropToggle, toggle], view:[
       { label:"화면에 맞춤", run:() => fit.click() }, { label:"원본 크기 (100%)", run:() => actual.click() },
       { label:"썸네일", checked:() => !thumbs.hidden, run:() => { thumbs.hidden = !thumbs.hidden; renderThumbs(); applyScale(); } },
+      { label:"전체 화면", shortcut:"F11", checked:isFullscreen, run:() => { void toggleFullscreen().catch(report); } },
       { label:"목록 새로고침", shortcut:"F5", run:() => { void refreshSources(true); }, disabled:() => busy },
     ] });
-    root.append(bar, coords, area, thumbs, status); el.replaceChildren(root);
+    root.append(bar, coords, area, thumbs, footer); el.replaceChildren(root);
     const report = (e: unknown) => { void platform.alert(String(e)).catch(() => {}); };
+    const copyPath = () => { void platform.copyText(path).then(() => { status.textContent = "파일 경로를 복사했습니다."; }).catch(report); };
+    // The number inputs are the single source of the crop rectangle; drags write into them.
+    let cropDrag: { kind:CropDrag; start:Point; rect:Rect; x:number; y:number; moved:boolean } | null = null;
+    const cropSize = () => ({ width: history?.state.width ?? 1, height: history?.state.height ?? 1 });
+    const readCrop = (): Rect => { const [x, y, width, height] = inputs.map(i => Number(i.value)); return { x, y, width, height }; };
+    const paintCrop = () => {
+      const { width, height } = cropSize(), r = fitRect(readCrop(), { width, height });
+      const pct = (value: number, of: number) => `${value / of * 100}%`;
+      const left = pct(r.x, width), top = pct(r.y, height), right = pct(r.x + r.width, width), bottom = pct(r.y + r.height, height);
+      cropBox.style.left = left; cropBox.style.top = top; cropBox.style.width = pct(r.width, width); cropBox.style.height = pct(r.height, height);
+      cropShade.style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${left} ${top}, ${right} ${top}, ${right} ${bottom}, ${left} ${bottom}, ${left} ${top})`;
+    };
+    const setCropRect = (rect: Rect) => {
+      const { x, y, width, height } = fitRect(rect, cropSize());
+      [x, y, width, height].forEach((value, i) => { inputs[i].value = String(value); }); paintCrop();
+    };
+    const setCropping = (on: boolean) => {
+      coords.hidden = !on; cropLayer.hidden = !on; cropDrag = null; area.style.cursor = "";
+      if (on) setCropRect({ x:0, y:0, ...cropSize() });
+    };
+    for (const input of inputs) { input.oninput = paintCrop; input.onchange = () => setCropRect(readCrop()); }
+    /** What a pointer position means for the crop; null outside the image or when not cropping. */
+    const cropHit = (e: MouseEvent) => {
+      if (coords.hidden) return null;
+      const box = (edited ? canvas : image).getBoundingClientRect(), size = cropSize();
+      if (e.clientX < box.left - GRAB_PX || e.clientX > box.right + GRAB_PX || e.clientY < box.top - GRAB_PX || e.clientY > box.bottom + GRAB_PX) return null;
+      const point = toImagePoint({ x:e.clientX, y:e.clientY }, box, size), rect = fitRect(readCrop(), size);
+      return { point, rect, kind: hitTest(point, rect, size, GRAB_PX * size.width / (box.width || 1)) };
+    };
     const refresh = () => {
       title.textContent = (dirty ? "● " : "") + nameOf(path); void platform.setWindowTitle(title.textContent).catch(() => {});
       const index = files.findIndex(f => pathKey(f) === pathKey(path)); prev.disabled = busy || index <= 0; next.disabled = busy || index < 0 || index + 1 >= files.length;
-      undo.hidden = redo.hidden = rotate.hidden = flip.hidden = cropToggle.hidden = save.hidden = !editing;
-      for (const b of [copy, rotate, flip, cropToggle, toggle]) b.disabled = busy;
+      undo.hidden = redo.hidden = rotate.hidden = rotateLeft.hidden = flip.hidden = flipVertical.hidden = cropToggle.hidden = save.hidden = !editing;
+      for (const b of [copy, rotate, rotateLeft, flip, flipVertical, cropToggle, toggle]) b.disabled = busy;
       undo.disabled = busy || !history?.previous; redo.disabled = busy || !history?.next;
       save.disabled = busy || !dirty;
       toggle.setAttribute("aria-pressed", String(editing));
+      info.textContent = history ? describeImage({ width:history.state.width, height:history.state.height, path, bytes:known.byteLength, edited }) : "";
       for (const b of thumbs.querySelectorAll<HTMLButtonElement>("button")) {
         b.disabled = busy; b.setAttribute("aria-current", String(pathKey(b.dataset.path!) === pathKey(path)));
       }
@@ -64,6 +114,7 @@ const viewer: Viewer = {
       const target = edited ? canvas : image, w = edited ? canvas.width : original?.naturalWidth ?? 0, h = edited ? canvas.height : original?.naturalHeight ?? 0;
       if (fitted && w && h) scale = Math.max(.01, Math.min(1, (area.clientWidth - 32) / w, (area.clientHeight - 32) / h));
       target.style.width = `${w * scale}px`;
+      frame.classList.toggle("image-pixelated", scale >= PIXEL_SCALE && (edited || imageFormat(path) !== "SVG"));
       surface.style.width = `${Math.max(area.clientWidth, w * scale + 32)}px`; surface.style.height = `${Math.max(area.clientHeight, h * scale + 32)}px`;
       zoomLabel.textContent = `${Math.round(scale * 100)}%`;
     };
@@ -90,9 +141,8 @@ const viewer: Viewer = {
       if (url) URL.revokeObjectURL(url);
       path = target; url = nextUrl; original = candidate; known = new Uint8Array(bytes); image.src = url; dirty = false; edited = false; scale = 1; status.textContent = "";
       history = new ImageHistory(candidate.naturalWidth, candidate.naturalHeight); canvas.width = canvas.height = 0;
-      fitted = true; coords.hidden = true; editing = false;
-      canvas.hidden = true; image.hidden = false; inputs[0].value = "0"; inputs[1].value = "0";
-      inputs[2].value = String(candidate.naturalWidth); inputs[3].value = String(candidate.naturalHeight);
+      fitted = true; setCropping(false); editing = false;
+      canvas.hidden = true; image.hidden = false;
       syncNavigation(); refresh(); applyScale();
     };
     const navigate = async (target: string) => {
@@ -103,15 +153,14 @@ const viewer: Viewer = {
       const tmp = document.createElement("canvas"); tmp.width = state.width; tmp.height = state.height;
       const ctx = tmp.getContext("2d"); if (!ctx) throw new Error("이미지 편집 화면을 만들 수 없습니다.");
       ctx.setTransform(...state.matrix); ctx.drawImage(original!, 0, 0);
-      surface.replaceChild(tmp, canvas); canvas.width = canvas.height = 0; canvas = tmp;
+      frame.replaceChild(tmp, canvas); canvas.width = canvas.height = 0; canvas = tmp;
     };
     const showState = () => {
       dirty = history!.dirty; edited = !history!.original;
-      image.hidden = edited; canvas.hidden = !edited; coords.hidden = true; status.textContent = "";
-      inputs[0].value = inputs[1].value = "0"; inputs[2].value = String(history!.state.width); inputs[3].value = String(history!.state.height);
+      image.hidden = edited; canvas.hidden = !edited; setCropping(false); status.textContent = "";
       refresh(); applyScale();
     };
-    const draw = (transform: "rotate" | "flip" | "crop") => {
+    const draw = (transform: "rotate" | "rotate-left" | "flip" | "flip-vertical" | "crop") => {
       if (!original || !history || busy || !editing) return;
       const [x, y, width, height] = inputs.map(i => Number(i.value));
       const state = transformImage(history.state, transform === "crop" ? { kind: "crop", x, y, width, height } : { kind: transform });
@@ -123,20 +172,20 @@ const viewer: Viewer = {
       try { renderState(state); if (back) history.undo(); else history.redo(); showState(); } catch (e) { report(e); }
     };
     undo.onclick = () => stepHistory(true); redo.onclick = () => stepHistory(false);
-    rotate.onclick = () => { try { draw("rotate"); } catch (e) { report(e); } };
-    flip.onclick = () => { try { draw("flip"); } catch (e) { report(e); } };
-    crop.onclick = () => { try { draw("crop"); } catch (e) { report(e); } };
+    for (const [b, transform] of [[rotate, "rotate"], [rotateLeft, "rotate-left"], [flip, "flip"], [flipVertical, "flip-vertical"], [crop, "crop"]] as const) {
+      b.onclick = () => { try { draw(transform); } catch (e) { report(e); } };
+    }
     zoomIn.onclick = () => setZoom(scale * 1.25);
     zoomOut.onclick = () => setZoom(scale / 1.25);
     fit.onclick = () => { fitted = true; applyScale(); };
-    cropToggle.onclick = () => { if (editing && !busy) coords.hidden = !coords.hidden; };
+    cropToggle.onclick = () => { if (editing && !busy) setCropping(!!coords.hidden); };
     toggle.onclick = () => { void (async () => {
       if (busy) return;
       busy = true; refresh();
       try {
         if (editing && dirty) { if (!await discard()) return; await load(path); }
         else editing = !editing;
-        coords.hidden = true;
+        setCropping(false);
       } finally { busy = false; refresh(); }
     })().catch(report); };
     area.addEventListener("wheel", e => {
@@ -144,10 +193,23 @@ const viewer: Viewer = {
       setZoom(scale * Math.exp(-Math.max(-300, Math.min(300, e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? area.clientHeight : 1))) * .002), {x:e.clientX, y:e.clientY});
     }, { passive:false });
     let pan: { x:number; y:number; left:number; top:number } | null = null;
-    area.onpointerdown = e => { if (e.button !== 0) return; e.preventDefault(); area.setPointerCapture(e.pointerId); pan = {x:e.clientX,y:e.clientY,left:area.scrollLeft,top:area.scrollTop}; area.classList.add("panning"); };
-    area.onpointermove = e => { if (pan) { area.scrollLeft = pan.left + pan.x - e.clientX; area.scrollTop = pan.top + pan.y - e.clientY; } };
-    const endPan = () => { pan = null; area.classList.remove("panning"); }; area.onpointerup = endPan; area.onpointercancel = endPan; area.onlostpointercapture = endPan;
-    area.ondblclick = () => fitted ? setZoom(1) : fit.click();
+    area.onpointerdown = e => {
+      if (e.button !== 0) return; e.preventDefault(); area.setPointerCapture(e.pointerId);
+      const hit = cropHit(e);
+      if (hit) { cropDrag = { kind:hit.kind, start:hit.point, rect:hit.rect, x:e.clientX, y:e.clientY, moved:false }; return; }
+      pan = {x:e.clientX,y:e.clientY,left:area.scrollLeft,top:area.scrollTop}; area.classList.add("panning");
+    };
+    area.onpointermove = e => {
+      if (cropDrag) {
+        if (!cropDrag.moved && Math.hypot(e.clientX - cropDrag.x, e.clientY - cropDrag.y) < DRAG_PX) return;
+        cropDrag.moved = true;
+        const size = cropSize(), point = toImagePoint({ x:e.clientX, y:e.clientY }, (edited ? canvas : image).getBoundingClientRect(), size);
+        setCropRect(dragRect(cropDrag.kind, cropDrag.start, point, cropDrag.rect, size));
+      } else if (pan) { area.scrollLeft = pan.left + pan.x - e.clientX; area.scrollTop = pan.top + pan.y - e.clientY; }
+      else if (!coords.hidden) { const hit = cropHit(e); area.style.cursor = hit ? CROP_CURSOR[hit.kind] : ""; }
+    };
+    const endPan = () => { pan = null; cropDrag = null; area.classList.remove("panning"); }; area.onpointerup = endPan; area.onpointercancel = endPan; area.onlostpointercapture = endPan;
+    area.ondblclick = e => { if (cropHit(e)) return; if (fitted) setZoom(1); else fit.click(); };
     copy.onclick = () => { void (async () => {
       if (!original || busy) return; busy = true; refresh();
       try {
@@ -157,10 +219,19 @@ const viewer: Viewer = {
         await platform.copyImage(new Uint8Array(await blob.arrayBuffer())); status.textContent = "이미지를 복사했습니다.";
       } finally { busy = false; refresh(); }
     })().catch(report); };
+    // Capture: Esc and Enter also work from the number inputs, and an open menu keeps its own Esc.
+    window.addEventListener("keydown", e => {
+      if (menus.isOpen || document.querySelector("dialog[open]")) return;
+      const handled = () => { e.preventDefault(); e.stopPropagation(); };
+      if (e.key === "Escape" && !coords.hidden) { handled(); setCropping(false); }
+      else if (e.key === "Escape" && isFullscreen()) { handled(); void toggleFullscreen().catch(report); }
+      // The toggle keeps focus after opening the crop, and Esc already closes it, so Enter applies there too.
+      else if (e.key === "Enter" && !coords.hidden && (e.target === cropToggle || !(e.target as HTMLElement)?.closest?.("button,a,select,summary"))) { handled(); if (!e.repeat) crop.click(); }
+    }, true);
     window.addEventListener("keydown", e => {
       if (e.key === "F5") { e.preventDefault(); if (!document.querySelector("dialog[open]") && !e.repeat) void refreshSources(true); return; }
       if (document.querySelector("dialog[open]") || (e.target as HTMLElement)?.closest?.("input,textarea,[contenteditable=true]")) return;
-      if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); if (!e.repeat) copy.click(); }
+      if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); if (e.repeat) return; if (e.shiftKey) copyPath(); else copy.click(); }
       else if (e.ctrlKey && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo.click(); else undo.click(); }
       else if (e.ctrlKey && e.key.toLowerCase() === "y") { e.preventDefault(); redo.click(); }
       else if (e.ctrlKey && e.key === "0") { e.preventDefault(); fit.click(); }
