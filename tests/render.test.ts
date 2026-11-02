@@ -99,6 +99,40 @@ test("drive-letter image paths in raw html and markdown resolve via assetUrl", a
   expect(html).toContain('src="asset://C:/p/a.png"');
   expect(html).toContain('src="asset://C:/p/b.png"');
 });
+test("alert markers become labelled boxes, in any case and for every kind", async () => {
+  const titles = { NOTE: "참고", TIP: "팁", IMPORTANT: "중요", WARNING: "경고", CAUTION: "주의" };
+  for (const [kind, title] of Object.entries(titles)) {
+    const { html } = await renderMarkdown(`> [!${kind}]\n> body **text**`, o);
+    expect(html).toContain(`<blockquote class="md-alert md-alert-${kind.toLowerCase()}">`);
+    expect(html).toContain(`<p class="md-alert-title">${title}</p>`);
+    expect(html).toContain("<p>body <strong>text</strong></p>");
+    expect(html).not.toContain("[!");
+  }
+  expect((await renderMarkdown("> [!note]\n> x", o)).html).toContain("md-alert-note");
+});
+test("an alert keeps later blocks, a hard break after the marker and a body starting in its own block", async () => {
+  const multi = (await renderMarkdown("> [!TIP]\n> one\n>\n> two\n>\n> - three", o)).html;
+  expect(multi).toContain("<p>one</p>");
+  expect(multi).toContain("<p>two</p>");
+  expect(multi).toContain("<li>three</li>");
+  const hardBreak = (await renderMarkdown("> [!TIP]  \n> one", o)).html;
+  expect(hardBreak).toContain("<p>one</p>");
+  expect(hardBreak).not.toContain("<br>");
+  const ownBlock = (await renderMarkdown("> [!TIP]\n>\n> one", o)).html;
+  expect(ownBlock).toContain("md-alert-tip");
+  expect(ownBlock).toContain("<p>one</p>");
+});
+test("anything but a marker on its own line followed by content stays an ordinary quote", async () => {
+  for (const src of ["> plain", "> [!FOO]\n> x", "> [!NOTE] same line", "> [!NOTE]", "> text\n> [!NOTE]\n> x", "> - [!NOTE]\n> - x", "> **[!NOTE]**\n> x"]) {
+    const { html } = await renderMarkdown(src, o);
+    expect(html, src).toContain("<blockquote>");
+    expect(html, src).not.toContain("md-alert");
+  }
+});
+test("raw html cannot claim the alert classes", async () => {
+  const { html } = await renderMarkdown('<blockquote class="md-alert md-alert-note">x</blockquote>\n\n<p class="md-alert-title">y</p>', o);
+  expect(html).not.toContain("md-alert");
+});
 test("task lists, footnotes and math survive sanitizing", async () => {
   const { html } = await renderMarkdown("- [x] done\n\nA[^1] $a$\n\n$$\nb\n$$\n\n[^1]: note", o);
   expect(html).toMatch(/<input type="checkbox" checked disabled>|<input checked type="checkbox" disabled>|<input type="checkbox" disabled checked>/);

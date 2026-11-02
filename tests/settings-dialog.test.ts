@@ -23,6 +23,14 @@ test("Markdown display edits and reset preserve the separate text settings",()=>
   expect(preferences().mdSize).toBe(20);field("Markdown").querySelector("button")!.click();
   expect(preferences()).toEqual({...DEFAULTS,textFont:"serif",textSize:22,textWrap:false});
 });
+test("the body width is a Markdown option that the Markdown reset restores",()=>{
+  configureSettings("a.md");openSettings();
+  const width=field("Markdown").querySelector<HTMLSelectElement>('select[aria-label="본문 폭"]')!;
+  expect(width.value).toBe("normal");change(width,"wide");expect(preferences().mdWidth).toBe("wide");
+  field("Markdown").querySelector("button")!.click();expect(preferences().mdWidth).toBe("normal");expect(width.value).toBe("normal");
+  document.querySelector("dialog")!.close();configureSettings("a.txt");openSettings();
+  expect(document.querySelector('select[aria-label="본문 폭"]')).toBeNull();
+});
 test("empty windows offer both display groups but no file encoding",()=>{
   openSettings();expect(legends()).toEqual(["일반","Markdown","텍스트"]);
   applyPreferences({mdSize:22,textSize:24});field("텍스트").querySelector("button")!.click();

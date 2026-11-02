@@ -179,6 +179,49 @@ function rehypeDropRawInputs() {
   };
 }
 
+const ALERT_TITLES: Record<string, string> = { note: "참고", tip: "팁", important: "중요", warning: "경고", caution: "주의" };
+const ALERT_MARKER = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)/i;
+const isBlank = (node: RootContent) => node.type === "text" && !node.value.trim();
+
+function toAlert(quote: Element): void {
+  const first = quote.children.find((child) => !isBlank(child));
+  if (first?.type !== "element" || first.tagName !== "p") return;
+  const lead = first.children[0];
+  const marker = lead?.type === "text" ? ALERT_MARKER.exec(lead.value) : null;
+  if (!lead || lead.type !== "text" || !marker) return;
+  const rest = lead.value.slice(marker[0].length);
+  const body = [...(rest ? [{ type: "text" as const, value: rest }] : []), ...first.children.slice(1)];
+  // A hard break after the marker only separates it from the text.
+  while (body[0] && (isBlank(body[0]) || (body[0].type === "element" && body[0].tagName === "br"))) body.shift();
+  if (body[0]?.type === "text") body[0] = { ...body[0], value: body[0].value.trimStart() };
+  const after = quote.children.slice(quote.children.indexOf(first) + 1);
+  if (body.length === 0 && after.every(isBlank)) return; // a marker alone stays an ordinary quote
+  const kind = marker[1].toLowerCase();
+  quote.properties = { ...quote.properties, className: ["md-alert", `md-alert-${kind}`] };
+  quote.children = [
+    { type: "element", tagName: "p", properties: { className: ["md-alert-title"] }, children: [{ type: "text", value: ALERT_TITLES[kind] }] },
+    ...(body.length ? [{ ...first, children: body }] : []),
+    ...after,
+  ];
+}
+
+/**
+ * GitHub's `> [!NOTE]` alerts. Runs after sanitize, which would strip these classes (and still
+ * strips any raw HTML that tries to use them). The source text and save path never see this.
+ */
+function rehypeAlerts() {
+  return (tree: Root) => {
+    const walk = (node: Root | Element) => {
+      for (const child of node.children) {
+        if (child.type !== "element") continue;
+        if (child.tagName === "blockquote") toAlert(child);
+        walk(child);
+      }
+    };
+    walk(tree);
+  };
+}
+
 /** Runs after sanitize: rewrites local image paths to asset URLs (last, so nothing strips them). */
 function rehypeImages(opts: RenderOptions) {
   return (tree: Root) => {
@@ -228,6 +271,7 @@ export async function renderMarkdown(src: string, opts: RenderOptions): Promise<
     .use(rehypeRaw)
     .use(rehypeDropRawInputs)
     .use(rehypeSanitize, sanitizeSchema)
+    .use(rehypeAlerts)
     .use(rehypeMermaid)
     .use(rehypeSlug)
     .use(rehypeHeadings, headings)

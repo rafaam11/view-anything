@@ -4,7 +4,7 @@ import { platform } from "../platform";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { decodeText, encodeText } from "./text";
-import { renderMarkdown, resolveAsset } from "./render";
+import { renderMarkdown, resolveAsset, type Heading } from "./render";
 import { classifyLink } from "./links";
 import { renderMermaid, watchTheme } from "./mermaid";
 import { buildToc } from "./toc";
@@ -13,6 +13,11 @@ import { bytesEqual, createRunner, planSave, shouldConfirmLeave, shouldReloadOnF
 import { saveCopy } from "../data/save-copy";
 import type { Editor } from "./editor";
 import { documentBar } from "../ui/chrome";
+import { applyPreferences, DEFAULTS, preferences } from "../settings/preferences";
+import { addCodeCopyButtons, imagesReady } from "./decorate";
+import { watchFile } from "./file-watch";
+import { createFind } from "./find";
+import { createWheelStepper, sizeShortcut, stepMdSize } from "./font-size";
 
 const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
 const REWRITE_MESSAGE = "원문 보존 불가 — 전체 재작성으로 저장할까요?";
@@ -94,6 +99,8 @@ function isKey(e: KeyboardEvent, key: string): boolean {
   return e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === key;
 }
 
+const hasOpenDialog = () => document.querySelector("dialog[open]") !== null;
+
 export function createViewer(loadEditor: () => Promise<Pick<typeof import("./editor"), "createEditor">> = () => import("./editor")): Viewer {
 return {
   async mount(el, path) {
@@ -131,7 +138,23 @@ return {
     const copy = document.createElement("button");
     copy.type = "button"; copy.className = "md-toggle"; copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
     const saveButton = document.createElement("button"); saveButton.textContent = "저장"; saveButton.hidden = true;
-    documentBar(bar, { toggle, files: [saveButton, copy], view: [{ label: "목차", checked: () => !root.querySelector(".toc")?.classList.contains("collapsed"), run: () => root.querySelector<HTMLButtonElement>(".toc-toggle")?.click() }] });
+    /** The shared setting, so it also follows in other open Markdown windows and stays for next time. */
+    const changeSize = (step: 1 | -1 | 0) => {
+      const current = preferences().mdSize;
+      const next = step === 0 ? DEFAULTS.mdSize : stepMdSize(current, step);
+      if (next === current) return;
+      const ratio = el.scrollHeight ? el.scrollTop / el.scrollHeight : 0;
+      applyPreferences({ mdSize: next });
+      el.scrollTop = ratio * el.scrollHeight;
+    };
+    const menus = documentBar(bar, { toggle, files: [saveButton, copy], view: [
+      { label: "목차", checked: () => !root.querySelector(".toc")?.classList.contains("collapsed"), run: () => root.querySelector<HTMLButtonElement>(".toc-toggle")?.click() },
+      { label: "찾기…", shortcut: "Ctrl+F", disabled: () => mode !== "read", run: () => find.open() },
+      { separator: true },
+      { label: "글자 크게", shortcut: "Ctrl+=", run: () => changeSize(1) },
+      { label: "글자 작게", shortcut: "Ctrl+-", run: () => changeSize(-1) },
+      { label: "글자 크기 원래대로", shortcut: "Ctrl+0", run: () => changeSize(0) },
+    ] });
     root.append(bar);
 
     const banner = document.createElement("div");
@@ -155,15 +178,39 @@ return {
     editorHost.className = "md-editor";
     editorHost.hidden = true;
     root.append(editorHost);
+    const find = createFind(article);
+    root.append(find.element);
     el.replaceChildren(root);
 
     /** One mode switch, save or reload at a time; user actions arriving meanwhile are queued. */
     const tasks = createRunner((e) => platform.alert(String(e)));
 
+    const decorate = (target: ParentNode) => addCodeCopyButtons(
+      target,
+      (text) => platform.copyText(text),
+      (e) => { void platform.alert(String(e)).catch(() => {}); },
+    );
     let disposeToc = () => {};
-    /** `keepScroll`: a reload of changed content keeps the reader where they were (best effort). */
+    /** Needs the article in the document: the toc looks its headings up by id. */
+    const showToc = (headings: Heading[]) => {
+      disposeToc();
+      disposeToc = () => {};
+      body.querySelector("nav.toc")?.remove();
+      if (headings.length > 0) {
+        const toc = buildToc(headings, article, el);
+        disposeToc = toc.dispose;
+        body.prepend(toc.nav);
+      }
+    };
+    /** Bumped on a theme change, which renders the diagrams of the article on screen only. */
+    let themeEpoch = 0;
+    /**
+     * `keepScroll`: a reload of changed content keeps the reader where they were (best effort). The
+     * new content is finished off-screen and swapped in at once, because a file watched while it is
+     * being written reloads often: the reader must see neither diagram source nor the page shifting.
+     */
     const render = async (keepScroll = false) => {
-      const scrollY = el.scrollTop;
+      let scrollY = el.scrollTop;
       const restore = () => {
         if (keepScroll) el.scrollTo(0, scrollY);
         else if (location.hash) scrollToId(location.hash);
@@ -173,15 +220,30 @@ return {
           baseDir,
           assetUrl: (abs) => platform.assetUrl(abs),
         });
-        article.innerHTML = html;
-        disposeToc();
-        disposeToc = () => {};
-        body.querySelector("nav.toc")?.remove();
-        if (headings.length > 0) {
-          const toc = buildToc(headings, article, el);
-          disposeToc = toc.dispose;
-          body.prepend(toc.nav);
+        if (keepScroll) {
+          const next = document.createElement("div");
+          next.innerHTML = html;
+          const opened = [...article.querySelectorAll("details")].map((d) => d.open);
+          next.querySelectorAll("details").forEach((d, i) => { d.open = opened[i] ?? d.open; });
+          decorate(next);
+          const epoch = themeEpoch;
+          await renderMermaid(next);
+          await imagesReady(next);
+          scrollY = el.scrollTop; // the reader may have kept scrolling meanwhile
+          article.replaceChildren(...next.childNodes);
+          showToc(headings);
+          find.refresh();
+          restore();
+          if (epoch !== themeEpoch) {
+            await renderMermaid(article);
+            restore();
+          }
+          return;
         }
+        article.innerHTML = html;
+        decorate(article);
+        showToc(headings);
+        find.refresh();
         restore();
         await renderMermaid(article);
         restore(); // diagrams change layout height
@@ -237,6 +299,7 @@ return {
         await render(true);
         if (d.readOnlyReason) return;
       }
+      find.close(); // its marks and panel belong to the read view
       const { createEditor } = await loadEditor();
       editorHost.hidden = false;
       body.hidden = true;
@@ -338,18 +401,42 @@ return {
       });
     };
 
-    // Read mode follows changes other programs made while the window was in the background.
+    // Read mode follows changes other programs made, whether or not the window is active. The bytes
+    // decide: a file that was only touched is not drawn again.
     const reloadIfChanged = async () => {
       const onDisk = await readDisk();
-      if (!onDisk || !shouldReloadOnFocus({ mode, busy: false }, known, onDisk)) return;
+      if (!onDisk) {
+        watch.retry();
+        return;
+      }
+      if (!shouldReloadOnFocus({ mode, busy: false }, known, onDisk)) return;
       adopt(onDisk);
       await render(true);
     };
     window.addEventListener("focus", () => {
       if (mode === "read") tasks.background(reloadIfChanged);
     });
+    /** A reload would drop a selection the reader is about to copy, so it waits for them. */
+    const selectingText = () => {
+      const selection = getSelection();
+      return !!selection && !selection.isCollapsed && article.contains(selection.anchorNode);
+    };
+    const watch = watchFile({
+      stat: () => platform.fileStat(path),
+      paused: () => mode !== "read" || tasks.busy || selectingText(),
+      changed: () => tasks.background(reloadIfChanged),
+      alive: () => root.isConnected,
+    });
 
     toggle.addEventListener("click", toggleMode);
+    const wheelStep = createWheelStepper();
+    // Not passive: Ctrl+wheel would otherwise zoom the whole webview, title bar included.
+    root.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const step = wheelStep(e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 16 : e.deltaY);
+      if (step) changeSize(step);
+    }, { passive: false });
     // Capture phase: ProseMirror/CodeMirror must not swallow the app shortcuts.
     window.addEventListener(
       "keydown",
@@ -363,6 +450,21 @@ return {
           e.preventDefault();
           e.stopPropagation();
           if (!e.repeat) requestSave();
+        } else if (sizeShortcut(e) !== null) {
+          if (hasOpenDialog()) return;
+          e.preventDefault();
+          e.stopPropagation();
+          changeSize(sizeShortcut(e)!);
+        } else if (isKey(e, "f")) {
+          // Edit mode keeps the editor's own behaviour for this key.
+          if (mode !== "read" || hasOpenDialog()) return;
+          e.preventDefault();
+          e.stopPropagation();
+          find.open();
+        } else if (e.key === "Escape" && find.isOpen && !menus.isOpen && !hasOpenDialog()) {
+          e.preventDefault();
+          e.stopPropagation();
+          find.close();
         } else if (mode === "edit" && isReloadOrHistoryKey(e)) {
           // Back/forward/reload would unload the page and drop the editor state.
           e.preventDefault();
@@ -397,6 +499,7 @@ return {
     editorHost.addEventListener("auxclick", blockNav);
 
     watchTheme(() => {
+      themeEpoch++;
       void renderMermaid(article);
     });
   },

@@ -5,19 +5,11 @@ import { platform } from '../platform';
 import type { Viewer } from '../registry';
 import { documentBar } from '../ui/chrome';
 import { iconButton } from '../ui/icons';
+import { matchRanges } from '../ui/match';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const MAX_BYTES = 100 * 1024 * 1024;
 const MAX_PIXELS = 20_000_000;
-
-/** Literal, case-insensitive matches retain UTF-16 offsets even when case folding changes length. */
-function matchRanges(text: string, query: string): Array<[number, number]> {
-  if (!query) return [];
-  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
-  const ranges: Array<[number, number]> = [];
-  for (const match of text.matchAll(pattern)) { ranges.push([match.index!, match.index! + match[0].length]); if (ranges.length >= 10000) break; }
-  return ranges;
-}
 
 type OutlineItem = { title: string; dest: string | unknown[] | null; items: OutlineItem[] };
 const button = (label: string) => { const b = document.createElement('button'); b.textContent = label; return b; };

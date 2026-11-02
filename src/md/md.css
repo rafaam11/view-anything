@@ -7,6 +7,12 @@
   --hl-comment: #6e7781;
   --hl-number: #0550ae;
   --hl-title: #8250df;
+  --alert-tip: #1a7f37;
+  --alert-important: #8250df;
+  --alert-warning: #9a6700;
+  --alert-caution: #cf222e;
+  --find-hit: #fff1a8;
+  --find-current: #ffb454;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
@@ -18,6 +24,12 @@
     --hl-comment: #8b949e;
     --hl-number: #79c0ff;
     --hl-title: #d2a8ff;
+    --alert-tip: #3fb950;
+    --alert-important: #a371f7;
+    --alert-warning: #d29922;
+    --alert-caution: #f85149;
+    --find-hit: #5c4a00;
+    --find-current: #9e5f00;
   }
 }
 :root[data-theme="dark"] {
@@ -29,6 +41,12 @@
   --hl-comment: #8b949e;
   --hl-number: #79c0ff;
   --hl-title: #d2a8ff;
+  --alert-tip: #3fb950;
+  --alert-important: #a371f7;
+  --alert-warning: #d29922;
+  --alert-caution: #f85149;
+  --find-hit: #5c4a00;
+  --find-current: #9e5f00;
 }
 
 .md-root { min-height: calc(100vh - var(--va-titlebar-height, 0px)); }
@@ -74,7 +92,7 @@
 .toc a.active { color: var(--toc-active); border-left-color: var(--toc-active); }
 
 .md-content {
-  flex: 1 1 auto; min-width: 0; max-width: 780px; margin: 0 auto;
+  flex: 1 1 auto; min-width: 0; max-width: var(--va-md-width, 780px); margin: 0 auto;
   padding: 32px 40px 96px; box-sizing: border-box;
   line-height: 1.7; font-size: var(--va-md-size, 16px); font-family: var(--va-md-font, system-ui); word-break: break-word;
 }
@@ -98,6 +116,33 @@
 .md-content .mermaid { text-align: center; margin: 1em 0; white-space: pre; }
 .md-content .mermaid-error { color: var(--muted); text-align: left; }
 .md-content .katex-display { overflow-x: auto; overflow-y: hidden; }
+
+.md-content blockquote.md-alert { color: var(--fg); border-left-color: var(--alert); }
+.md-content .md-alert > p { margin: 0.5em 0; }
+.md-content .md-alert > .md-alert-title { font-weight: 600; color: var(--alert); }
+.md-alert-note { --alert: var(--accent); }
+.md-alert-tip { --alert: var(--alert-tip); }
+.md-alert-important { --alert: var(--alert-important); }
+.md-alert-warning { --alert: var(--alert-warning); }
+.md-alert-caution { --alert: var(--alert-caution); }
+
+.md-code { position: relative; margin: 1em 0; }
+.md-content .md-code pre { margin: 0; }
+.md-content .md-code-copy.va-icon-button { position: absolute; top: 6px; right: 6px; background: var(--code-bg); color: var(--muted); opacity: 0; user-select: none; }
+.md-code:hover .md-code-copy, .md-content .md-code-copy:focus-visible, .md-content .md-code-copy.copied { opacity: 1; }
+/* Generated text, so the label never joins a text selection of the code. */
+.md-code-copy.copied::after { content: "복사됨"; position: absolute; right: 100%; margin-right: 4px; font-size: 12px; white-space: nowrap; }
+
+.md-content mark.md-find-hit { background: var(--find-hit); color: inherit; border-radius: 2px; }
+.md-content mark.md-find-current { background: var(--find-current); color: var(--fg); }
+/* Over the text rather than beside it, and under the menus that open from the bar. */
+.md-root .md-find {
+  position: fixed; top: calc(var(--va-titlebar-height, 0px) + 44px); right: 24px; z-index: 4;
+  flex-wrap: nowrap; max-width: calc(100vw - 48px); box-sizing: border-box; padding: 4px 6px 4px 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 8px #0003;
+}
+.md-find input { flex: 1 1 200px; width: 200px; }
+.md-find-count { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .hljs-keyword, .hljs-built_in, .hljs-literal, .hljs-selector-tag { color: var(--hl-keyword); }
 .hljs-string, .hljs-regexp, .hljs-attr { color: var(--hl-string); }
