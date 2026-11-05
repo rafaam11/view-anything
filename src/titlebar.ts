@@ -3,7 +3,7 @@ import { reflectFullscreen } from "./fullscreen";
 import { currentMode, cycleTheme, nextMode, type ThemeMode } from "./theme";
 import "./titlebar.css";
 
-type WindowControls = Pick<AppWindow, "minimize" | "toggleMaximize" | "close" | "isMaximized" | "isFullscreen" | "onResized" | "setTheme">;
+type WindowControls = Pick<AppWindow, "minimize" | "toggleMaximize" | "close" | "isMaximized" | "isFullscreen" | "onResized" | "setTheme" | "isAlwaysOnTop" | "setAlwaysOnTop">;
 
 // Static application icons only. File names and other external strings use textContent.
 const svg = (body: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${body}</svg>`;
@@ -12,6 +12,8 @@ const icons = {
   dark: svg('<path d="M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10Z"/>'),
   light: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'),
   system: svg('<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M12 17v4m-4 0h8"/>'),
+  pin: svg('<g transform="rotate(35 12 12)"><path d="M8 3h8m-7 0v7l-3 4v2h12v-2l-3-4V3M12 16v6"/></g>'),
+  pinned: svg('<path d="M8 3h8m-7 0v7l-3 4v2h12v-2l-3-4V3M12 16v6"/>'),
   minimize: svg('<path d="M6 12h12"/>'),
   maximize: svg('<rect x="6" y="6" width="12" height="12"/>'),
   restore: svg('<path d="M9 6V4h11v11h-2"/><rect x="4" y="9" width="11" height="11"/>'),
@@ -50,6 +52,23 @@ export function mountTitlebar(host: HTMLElement = document.body, appWindow: Wind
   button("settings", "설정", icons.settings, async () => { (await import("./settings/dialog")).openSettings(); });
   const theme = button("theme", "테마", icons.system, () => { cycleTheme(); });
   theme.setAttribute("aria-keyshortcuts", "Control+Shift+T");
+  let pinBusy = false;
+  const pin = button("pin", "항상 위에 표시", icons.pin, async () => {
+    if (disposed || pinBusy) return;
+    pinBusy = true;
+    pin.disabled = true;
+    try {
+      const on = await appWindow.isAlwaysOnTop();
+      if (disposed) return;
+      await appWindow.setAlwaysOnTop(!on);
+      await syncPinState();
+    } finally {
+      pinBusy = false;
+      if (!disposed) pin.disabled = false;
+    }
+  });
+  pin.setAttribute("aria-pressed", "false");
+  pin.disabled = true;
   button("minimize", "최소화", icons.minimize, () => appWindow.minimize());
   const maximize = button("maximize", "최대화", icons.maximize, async () => {
     await appWindow.toggleMaximize();
@@ -61,6 +80,15 @@ export function mountTitlebar(host: HTMLElement = document.body, appWindow: Wind
   host.prepend(bar);
 
   let disposed = false;
+  async function syncPinState() {
+    const on = await appWindow.isAlwaysOnTop();
+    if (disposed) return;
+    pin.setAttribute("aria-pressed", String(on));
+    pin.title = on ? "항상 위 해제" : "항상 위에 표시";
+    pin.setAttribute("aria-label", pin.title);
+    pin.innerHTML = on ? icons.pinned : icons.pin;
+  }
+  void syncPinState().catch(report).finally(() => { if (!disposed) pin.disabled = false; });
   let resizeVersion = 0;
   async function syncWindowState() {
     const version = ++resizeVersion;

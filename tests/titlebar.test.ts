@@ -12,6 +12,8 @@ const controls = {
   close: vi.fn(async () => {}),
   isMaximized: vi.fn(async () => false),
   isFullscreen: vi.fn(async () => false),
+  isAlwaysOnTop: vi.fn(async () => false),
+  setAlwaysOnTop: vi.fn(async (_on: boolean) => {}),
   onResized: vi.fn(async (cb: () => void) => { resized = cb; return unlisten; }),
   setTheme: vi.fn(async () => {}),
 };
@@ -23,6 +25,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   controls.isMaximized.mockResolvedValue(false);
   controls.isFullscreen.mockResolvedValue(false);
+  controls.isAlwaysOnTop.mockResolvedValue(false);
+  controls.setAlwaysOnTop.mockImplementation(async (on: boolean) => {
+    controls.isAlwaysOnTop.mockResolvedValue(on);
+  });
   delete document.documentElement.dataset.fullscreen;
   document.body.innerHTML = '<main id="app"></main>';
   document.title = "모델.step";
@@ -31,9 +37,9 @@ beforeEach(() => {
 });
 afterEach(() => { dispose(); vi.restoreAllMocks(); });
 
-test("theme is immediately before minimize, maximize and close; buttons never drag the window", () => {
+test("settings, theme and pin precede window controls; buttons never drag the window", () => {
   expect([...document.querySelectorAll(".va-titlebar button")].map((b) => (b as HTMLElement).dataset.action))
-    .toEqual(["settings", "theme", "minimize", "maximize", "close"]);
+    .toEqual(["settings", "theme", "pin", "minimize", "maximize", "close"]);
   expect(document.body.firstElementChild?.className).toBe("va-titlebar");
   expect(document.querySelector(".va-titlebar-drag")?.hasAttribute("data-tauri-drag-region")).toBe(true);
   for (const b of document.querySelectorAll(".va-titlebar button")) {
@@ -41,6 +47,69 @@ test("theme is immediately before minimize, maximize and close; buttons never dr
     expect(b.getAttribute("type")).toBe("button");
     expect(b.getAttribute("aria-label")).toBeTruthy();
   }
+});
+
+test("pin toggles native always-on-top with accessible state and distinct icons", async () => {
+  await settle();
+  const pin = button("pin");
+  const offIcon = pin.innerHTML;
+  expect(pin.getAttribute("aria-pressed")).toBe("false");
+  expect(pin.title).toBe("항상 위에 표시");
+  pin.click();
+  await settle();
+  expect(controls.setAlwaysOnTop).toHaveBeenLastCalledWith(true);
+  expect(pin.getAttribute("aria-pressed")).toBe("true");
+  expect(pin.title).toBe("항상 위 해제");
+  expect(pin.getAttribute("aria-label")).toBe(pin.title);
+  expect(pin.innerHTML).not.toBe(offIcon);
+  pin.click();
+  await settle();
+  expect(controls.setAlwaysOnTop).toHaveBeenLastCalledWith(false);
+  expect(pin.getAttribute("aria-pressed")).toBe("false");
+  expect(pin.innerHTML).toBe(offIcon);
+});
+
+test("pin reads native state on remount and does not set it on initialization", async () => {
+  await settle();
+  dispose();
+  controls.isAlwaysOnTop.mockResolvedValue(true);
+  dispose = mountTitlebar(document.body, controls);
+  await settle();
+  expect(button("pin").getAttribute("aria-pressed")).toBe("true");
+  expect(controls.setAlwaysOnTop).not.toHaveBeenCalled();
+});
+
+test("pin ignores rapid clicks while a native change is pending", async () => {
+  await settle();
+  let finish!: () => void;
+  controls.setAlwaysOnTop.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    finish = () => { controls.isAlwaysOnTop.mockResolvedValue(true); resolve(); };
+  }));
+  button("pin").click();
+  button("pin").click();
+  await settle();
+  expect(controls.setAlwaysOnTop).toHaveBeenCalledTimes(1);
+  expect(button("pin").disabled).toBe(true);
+  button("pin").click();
+  finish();
+  await settle();
+  expect(controls.setAlwaysOnTop).toHaveBeenCalledTimes(1);
+  expect(button("pin").disabled).toBe(false);
+  expect(button("pin").getAttribute("aria-pressed")).toBe("true");
+});
+
+test("failed pin changes preserve the displayed state and allow retry", async () => {
+  await settle();
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  controls.setAlwaysOnTop.mockRejectedValueOnce(new Error("native failure"));
+  button("pin").click();
+  await settle();
+  expect(button("pin").getAttribute("aria-pressed")).toBe("false");
+  expect(button("pin").disabled).toBe(false);
+  expect(warn).toHaveBeenCalled();
+  button("pin").click();
+  await settle();
+  expect(button("pin").getAttribute("aria-pressed")).toBe("true");
 });
 
 test("clicks and shortcuts update icon, accessible tooltip and native/system theme", async () => {
@@ -116,7 +185,7 @@ test("disposes resize and DOM observers", async () => {
 
 test("every native window control has an explicit capability", () => {
   const capability = JSON.parse(readFileSync("src-tauri/capabilities/default.json", "utf8"));
-  for (const name of ["minimize", "toggle-maximize", "start-dragging", "close", "set-theme", "set-fullscreen"]) {
+  for (const name of ["minimize", "toggle-maximize", "start-dragging", "close", "set-theme", "set-fullscreen", "set-always-on-top"]) {
     expect(capability.permissions).toContain(`core:window:allow-${name}`);
   }
   const rust = readFileSync("src-tauri/src/lib.rs", "utf8");
