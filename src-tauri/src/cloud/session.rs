@@ -176,7 +176,7 @@ impl Clouds {
         Ok(s)
     }
     pub fn close_window(&self, owner: &str) {
-        for (_, (w, _, c)) in self.jobs.lock().unwrap().iter() {
+        for (w, _, c) in self.jobs.lock().unwrap().values() {
             if w == owner {
                 c.store(true, Ordering::Relaxed);
             }

@@ -27,7 +27,9 @@ jobs:
         with:
           node-version: 22.12.0
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      # Pinned: clippy runs with -D warnings, so a new stable must not fail main on new lints.
+      # Bump deliberately (and fix what the new clippy reports) together with AGENTS.md.
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
