@@ -123,6 +123,25 @@ pub fn into_cloud(las: LasCloud) -> Result<super::codec::Cloud> {
     })
 }
 
+/// The two LAS limits, kept apart like the PCD/PLY decoder does: the raw point records against
+/// the 2 GiB decode cap, and the working memory (decoded `las::Point`s, extra bytes copied twice,
+/// and the same 348-byte per-point session overhead as PCD/PLY) against the app budget left.
+/// Comparing the working memory with 2 GiB used to refuse plain LAS files from about 4.5 million
+/// points, far below the documented ten million.
+pub fn las_budget(count: usize, record_len: usize, extra_bytes: usize, budget: usize) -> Result<()> {
+    if count.checked_mul(record_len).is_none_or(|n| n > MAX_BYTES) {
+        return Err("LAS/LAZ 디코딩 데이터 한도를 초과합니다".into());
+    }
+    let per_point = extra_bytes
+        .checked_mul(2)
+        .and_then(|n| n.checked_add(std::mem::size_of::<las::Point>() + 348))
+        .ok_or("메모리 한도 오류")?;
+    if count.checked_mul(per_point).is_none_or(|n| n > budget) {
+        return Err("LAS/LAZ 디코딩 메모리 한도를 초과합니다".into());
+    }
+    Ok(())
+}
+
 #[allow(dead_code)]
 pub fn read<R: Read + Seek + Send + Sync + 'static>(
     reader: R,
@@ -158,18 +177,12 @@ pub fn read<R: Read + Seek + Send + Sync + 'static>(
     if count > MAX_POINTS {
         return Err("점 개수 한도를 초과합니다".into());
     }
-    let per_point = std::mem::size_of::<las::Point>()
-        .checked_add(
-            (header.point_format().extra_bytes as usize)
-                .checked_mul(2)
-                .ok_or("메모리 한도 오류")?,
-        )
-        .and_then(|n| n.checked_add(320))
-        .ok_or("메모리 한도 오류")?;
-    let estimated = count.checked_mul(per_point).ok_or("메모리 한도 오류")?;
-    if estimated > budget || count.checked_mul(per_point).is_none_or(|n| n > MAX_BYTES) {
-        return Err("LAS/LAZ 디코딩 메모리 한도를 초과합니다".into());
-    }
+    las_budget(
+        count,
+        header.point_format().len() as usize,
+        header.point_format().extra_bytes as usize,
+        budget,
+    )?;
     let mut points = Vec::with_capacity(count);
     for i in 0..count {
         if i % 4096 == 0 {
@@ -304,6 +317,25 @@ mod tests {
             assert_eq!(transformed.points, vec![expected]);
             assert_eq!(cloud.points[1], mk(4.));
         }
+    }
+
+    #[test]
+    fn las_budget_admits_ten_million_plain_points() {
+        assert!(las_budget(10_000_000, 34, 0, 8 * 1024 * 1024 * 1024).is_ok());
+    }
+
+    #[test]
+    fn las_budget_rejects_records_over_two_gib_and_memory_over_budget() {
+        assert!(
+            las_budget(10_000_000, 300, 0, usize::MAX)
+                .unwrap_err()
+                .contains("데이터")
+        );
+        assert!(
+            las_budget(10_000_000, 34, 0, 1024 * 1024 * 1024)
+                .unwrap_err()
+                .contains("메모리")
+        );
     }
 
     #[test]
