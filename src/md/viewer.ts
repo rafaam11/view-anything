@@ -500,9 +500,10 @@ return {
 
     const onLink = (e: MouseEvent) => handleLinkClick(e, baseDir, confirmLeave);
     article.addEventListener("click", onLink);
-    // Middle-click must not navigate the webview; the right button belongs to the context menu.
+    // Middle-click follows the link like a click (never navigating the webview itself); the right
+    // button belongs to the context menu and does nothing here.
     article.addEventListener("auxclick", (e) => {
-      if (e.button === 1 && (e.target as HTMLElement).closest("a")) e.preventDefault();
+      if (e.button === 1) onLink(e);
     });
     // Links inside the editor are edited, not followed; never let them navigate the webview.
     const blockNav = (e: MouseEvent) => {

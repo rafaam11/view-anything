@@ -477,7 +477,7 @@ test("the watch ends with the view", () => withFakeClock(async () => {
 }));
 
 test("focus looks at the stamp first and reads nothing when it is unchanged", () => withFakeClock(async () => {
-  const path = "D:\q\s.md";
+  const path = "D:\\\\q\\\\s.md";
   await mount(path, "# same\n");
   await rounds(1); // the first round has seen the file
   reads.length = 0;
@@ -487,7 +487,7 @@ test("focus looks at the stamp first and reads nothing when it is unchanged", ()
 }));
 
 test("a markdown file over 10 MiB is refused with a clear message", async () => {
-  const path = "D:\q\big.md";
+  const path = "D:\\\\q\\\\big.md";
   disk.set(path, new Uint8Array(10 * 1024 * 1024 + 1));
   const { createViewer } = await import("../src/md/viewer");
   await expect(createViewer(async () => editorFixture).mount(document.createElement("div"), path)).rejects.toThrow("10 MiB");
@@ -495,7 +495,7 @@ test("a markdown file over 10 MiB is refused with a clear message", async () => 
 });
 
 test("a file that grew past the limit keeps the screen", () => withFakeClock(async () => {
-  const path = "D:\q\grow.md";
+  const path = "D:\\\\q\\\\grow.md";
   const v = await mount(path, "# old\n");
   await rounds(1);
   disk.set(path, new Uint8Array(10 * 1024 * 1024 + 1));
@@ -506,22 +506,22 @@ test("a file that grew past the limit keeps the screen", () => withFakeClock(asy
   expect(reads).toEqual([]);
 }));
 
-test("right-click on a link is left to the context menu; middle-click only stops navigation", async () => {
-  const v = await mount("D:\q\l.md", "[x](https://example.com)\n");
+test("right-click on a link is left to the context menu; middle-click follows it without navigating the webview", async () => {
+  const v = await mount("D:\\\\q\\\\l.md", "[x](https://example.com)\n");
   const a = v.article.querySelector("a")!;
   a.dispatchEvent(new MouseEvent("auxclick", { button: 2, bubbles: true, cancelable: true }));
+  await settle();
+  expect(platform.openExternal).not.toHaveBeenCalled();
   const middle = new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true });
   a.dispatchEvent(middle);
   await settle();
-  expect(platform.openExternal).not.toHaveBeenCalled();
   expect(middle.defaultPrevented).toBe(true);
-  a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  await settle();
+  expect(platform.openExternal).toHaveBeenCalledTimes(1);
   expect(platform.openExternal).toHaveBeenCalledWith("https://example.com");
 });
 
 test("ctrl+e and ctrl+s stay out of an open dialog", async () => {
-  const v = await mount("D:\q\d.md", "# a\n");
+  const v = await mount("D:\\\\q\\\\d.md", "# a\n");
   const dialog = openDialog();
   press({ key: "e" });
   await settle();
@@ -531,7 +531,7 @@ test("ctrl+e and ctrl+s stay out of an open dialog", async () => {
 });
 
 test("a whole-file rewrite asks with the safe default and shows the reason", async () => {
-  const path = "D:\q\w.md";
+  const path = "D:\\\\q\\\\w.md";
   const v = await mount(path, "# a\n");
   v.toggle.click();
   await vi.waitFor(() => expect(v.toggle.textContent).toBe("읽기"));
@@ -540,4 +540,17 @@ test("a whole-file rewrite asks with the safe default and shows the reason", asy
   await settle();
   expect(platform.confirmDanger).toHaveBeenCalledWith(expect.stringContaining("사유: test reason"), "전체 다시 쓰기");
   expect(new TextDecoder().decode(disk.get(path))).toBe("# a\n");
+});
+
+test("ctrl+s in edit mode leaves an open dialog alone", async () => {
+  const path = "D:\\q\\ds.md";
+  const v = await mount(path, "# a\n");
+  v.toggle.click();
+  await vi.waitFor(() => expect(v.toggle.textContent).toBe("읽기"));
+  v.editorHost.dataset.testEditor = "# a\n\nmore\n";
+  const dialog = openDialog();
+  press({ key: "s" });
+  await settle();
+  expect(new TextDecoder().decode(disk.get(path))).toBe("# a\n");
+  dialog.remove();
 });
