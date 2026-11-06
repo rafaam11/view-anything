@@ -258,3 +258,21 @@ test("exported-HTML panel (no remove, no frame handler): no × or ⋯ buttons; c
   panel.setCollapsed(false);
   expect(panel.collapsed).toBe(false);
 });
+
+test("glyph buttons are named for what they do now: expand/collapse and the panel toggle follow their state", () => {
+  const { panel } = setup([sceneFile("f1", nested)]);
+  const asm = node(panel, "f1/0")!;
+  const twisty = btn(panel, "f1/0", "va3d-twisty");
+  const name = () => twisty.getAttribute("aria-label");
+  const before = asm.getAttribute("aria-expanded") === "true";
+  expect(name()).toBe(before ? "접기" : "펼치기");
+  twisty.click();
+  expect(name()).toBe(before ? "펼치기" : "접기");
+  expect(name()).toBe(twisty.title);
+  const toggle = panel.root.querySelector<HTMLButtonElement>(".va3d-panel-toggle")!;
+  panel.setCollapsed(true);
+  expect(toggle.getAttribute("aria-label")).toBe("장면 패널 펼치기");
+  panel.setCollapsed(false);
+  expect(toggle.getAttribute("aria-label")).toBe("장면 패널 접기");
+  panel.root.remove();
+});

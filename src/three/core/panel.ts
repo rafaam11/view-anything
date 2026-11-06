@@ -22,12 +22,17 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): 
   return e;
 }
 
+/** Glyph buttons: the tooltip and the accessible name always say the same, current action. */
+function name(b: HTMLButtonElement, text: string): void {
+  b.title = text;
+  b.setAttribute("aria-label", text);
+}
+
 function button(className: string, text: string, title: string, action: string): HTMLButtonElement {
   const b = el("button", className);
   b.type = "button";
   b.textContent = text;
-  b.title = title;
-  b.setAttribute("aria-label", title);
+  name(b, title);
   b.dataset.action = action;
   return b;
 }
@@ -296,7 +301,7 @@ export class ScenePanel {
     const t = item.querySelector<HTMLButtonElement>(":scope > .va3d-row > .va3d-twisty");
     if (t) {
       t.textContent = open ? "▾" : "▸";
-      t.title = open ? "접기" : "펼치기";
+      name(t, open ? "접기" : "펼치기");
     }
   }
 
@@ -308,7 +313,7 @@ export class ScenePanel {
     this.root.classList.toggle("collapsed", collapsed);
     this.tree.hidden = collapsed;
     this.toggleButton.textContent = collapsed ? "◀" : "▶";
-    this.toggleButton.title = collapsed ? "장면 패널 펼치기" : "장면 패널 접기";
+    name(this.toggleButton, collapsed ? "장면 패널 펼치기" : "장면 패널 접기");
   }
 
   private onClick(e: Event): void {
