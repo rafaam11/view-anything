@@ -15,7 +15,7 @@ export interface FileWatchOptions {
  * Polls by path: unlike a native watcher this also follows atomic replaces and network or synced
  * folders, and needs no per-window lifetime handling. Rounds never overlap.
  */
-export function watchFile(options: FileWatchOptions): { retry(): void } {
+export function watchFile(options: FileWatchOptions): { retry(): void; kick(): void } {
   const { intervalMs = 1000, settleMs = 150 } = options;
   const key = (s: FileStamp) => `${s.len}:${s.modified_ms}`;
   let last: string | null = null;
@@ -42,15 +42,18 @@ export function watchFile(options: FileWatchOptions): { retry(): void } {
     }
     timer = setTimeout(round, intervalMs);
   };
-  const onVisibility = () => {
+  /** Look now (shown again, window focused) unless a round is already in flight. */
+  const now = () => {
     if (document.hidden || running) return;
     clearTimeout(timer);
     void round();
   };
+  const onVisibility = now;
   document.addEventListener("visibilitychange", onVisibility);
   timer = setTimeout(round, intervalMs);
   return {
     /** The change could not be read after all; see it as new on the next round. */
     retry() { last = null; },
+    kick: now,
   };
 }

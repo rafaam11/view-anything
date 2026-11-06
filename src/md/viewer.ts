@@ -22,6 +22,8 @@ import { createWheelStepper, sizeShortcut, stepMdSize } from "./font-size";
 const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
 const REWRITE_MESSAGE = "원문 보존 불가 — 전체 재작성으로 저장할까요?";
 const CONFLICT_MESSAGE = "파일이 변경되었거나 읽을 수 없습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 읽기 모드에서 다시 여세요.";
+/** Same cap as the text viewer: the file is read whole into the webview and rendered at once. */
+const MAX_BYTES = 10 * 1024 * 1024;
 
 function dirOf(path: string): string {
   return path.replace(/[\\/][^\\/]*$/, "");
@@ -104,8 +106,13 @@ const hasOpenDialog = () => document.querySelector("dialog[open]") !== null;
 export function createViewer(loadEditor: () => Promise<Pick<typeof import("./editor"), "createEditor">> = () => import("./editor")): Viewer {
 return {
   async mount(el, path) {
+    /** Raw-bytes read behind a size check, like every other viewer (no JSON number arrays). */
+    const readBytes = async () => {
+      if (await platform.fileSize(path) > MAX_BYTES) throw new Error("Markdown 파일이 10 MiB를 초과합니다.");
+      return new Uint8Array(await platform.readFileRaw(path));
+    };
     /** The file bytes as last read or written; external changes are detected against them. */
-    let known = await platform.readFile(path);
+    let known: Uint8Array = await readBytes();
     const decoded = decodeText(known);
     const meta = { bom: decoded.bom, eol: decoded.eol };
     const baseDir = dirOf(path);
@@ -267,7 +274,7 @@ return {
       return d;
     };
     /** Current disk bytes, or null when the file cannot be read (deleted, locked). */
-    const readDisk = () => platform.readFile(path).catch(() => null);
+    const readDisk = () => readBytes().catch(() => null);
 
     const setDirty = (value: boolean) => {
       if (value === dirty) return;
@@ -413,9 +420,6 @@ return {
       adopt(onDisk);
       await render(true);
     };
-    window.addEventListener("focus", () => {
-      if (mode === "read") tasks.background(reloadIfChanged);
-    });
     /** A reload would drop a selection the reader is about to copy, so it waits for them. */
     const selectingText = () => {
       const selection = getSelection();
@@ -426,6 +430,10 @@ return {
       paused: () => mode !== "read" || tasks.busy || selectingText(),
       changed: () => tasks.background(reloadIfChanged),
       alive: () => root.isConnected,
+    });
+    // Activating the window looks at the stamp at once; the bytes are read only when it changed.
+    window.addEventListener("focus", () => {
+      if (mode === "read") watch.kick();
     });
 
     toggle.addEventListener("click", toggleMode);

@@ -12,6 +12,7 @@ export const platform = {
   async copyText(text: string): Promise<void> {
     await invoke("copy_text", { text });
   },
+  /** Small files only: the bytes travel as a JSON number array over a synchronous command. Viewers read through `readFileRaw`. */
   async readFile(path: string): Promise<Uint8Array> {
     return new Uint8Array(await invoke<number[]>("read_file", { path }));
   },

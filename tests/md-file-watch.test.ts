@@ -146,3 +146,27 @@ test("stops by itself once the view is gone", async () => {
   await vi.advanceTimersByTimeAsync(5000);
   expect(stat).not.toHaveBeenCalled();
 });
+
+test("kick runs a round at once instead of waiting for the timer", async () => {
+  const watch = await started();
+  stamp = { len: 2, modified_ms: 2 };
+  watch.kick();
+  await vi.advanceTimersByTimeAsync(160); // settle wait only, far less than a round
+  expect(changed).toHaveBeenCalledTimes(1);
+});
+
+test("kick while a round is in flight does not overlap", async () => {
+  const watch = await started();
+  let inFlight = 0, most = 0;
+  stat.mockImplementation(async () => {
+    most = Math.max(most, ++inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    inFlight--;
+    return stamp;
+  });
+  await vi.advanceTimersByTimeAsync(1000); // a round starts
+  watch.kick();
+  watch.kick();
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(most).toBe(1);
+});

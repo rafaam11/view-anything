@@ -6,19 +6,32 @@ import { applyPreferences, DEFAULTS, preferences } from "../src/settings/prefere
 const disk = new Map<string, Uint8Array>();
 /** Modification times for fileStat, for changes that keep the file's length. */
 const stamps = new Map<string, number>();
-/** When set, the next readFile waits for it (simulates a slow focus re-read). */
+/** When set, the next readFileRaw waits for it (simulates a slow focus re-read). */
 let gate: Promise<void> | null = null;
+/** Paths handed to readFileRaw, in order. */
+const reads: string[] = [];
 const enc = (s: string) => new TextEncoder().encode(s);
+/** Writes like another program would: the time changes even when the length does not. */
+const rewrite = (path: string, text: string) => {
+  disk.set(path, enc(text));
+  stamps.set(path, (stamps.get(path) ?? 0) + 1);
+};
 
 vi.mock("../src/platform", () => ({
   platform: {
-    readFile: async (p: string) => {
+    fileSize: async (p: string) => {
+      const b = disk.get(p);
+      if (!b) throw new Error("missing " + p);
+      return b.length;
+    },
+    readFileRaw: async (p: string) => {
+      reads.push(p);
       const g = gate;
       gate = null;
       if (g) await g;
       const b = disk.get(p);
       if (!b) throw new Error("missing " + p);
-      return b;
+      return b.slice().buffer;
     },
     writeFile: async (p: string, d: Uint8Array) => void disk.set(p, d),
     writeFileChecked: async (p: string, expected: Uint8Array, d: Uint8Array) => {
@@ -89,6 +102,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   gate = null;
+  reads.length = 0;
   mermaidGate = null;
   mermaidRoots.length = 0;
   localStorage.clear();
@@ -112,7 +126,7 @@ test("an edit toggle during a focus re-read is queued, not dropped", async () =>
   let release!: () => void;
   gate = new Promise<void>((r) => (release = r));
   window.dispatchEvent(new Event("focus")); // starts the (slow) re-read
-  await settle();
+  await vi.waitFor(() => expect(reads).toContain("D:\\q\\a.md"));
   v.toggle.click(); // arrives while the re-read is in flight
   await settle();
   expect(v.editorHost.hidden).toBe(true);
@@ -291,7 +305,7 @@ test("a reload redraws the search on the new content, keeping the position", asy
   search(v.el, "one");
   panelOf(v.el).querySelector<HTMLInputElement>("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
   expect(panelOf(v.el).querySelector(".md-find-count")!.textContent).toBe("2/3");
-  disk.set(path, enc("one one one one\n"));
+  rewrite(path, "one one one one\n");
   window.dispatchEvent(new Event("focus"));
   await vi.waitFor(() => expect(panelOf(v.el).querySelector(".md-find-count")!.textContent).toBe("2/4"));
   expect(v.article.querySelectorAll("mark").length).toBe(4);
@@ -304,7 +318,7 @@ test("code blocks get a copy button, also after a reload, and diagrams do not", 
   expect(v.article.querySelectorAll(".md-code-copy").length).toBe(1);
   v.article.querySelector<HTMLButtonElement>(".md-code-copy")!.click();
   expect(platform.copyText).toHaveBeenLastCalledWith("const a = 1;");
-  disk.set(path, enc("```\nnew\n```\n"));
+  rewrite(path, "```\nnew\n```\n");
   window.dispatchEvent(new Event("focus"));
   await vi.waitFor(() => expect(v.article.textContent).toContain("new"));
   expect(v.article.querySelectorAll(".md-code-copy").length).toBe(1);
@@ -315,10 +329,9 @@ test("a reload keeps the old content on screen until the new one is finished", a
   const v = await mount(path, "# old\n");
   let release!: () => void;
   mermaidGate = new Promise<void>((r) => (release = r));
-  disk.set(path, enc("# new\n"));
+  rewrite(path, "# new\n");
   window.dispatchEvent(new Event("focus"));
-  await settle();
-  expect(mermaidRoots.at(-1)).not.toBe(v.article);
+  await vi.waitFor(() => expect(mermaidRoots.at(-1)).not.toBe(v.article));
   expect(v.article.textContent).toContain("old");
   release();
   await vi.waitFor(() => expect(v.article.textContent).toContain("new"));
@@ -332,9 +345,9 @@ test("a reload restores where the reader has scrolled to by then", async () => {
   v.el.scrollTop = 120;
   let release!: () => void;
   mermaidGate = new Promise<void>((r) => (release = r));
-  disk.set(path, enc("# new\n"));
+  rewrite(path, "# new\n");
   window.dispatchEvent(new Event("focus"));
-  await settle();
+  await vi.waitFor(() => expect(mermaidRoots.at(-1)).not.toBe(v.article));
   v.el.scrollTop = 300;
   const scrollTo = vi.spyOn(v.el, "scrollTo");
   release();
@@ -346,7 +359,7 @@ test("a reload keeps the details the reader opened, so the page height stays", a
   const path = "D:\\q\\l.md";
   const v = await mount(path, "<details><summary>a</summary>x</details>\n\n<details><summary>b</summary>y</details>\n");
   v.article.querySelectorAll("details")[1].open = true;
-  disk.set(path, enc("<details><summary>a</summary>x2</details>\n\n<details><summary>b</summary>y2</details>\n"));
+  rewrite(path, "<details><summary>a</summary>x2</details>\n\n<details><summary>b</summary>y2</details>\n");
   window.dispatchEvent(new Event("focus"));
   await vi.waitFor(() => expect(v.article.textContent).toContain("y2"));
   expect([...v.article.querySelectorAll("details")].map((d) => d.open)).toEqual([false, true]);
@@ -357,9 +370,9 @@ test("a theme change during the preparation redraws the diagrams after the swap"
   const v = await mount(path, "# old\n");
   let release!: () => void;
   mermaidGate = new Promise<void>((r) => (release = r));
-  disk.set(path, enc("# new\n"));
+  rewrite(path, "# new\n");
   window.dispatchEvent(new Event("focus"));
-  await settle();
+  await vi.waitFor(() => expect(mermaidRoots.at(-1)).not.toBe(v.article));
   themeChanged();
   mermaidGate = null;
   mermaidRoots.length = 0;
@@ -383,11 +396,6 @@ const withFakeClock = async (run: () => Promise<void>) => {
   try { await run(); } finally { vi.useRealTimers(); }
 };
 const rounds = (n: number) => vi.advanceTimersByTimeAsync(n * 1200);
-/** Writes like another program would: the time changes even when the length does not. */
-const rewrite = (path: string, text: string) => {
-  disk.set(path, enc(text));
-  stamps.set(path, (stamps.get(path) ?? 0) + 1);
-};
 
 test("a change on disk shows without the window being activated", () => withFakeClock(async () => {
   const path = "D:\\q\\o.md";
@@ -457,4 +465,34 @@ test("the watch ends with the view", () => withFakeClock(async () => {
   await rounds(3);
   expect(stat).not.toHaveBeenCalled();
   stat.mockRestore();
+}));
+
+test("focus looks at the stamp first and reads nothing when it is unchanged", () => withFakeClock(async () => {
+  const path = "D:\q\s.md";
+  await mount(path, "# same\n");
+  await rounds(1); // the first round has seen the file
+  reads.length = 0;
+  window.dispatchEvent(new Event("focus"));
+  await rounds(1);
+  expect(reads).toEqual([]);
+}));
+
+test("a markdown file over 10 MiB is refused with a clear message", async () => {
+  const path = "D:\q\big.md";
+  disk.set(path, new Uint8Array(10 * 1024 * 1024 + 1));
+  const { createViewer } = await import("../src/md/viewer");
+  await expect(createViewer(async () => editorFixture).mount(document.createElement("div"), path)).rejects.toThrow("10 MiB");
+  expect(reads).toEqual([]);
+});
+
+test("a file that grew past the limit keeps the screen", () => withFakeClock(async () => {
+  const path = "D:\q\grow.md";
+  const v = await mount(path, "# old\n");
+  await rounds(1);
+  disk.set(path, new Uint8Array(10 * 1024 * 1024 + 1));
+  stamps.set(path, 9);
+  reads.length = 0;
+  await rounds(3);
+  expect(v.article.textContent).toContain("old");
+  expect(reads).toEqual([]);
 }));
