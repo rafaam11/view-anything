@@ -132,3 +132,18 @@ test("the classification colour mode follows the field and shows a legend", asyn
   expect(legend.querySelector("li:last-child")!.textContent).toBe("그 외");
   expect(legend.querySelector("li")!.textContent).toBe("0 미분류");
 });
+test("a failed operation shows once in the error banner and clears the progress line; a cancel is only a note", async () => {
+  const { c, h } = await setup();
+  const status = c.root.querySelector<HTMLElement>("[role=status]")!;
+  mocks.request.mockImplementationOnce(async (_a: unknown, _m: unknown, progress: (t: string) => void) => { progress("40%"); throw new Error("디스크가 가득 찼습니다"); });
+  click("선택 부분 삭제");
+  await vi.waitFor(() => expect(c.isBusy()).toBe(false));
+  expect(h.notice).toHaveBeenCalledWith("디스크가 가득 찼습니다", "error");
+  expect(status.textContent).toBe("");
+  vi.mocked(h.notice).mockClear();
+  mocks.request.mockImplementationOnce(async (_a: unknown, _m: unknown, progress: (t: string) => void) => { progress("취소 요청됨…"); throw new DOMException("작업을 취소했습니다", "AbortError"); });
+  click("선택 부분 삭제");
+  await vi.waitFor(() => expect(c.isBusy()).toBe(false));
+  expect(h.notice).not.toHaveBeenCalled();
+  expect(status.textContent).toBe("작업을 취소했습니다");
+});

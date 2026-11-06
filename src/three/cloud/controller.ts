@@ -132,6 +132,12 @@ export class CloudController {
     registerUpdateGuard(() => this.dirty() || this.isBusy(), (approved) => { this.approved = approved; if (approved) this.cancel(); });
     void platform.onCloseRequested(async () => this.approved || (!(this.dirty() || this.isBusy())) || await platform.confirmDiscard("저장하지 않은 포인트클라우드 작업을 버리고 닫을까요?", "닫기"));
   }
+  /** An operation ended without a result: a cancel is a note in the status line, a failure shows once, in the error banner. */
+  private fail(error: unknown): void {
+    if (error instanceof DOMException && error.name === "AbortError") { this.status.textContent = "작업을 취소했습니다"; return; }
+    this.status.textContent = "";
+    this.host.notice(errorMessage(error), "error");
+  }
   private button(text: string, run: () => void) { const b = textButton(text); b.onclick = run; return b; }
   private label(text: string, input: HTMLElement, parent: HTMLElement = this.body) { const l = el("label", text); l.append(input); parent.append(l); }
   private number(text: string, value: string, min: number) { const i = el("input"); i.type = "number"; i.step = "any"; i.min = String(min); i.value = value; this.label(text, i, this.editBody); return i; }
@@ -226,7 +232,7 @@ export class CloudController {
       if (action.type !== "save") await this.rebuild(id, e); else e.savedAlignment.copy(e.alignment);
       this.status.textContent = action.type === "save" ? "" : "완료";
       if (action.type === "save") toast(SAVED);
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
     finally { this.busy = false; this.committed = false; this.buildAbort = null; this.sync(); }
   }
   private recordHistory(e: Entry, item: History): void { e.undo.push(item); if (e.undo.length > 20) e.undo.shift(); e.redo = []; }
@@ -245,7 +251,7 @@ export class CloudController {
         this.setAlignment(id, matrix); e.alignment.copy(matrix); from.pop(); to.push(item); alignmentChanged = true;
       }
       this.status.textContent = direction === "undo" ? "실행 취소 완료" : "다시 실행 완료";
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
     finally { this.busy = false; this.committed = false; this.buildAbort = null; this.sync(); }
     if (alignmentChanged && e.display.mode === "height") await this.framesChanged(id);
   }
@@ -261,7 +267,7 @@ export class CloudController {
       const exists = await platform.pathExists(path);
       if (exists && !await platform.confirmDanger("기존 저장 파일을 교체할까요? 원본 파일은 덮어쓸 수 없습니다.", "교체")) return;
       if (!this.cancelled) action = { type: "save", path, overwrite: exists, matrix: e.alignment.equals(new Matrix4()) ? undefined : e.alignment.toArray() };
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
     finally { this.busy = false; this.sync(); }
     if (action) await this.act(action);
   }
@@ -290,7 +296,7 @@ export class CloudController {
       this.setAlignment(id, after);
       this.registrationPreview = { id, target: targetId, before: source.alignment.clone(), after };
       this.status.textContent = `정합 미리보기: 대응 ${result.pairs.toLocaleString()}/${result.sampledSource.toLocaleString()}점 (${(result.fitness * 100).toFixed(1)}%), 기준 표본 ${result.sampledTarget.toLocaleString()}점, RMSE ${result.rmse.toPrecision(4)}, ${result.iterations}회, ${result.converged ? "수렴" : "반복 한도 도달"}`;
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
     finally { this.busy = false; this.sync(); }
   }
   private finishRegistration(accept: boolean): void {
@@ -300,7 +306,7 @@ export class CloudController {
       if (accept) { entry.alignment.copy(preview.after); this.recordHistory(entry, { kind: "alignment", before: preview.before.clone(), after: preview.after.clone() }); } else this.setAlignment(preview.id, preview.before);
       this.registrationPreview = null; this.status.textContent = accept ? "정합을 적용했습니다. 다른 이름으로 저장하세요." : "정합을 취소했습니다.";
       if (accept && entry.display.mode === "height") void this.framesChanged(preview.id);
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
     this.sync();
   }
   private async changeDisplay() {
@@ -319,7 +325,7 @@ export class CloudController {
       const min = this.rangeMin.valueAsNumber, max = this.rangeMax.valueAsNumber;
       if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) throw new Error("색상 범위를 확인하세요");
       e.display = { ...e.display, mode, range: [min, max] }; await this.rebuild(id, e);
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
     finally { this.busy = false; this.committed = false; this.sync(); }
   }
   async framesChanged(fileId?: string): Promise<void> {
@@ -375,6 +381,6 @@ export class CloudController {
       const p = await this.client.point(e.meta.id, id); if (this.selected !== selected || e.meta.revision !== revision || this.mode !== "point") return;
       const display = new Vector3(...p.position).applyMatrix4(matrix);
       this.info.textContent = `점 #${p.id}\n원본: ${p.position.join(", ")}\n화면: ${display.toArray().join(", ")}\n` + Object.entries(p.fields).map(([name, v]) => `${name}: ${v.values.join(", ")}${v.count > v.values.length ? ` … (${v.count}개)` : ""}`).join("\n");
-    } catch (error) { this.host.notice(errorMessage(error), "error"); }
+    } catch (error) { this.fail(error); }
   }
 }
