@@ -76,10 +76,10 @@ pub fn align(
                 .query(&q)
                 .nearest_n::<SquaredEuclidean<f64>>(NonZeroUsize::new(1).unwrap())
                 .execute();
-            if let Some(hit) = hit.first() {
-                if hit.distance <= max_distance * max_distance {
-                    correspondence.push((p, Vector3::from(target[hit.item as usize])));
-                }
+            if let Some(hit) = hit.first()
+                && hit.distance <= max_distance * max_distance
+            {
+                correspondence.push((p, Vector3::from(target[hit.item as usize])));
             }
         }
         pairs = correspondence.len();

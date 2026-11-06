@@ -15,10 +15,13 @@ use tauri::{Emitter, Manager};
 
 const APP_BYTES: usize = 8 * 1024 * 1024 * 1024;
 const CHUNK: usize = 25_000;
+/// A running job: owning window label, the session it works on (if any) and its cancel flag.
+type Job = (String, Option<String>, Arc<AtomicBool>);
+
 #[derive(Default)]
 pub struct Clouds {
     sessions: Mutex<HashMap<String, Arc<Mutex<Session>>>>,
-    jobs: Mutex<HashMap<String, (String, Option<String>, Arc<AtomicBool>)>>,
+    jobs: Mutex<HashMap<String, Job>>,
     busy: AtomicBool,
     seq: AtomicU64,
 }
@@ -233,6 +236,7 @@ fn registration_points(
 }
 
 /// Compute a preview only; neither point records nor the scene are mutated here.
+#[allow(clippy::too_many_arguments)] // one argument per IPC field; a struct would only move the list
 #[tauri::command]
 pub async fn cloud_register(
     window: tauri::WebviewWindow,
@@ -620,6 +624,7 @@ fn save(
     save_transformed(cloud, ids, source, target, overwrite, job, None, check)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn save_transformed(
     cloud: &Cloud,
     ids: &[u32],
@@ -630,15 +635,10 @@ fn save_transformed(
     matrix: Option<&[f64; 16]>,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<()> {
-    if let Some(m) = matrix {
-        if !m.iter().all(|v| v.is_finite())
-            || m[3] != 0.
-            || m[7] != 0.
-            || m[11] != 0.
-            || m[15] != 1.
-        {
-            return Err("저장 좌표 변환이 잘못되었습니다".into());
-        }
+    if let Some(m) = matrix
+        && (!m.iter().all(|v| v.is_finite()) || m[3] != 0. || m[7] != 0. || m[11] != 0. || m[15] != 1.)
+    {
+        return Err("저장 좌표 변환이 잘못되었습니다".into());
     }
     let target = crate::write_target(target);
     let parent = target
@@ -766,10 +766,10 @@ fn rename_new(source: &Path, target: &Path) -> std::io::Result<()> {
 
 #[tauri::command]
 pub fn cloud_cancel(window: tauri::WebviewWindow, state: tauri::State<Clouds>, job_id: String) {
-    if let Some((owner, _, c)) = state.jobs.lock().unwrap().get(&job_id) {
-        if owner == window.label() {
-            c.store(true, Ordering::Relaxed);
-        }
+    if let Some((owner, _, c)) = state.jobs.lock().unwrap().get(&job_id)
+        && owner == window.label()
+    {
+        c.store(true, Ordering::Relaxed);
     }
 }
 #[tauri::command]

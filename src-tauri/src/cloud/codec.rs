@@ -150,7 +150,7 @@ impl Cloud {
     pub fn record(&self, id: u32) -> &[u8] {
         &self.bytes[self.offsets[id as usize] as usize..self.offsets[id as usize + 1] as usize]
     }
-    pub fn values<'a>(&'a self, id: u32) -> impl Iterator<Item = (&'a Field, &'a [u8])> {
+    pub fn values(&self, id: u32) -> impl Iterator<Item = (&Field, &[u8])> {
         let record = self.record(id);
         let mut at = 0;
         self.fields.iter().map(move |f| {

@@ -559,15 +559,15 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let target = dir.join("ro.md");
         std::fs::write(&target, b"keep").unwrap();
-        let mut perm = std::fs::metadata(&target).unwrap().permissions();
-        perm.set_readonly(true);
-        std::fs::set_permissions(&target, perm.clone()).unwrap();
+        let writable = std::fs::metadata(&target).unwrap().permissions();
+        let mut read_only = writable.clone();
+        read_only.set_readonly(true);
+        std::fs::set_permissions(&target, read_only).unwrap();
         let err = write_atomic(&target, b"new").unwrap_err();
         assert!(err.to_string().contains("읽기 전용"), "{err}");
         assert_eq!(std::fs::read(&target).unwrap(), b"keep");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
-        perm.set_readonly(false);
-        std::fs::set_permissions(&target, perm).unwrap();
+        std::fs::set_permissions(&target, writable).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
