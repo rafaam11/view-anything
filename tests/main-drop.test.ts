@@ -216,3 +216,22 @@ test("a viewer that fails to mount offers opening the file as text", async () =>
   expect(new URLSearchParams(location.search).get("text")).toBe("1");
   expect(fileParam()).toBe(MD);
 });
+
+test("a failed text open is reported instead of rejected silently", async () => {
+  await start(null);
+  platform.pickFiles.mockResolvedValueOnce([TXT]);
+  platform.openWindow.mockRejectedValueOnce(new Error("boom"));
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "O", ctrlKey: true, shiftKey: true }));
+  await settle();
+  expect(platform.alert).toHaveBeenCalledWith("Error: boom");
+});
+
+test("global shortcuts do not reach later window listeners", async () => {
+  await start(MD);
+  const later = vi.fn();
+  window.addEventListener("keydown", later, true);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "o", ctrlKey: true }));
+  f11();
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true }));
+  expect(later).not.toHaveBeenCalled();
+});

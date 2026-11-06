@@ -74,7 +74,11 @@ export async function startUpdater(): Promise<void> {
       if (before.owner !== current.label) return false;
       activeProbe = { id: crypto.randomUUID(), owner: current.label, phase: "prepare" };
       const prepared = await round(activeProbe, before.windows);
-      if (!prepared.ok) return false;
+      if (!prepared.ok) {
+        // A window that is still mounting (or hung) did not answer within the round: say so instead of staying silent.
+        void platform.notice("다른 창이 응답하지 않아 업데이트 설치를 미뤘습니다. 창을 확인한 뒤 다시 시도하세요.").catch(() => {});
+        return false;
+      }
       await current.setFocus();
       if (!await confirmRestart(prepared.dirty)) return false;
       const after = await context();

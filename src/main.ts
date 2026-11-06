@@ -143,7 +143,10 @@ async function pickAndOpen(append = false, text = false) {
   } finally {
     picking = false; // the dialog is closed; routing below must not block the next Ctrl+O
   }
-  if (text) { for (const p of paths) await platform.openWindow(p, true); return; }
+  if (text) {
+    for (const p of paths) await platform.openWindow(p, true).catch((e) => platform.alert(String(e)).catch(() => {}));
+    return;
+  }
   const run = append && kind === "3d" ? appendPaths(paths) : openPaths(paths, false);
   await run.catch((e) => platform.alert(String(e)).catch(() => {}));
 }
@@ -169,7 +172,7 @@ window.addEventListener(
     // Every viewer handles F11: opening another format reloads the page, and a window without
     // its titlebar must stay escapable from whatever it shows next.
     if (e.key === "F11") {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (!e.repeat && !document.querySelector("dialog[open]")) void toggleFullscreen().catch((err) => platform.alert(String(err)).catch(() => {}));
       return;
     }
@@ -177,15 +180,15 @@ window.addEventListener(
       e.preventDefault(); e.stopImmediatePropagation();
       if (!e.repeat) void import("./settings/dialog").then(m => m.openSettings());
     } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "o") {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (!e.repeat) void pickAndOpen(false, true);
     } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       if (!e.repeat) cycleTheme();
     } else if (isOpenKey(e)) {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       if (!e.repeat) void pickAndOpen(); // a held key must not queue dialogs
     }
   },

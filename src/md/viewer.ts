@@ -366,7 +366,7 @@ return {
         setDirty(false);
         return;
       }
-      if (plan.kind === "rewrite" && !(await platform.confirm(REWRITE_MESSAGE))) {
+      if (plan.kind === "rewrite" && !(await platform.confirmDanger(`${REWRITE_MESSAGE}\n\n사유: ${plan.reason}`, "전체 다시 쓰기"))) {
         tasks.dropQueuedSave(); // a Ctrl+S queued behind the dialog would only ask the same again
         return;
       }
@@ -396,7 +396,7 @@ return {
     copy.addEventListener("click", () => tasks.user(async () => {
       if (!editor) return;
       const plan = planSave(original, baseline, editor.getMarkdown());
-      if (plan.kind === "rewrite" && !(await platform.confirm(REWRITE_MESSAGE))) return;
+      if (plan.kind === "rewrite" && !(await platform.confirmDanger(`${REWRITE_MESSAGE}\n\n사유: ${plan.reason}`, "전체 다시 쓰기"))) return;
       const text = plan.kind === "unchanged" ? original : plan.text;
       if (await saveCopy(path, encodeText(text, meta))) await platform.notice("복사본을 저장했습니다. 원본 편집 내용은 그대로 유지합니다.");
     }));
@@ -450,11 +450,13 @@ return {
       "keydown",
       (e) => {
         if (isKey(e, "e")) {
+          if (hasOpenDialog()) return;
           e.preventDefault();
           e.stopPropagation();
           // A held key would queue enter-then-leave; only the first press counts.
           if (!e.repeat) toggleMode();
         } else if (isKey(e, "s")) {
+          if (hasOpenDialog()) return;
           e.preventDefault();
           e.stopPropagation();
           if (!e.repeat) requestSave();
@@ -498,7 +500,10 @@ return {
 
     const onLink = (e: MouseEvent) => handleLinkClick(e, baseDir, confirmLeave);
     article.addEventListener("click", onLink);
-    article.addEventListener("auxclick", onLink); // middle-click must not navigate the webview
+    // Middle-click must not navigate the webview; the right button belongs to the context menu.
+    article.addEventListener("auxclick", (e) => {
+      if (e.button === 1 && (e.target as HTMLElement).closest("a")) e.preventDefault();
+    });
     // Links inside the editor are edited, not followed; never let them navigate the webview.
     const blockNav = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest("a")) e.preventDefault();

@@ -12,6 +12,7 @@ const mock = vi.hoisted(() => ({
   check: vi.fn(),
   render: vi.fn(),
   relaunch: vi.fn(async () => {}),
+  notice: vi.fn(async () => {}),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: async (command: string, args: any) => {
   if (command === "update_context") {
@@ -32,7 +33,7 @@ vi.mock("@tauri-apps/api/event", () => ({
     }
   },
 }));
-vi.mock("../src/platform", () => ({ platform: { openExternal: async () => {} } }));
+vi.mock("../src/platform", () => ({ platform: { openExternal: async () => {}, notice: mock.notice } }));
 vi.mock("../src/update/badge", () => ({ updateBadge: () => mock.render, confirmRestart: mock.confirm }));
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: mock.check }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: mock.relaunch }));
@@ -75,6 +76,7 @@ test("an unresponsive window prevents restart and releases the freeze after time
   expect(mock.confirm).not.toHaveBeenCalled();
   expect(mock.install).not.toHaveBeenCalled();
   expect(document.getElementById("app")!.hasAttribute("inert")).toBe(false);
+  expect(mock.notice).toHaveBeenCalledTimes(1);
 });
 test("previous failed attempt is consumed once and shown without automatic check", async () => {
   localStorage.setItem("va.update.attempt", '{"from":"0.2.0","to":"0.3.0"}');

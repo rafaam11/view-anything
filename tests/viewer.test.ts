@@ -51,15 +51,24 @@ vi.mock("../src/platform", () => ({
     setWindowTitle: async () => {},
     confirm: vi.fn(async () => true),
     confirmDiscard: vi.fn(async () => true),
-    confirmDanger: async () => false,
+    confirmDanger: vi.fn(async () => false),
     notice: async () => {},
     alert: async () => {},
     onCloseRequested: async () => {},
     pathExists: async () => true,
-    openExternal: async () => {},
+    openExternal: vi.fn(async () => {}),
     openWithDefaultApp: async () => {},
   },
 }));
+// A save plan the splice cannot produce from the fixture editor: "FORCE-REWRITE" stands for a SpliceError.
+vi.mock("../src/md/viewer-state", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/md/viewer-state")>();
+  return {
+    ...actual,
+    planSave: (original: string, baseline: string, edited: string) =>
+      edited.includes("FORCE-REWRITE") ? { kind: "rewrite", text: edited, reason: "test reason" } : actual.planSave(original, baseline, edited),
+  };
+});
 /** When set, diagrams take until it resolves (simulates slow rendering). */
 let mermaidGate: Promise<void> | null = null;
 const mermaidRoots: HTMLElement[] = [];
@@ -496,3 +505,39 @@ test("a file that grew past the limit keeps the screen", () => withFakeClock(asy
   expect(v.article.textContent).toContain("old");
   expect(reads).toEqual([]);
 }));
+
+test("right-click on a link is left to the context menu; middle-click only stops navigation", async () => {
+  const v = await mount("D:\q\l.md", "[x](https://example.com)\n");
+  const a = v.article.querySelector("a")!;
+  a.dispatchEvent(new MouseEvent("auxclick", { button: 2, bubbles: true, cancelable: true }));
+  const middle = new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true });
+  a.dispatchEvent(middle);
+  await settle();
+  expect(platform.openExternal).not.toHaveBeenCalled();
+  expect(middle.defaultPrevented).toBe(true);
+  a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  await settle();
+  expect(platform.openExternal).toHaveBeenCalledWith("https://example.com");
+});
+
+test("ctrl+e and ctrl+s stay out of an open dialog", async () => {
+  const v = await mount("D:\q\d.md", "# a\n");
+  const dialog = openDialog();
+  press({ key: "e" });
+  await settle();
+  expect(v.toggle.textContent).toBe("편집");
+  expect(v.editorHost.hidden).toBe(true);
+  dialog.remove();
+});
+
+test("a whole-file rewrite asks with the safe default and shows the reason", async () => {
+  const path = "D:\q\w.md";
+  const v = await mount(path, "# a\n");
+  v.toggle.click();
+  await vi.waitFor(() => expect(v.toggle.textContent).toBe("읽기"));
+  v.editorHost.dataset.testEditor = "FORCE-REWRITE\n";
+  press({ key: "s" });
+  await settle();
+  expect(platform.confirmDanger).toHaveBeenCalledWith(expect.stringContaining("사유: test reason"), "전체 다시 쓰기");
+  expect(new TextDecoder().decode(disk.get(path))).toBe("# a\n");
+});

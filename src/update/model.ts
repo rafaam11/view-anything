@@ -67,7 +67,8 @@ export class UpdateController {
         if (percent !== last) { last = percent; this.set({ state: "downloading", version, percent }); }
       });
       this.set({ state: "downloaded", version });
-    } catch {
+    } catch (e) {
+      console.warn("update check failed", e); // the badge only shows "error"; the cause stays in the console
       await this.handle?.close().catch(() => {});
       this.handle = null;
       this.set({ state: "error" });
