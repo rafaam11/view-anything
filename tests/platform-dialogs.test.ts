@@ -141,17 +141,27 @@ test("a second close request while the first one asks is ignored", async () => {
   expect(first.preventDefault).toHaveBeenCalled();
 });
 
-test("a failing close check falls back to the webview's own question", async () => {
+test("a failing close check still asks in the app, and the answer decides", async () => {
   let handler: (e: { preventDefault(): void }) => Promise<void> = async () => {};
   win.onCloseRequested.mockImplementation(async (h) => { handler = h; });
   await platform.onCloseRequested(async () => { throw new Error("boom"); });
-  const confirm = vi.fn(() => true);
+  // The dialog plugin replaces window.confirm with an async IPC call (a truthy Promise): never rely on it.
+  const confirm = vi.fn(() => Promise.resolve(false));
   vi.stubGlobal("confirm", confirm);
   try {
-    const e = { preventDefault: vi.fn() };
-    await handler(e);
-    expect(confirm).toHaveBeenCalledOnce();
-    expect(e.preventDefault).not.toHaveBeenCalled();
+    const kept = { preventDefault: vi.fn() };
+    const asking = handler(kept);
+    const d = await dialog();
+    expect(d.labels).toEqual(["닫기", "취소"]);
+    d.press("취소");
+    await asking;
+    expect(kept.preventDefault).toHaveBeenCalled();
+    const closed = { preventDefault: vi.fn() };
+    const again = handler(closed);
+    (await dialog()).press("닫기");
+    await again;
+    expect(closed.preventDefault).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
   } finally {
     vi.unstubAllGlobals();
   }

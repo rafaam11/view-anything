@@ -151,8 +151,13 @@ export const platform = {
       try {
         ok = await allowClose();
       } catch {
-        // A throwing handler would leave the window impossible to close; fall back to the webview.
-        ok = window.confirm(DISCARD_CLOSE);
+        // A throwing check would leave the window impossible to close: ask in the app instead.
+        // (Not window.confirm: the dialog plugin turns it into an async call whose Promise is truthy.)
+        try {
+          ok = await platform.confirmDiscard(DISCARD_CLOSE, "닫기");
+        } catch {
+          ok = true;
+        }
       } finally {
         asking = false;
       }
