@@ -65,3 +65,17 @@ test('password prompt permits retry and cancellation without retaining the passw
   await vi.waitFor(() => expect(second.querySelector('input[type=password]')).not.toBeNull()); find(second, '취소').click();
   await expect(cancelled).rejects.toThrow('취소');
 });
+test('zoom stays within 25% and 300% and the page input clamps to the document', async () => {
+  const root = document.createElement('div'); await viewer.mount(root, 'test.pdf');
+  const label = () => [...root.querySelectorAll('span')].find(s => /^\d+%$/.test(s.textContent ?? ''))!.textContent;
+  expect(label()).toBe('100%');
+  for (let i = 0; i < 20; i++) find(root, '확대').click();
+  await vi.waitFor(() => expect(label()).toBe('300%'));
+  for (let i = 0; i < 20; i++) find(root, '축소').click();
+  await vi.waitFor(() => expect(label()).toBe('25%'));
+  const page = root.querySelector<HTMLInputElement>('input[type=number]')!;
+  page.value = '9'; page.dispatchEvent(new Event('change'));
+  await vi.waitFor(() => expect(page.value).toBe('2'));
+  page.value = '0'; page.dispatchEvent(new Event('change'));
+  await vi.waitFor(() => expect(page.value).toBe('1'));
+});
