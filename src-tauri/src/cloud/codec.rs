@@ -5,6 +5,18 @@ pub const MAX_POINTS: usize = 10_000_000;
 pub const MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub type Result<T> = std::result::Result<T, String>;
 
+/// Refuse a file by its declared point count, before any body is read. `max_points` is what the
+/// window's scene has left of `MAX_POINTS`.
+pub fn point_limit(count: usize, max_points: usize) -> Result<()> {
+    if count <= max_points {
+        Ok(())
+    } else if max_points < MAX_POINTS {
+        Err("장면 합계 1천만 점 한도를 초과합니다".into())
+    } else {
+        Err("1천만 점 한도를 초과합니다".into())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Scalar {
     I8,
@@ -231,12 +243,13 @@ pub fn read<R: BufRead>(
     ext: &str,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<Parsed> {
-    read_budget(r, ext, usize::MAX, check)
+    read_budget(r, ext, usize::MAX, MAX_POINTS, check)
 }
 pub fn read_budget<R: BufRead>(
     mut r: R,
     ext: &str,
     available: usize,
+    max_points: usize,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<Parsed> {
     let mut header = 0;
@@ -405,9 +418,7 @@ pub fn read_budget<R: BufRead>(
     } else {
         return Err("PCD/PLY만 지원합니다".into());
     }
-    if n > MAX_POINTS {
-        return Err("1천만 점 한도를 초과합니다".into());
-    }
+    point_limit(n, max_points)?;
     if fields.is_empty() || fields.len() > 1024 {
         return Err("필드 개수 오류".into());
     }
@@ -899,8 +910,17 @@ mod tests {
     fn budget_rejects_before_body_allocation() {
         let header = pcd_header("binary");
         assert!(
-            matches!(read_budget(std::io::Cursor::new(header),"pcd",16,&mut|_,_|Ok(())),Err(e) if e.contains("메모리"))
+            matches!(read_budget(std::io::Cursor::new(header),"pcd",16,MAX_POINTS,&mut|_,_|Ok(())),Err(e) if e.contains("메모리"))
         );
+    }
+    #[test]
+    fn point_limit_is_checked_before_the_body_is_read() {
+        // Three points declared, none in the body: the limit must fire on the header alone.
+        let pcd = b"VERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\nWIDTH 3\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 3\nDATA ascii\n";
+        let err = read_budget(std::io::Cursor::new(&pcd[..]), "pcd", usize::MAX, 2, &mut |_, _| Ok(()))
+            .err()
+            .unwrap();
+        assert!(err.contains("장면 합계"), "{err}");
     }
     fn parse(b: &[u8], ext: &str) -> Cloud {
         match read(std::io::Cursor::new(b), ext, &mut |_, _| Ok(())).unwrap() {

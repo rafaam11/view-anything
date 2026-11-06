@@ -1,5 +1,5 @@
 //! LAS/LAZ attributed-point codec.
-use super::codec::{MAX_BYTES, MAX_POINTS, Result};
+use super::codec::{MAX_BYTES, Result, point_limit};
 use std::io::{Read, Seek, Write};
 
 #[derive(Clone, Debug)]
@@ -146,6 +146,7 @@ pub fn las_budget(count: usize, record_len: usize, extra_bytes: usize, budget: u
 pub fn read<R: Read + Seek + Send + Sync + 'static>(
     reader: R,
     budget: usize,
+    max_points: usize,
     check: &mut impl FnMut(usize, usize) -> Result<()>,
 ) -> Result<LasCloud> {
     let mut reader = las::Reader::new(reader).map_err(|e| e.to_string())?;
@@ -174,9 +175,7 @@ pub fn read<R: Read + Seek + Send + Sync + 'static>(
         return Err("COPC 계층 정보는 보존 저장할 수 없습니다".into());
     }
     let count = usize::try_from(header.number_of_points()).map_err(|_| "점 개수가 너무 큽니다")?;
-    if count > MAX_POINTS {
-        return Err("점 개수 한도를 초과합니다".into());
-    }
+    point_limit(count, max_points)?;
     las_budget(
         count,
         header.point_format().len() as usize,
@@ -242,6 +241,7 @@ pub fn write_transformed<W: Write + Seek + Send + Sync + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::codec::MAX_POINTS;
     use super::*;
     use std::io::Cursor;
     #[test]
@@ -279,14 +279,14 @@ mod tests {
             writer.write_point(mk(4.)).unwrap();
             let mut cursor = writer.into_inner().unwrap();
             cursor.set_position(0);
-            let cloud = read(cursor, 1_000_000, &mut |_, _| Ok(())).unwrap();
+            let cloud = read(cursor, 1_000_000, MAX_POINTS, &mut |_, _| Ok(())).unwrap();
             let display = into_cloud(cloud.clone()).unwrap();
             assert_eq!(display.value(1, "red"), Some(65535.));
             assert_eq!(display.rgb(1), Some([255, 116, 1]));
             let mut output =
                 write(&cloud, &[1], Cursor::new(Vec::new()), &mut |_, _| Ok(())).unwrap();
             output.set_position(0);
-            let result = read(output, 1_000_000, &mut |_, _| Ok(())).unwrap();
+            let result = read(output, 1_000_000, MAX_POINTS, &mut |_, _| Ok(())).unwrap();
             assert_eq!(result.points, vec![mk(4.)]);
             assert!(
                 result
@@ -311,12 +311,23 @@ mod tests {
             )
             .unwrap();
             output.set_position(0);
-            let transformed = read(output, 1_000_000, &mut |_, _| Ok(())).unwrap();
+            let transformed = read(output, 1_000_000, MAX_POINTS, &mut |_, _| Ok(())).unwrap();
             let mut expected = mk(4.);
             expected.x += 2.;
             assert_eq!(transformed.points, vec![expected]);
             assert_eq!(cloud.points[1], mk(4.));
         }
+    }
+
+    #[test]
+    fn las_point_limit_is_checked_from_the_header() {
+        let mut writer = las::Writer::new(Cursor::new(Vec::new()), las::Header::default()).unwrap();
+        writer.write_point(las::Point::default()).unwrap();
+        writer.write_point(las::Point::default()).unwrap();
+        let mut input = writer.into_inner().unwrap();
+        input.set_position(0);
+        let err = read(input, 1_000_000, 1, &mut |_, _| Ok(())).unwrap_err();
+        assert!(err.contains("장면 합계"), "{err}");
     }
 
     #[test]
@@ -347,7 +358,7 @@ mod tests {
         let mut input = writer.into_inner().unwrap();
         input.set_position(0);
         assert!(
-            read(input, 1_000_000, &mut |_, _| Ok(()))
+            read(input, 1_000_000, MAX_POINTS, &mut |_, _| Ok(()))
                 .unwrap_err()
                 .contains("파형")
         );
@@ -355,8 +366,8 @@ mod tests {
         writer.write_point(las::Point::default()).unwrap();
         let mut input = writer.into_inner().unwrap();
         input.set_position(0);
-        assert!(read(input.clone(), 1, &mut |_, _| Ok(())).is_err());
-        assert!(read(input, 1_000_000, &mut |_, _| Err("cancelled".into())).is_err());
+        assert!(read(input.clone(), 1, MAX_POINTS, &mut |_, _| Ok(())).is_err());
+        assert!(read(input, 1_000_000, MAX_POINTS, &mut |_, _| Err("cancelled".into())).is_err());
     }
 
     #[test]

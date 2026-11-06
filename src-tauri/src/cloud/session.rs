@@ -408,10 +408,23 @@ pub async fn cloud_request(
                 .values()
                 .map(|s| s.lock().unwrap().estimate())
                 .sum::<usize>();
+            let loaded = state
+                .sessions
+                .lock()
+                .unwrap()
+                .values()
+                .filter_map(|s| {
+                    let s = s.lock().unwrap();
+                    (s.owner == owner).then_some(s.cloud.len())
+                })
+                .sum::<usize>();
+            // The decoders refuse by the header's point count, before reading the body.
+            let room = MAX_POINTS.saturating_sub(loaded);
             let cloud = if ext == "las" || ext == "laz" {
                 let las = super::las_codec::read(
                     std::io::BufReader::new(f),
                     APP_BYTES.saturating_sub(used),
+                    room,
                     &mut check,
                 )?;
                 if las.header.point_format().is_compressed != (ext == "laz") {
@@ -423,22 +436,14 @@ pub async fn cloud_request(
                     std::io::BufReader::new(f),
                     &ext,
                     APP_BYTES.saturating_sub(used),
+                    room,
                     &mut check,
                 )? {
                     Parsed::Cloud(c) => c,
                     Parsed::Mesh => return Ok(None),
                 }
             };
-            let loaded = state
-                .sessions
-                .lock()
-                .unwrap()
-                .values()
-                .filter_map(|s| {
-                    let s = s.lock().unwrap();
-                    (s.owner == owner).then_some(s.cloud.len())
-                })
-                .sum::<usize>();
+            // Kept as a safety net: another load of this window may have finished meanwhile.
             if loaded + cloud.len() > MAX_POINTS {
                 return Err("장면 합계 1천만 점 한도를 초과합니다".into());
             }
@@ -966,6 +971,7 @@ mod tests {
             let las = super::super::las_codec::read(
                 std::io::BufReader::new(std::fs::File::open(&source).unwrap()),
                 1_000_000,
+                MAX_POINTS,
                 &mut |_, _| Ok(()),
             )
             .unwrap();
@@ -1018,6 +1024,7 @@ mod tests {
             let saved = super::super::las_codec::read(
                 std::io::BufReader::new(std::fs::File::open(&target).unwrap()),
                 1_000_000,
+                MAX_POINTS,
                 &mut |_, _| Ok(()),
             )
             .unwrap();
