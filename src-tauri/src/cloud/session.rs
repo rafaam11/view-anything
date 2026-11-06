@@ -372,11 +372,7 @@ pub async fn cloud_request(
             if cancel.load(Ordering::Relaxed) || app.get_webview_window(owner).is_none() {
                 return Err("작업을 취소했습니다".into());
             }
-            let percent = if total > 0 {
-                loaded.saturating_mul(100) / total
-            } else {
-                0
-            };
+            let percent = loaded.saturating_mul(100).checked_div(total).unwrap_or(0);
             if last != Some(percent) {
                 last = Some(percent);
                 let _ = window.emit(
