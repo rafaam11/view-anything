@@ -55,11 +55,15 @@ async function show() {
   // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
   void platform.setWindowTitle(file.split(/[\\/]/).pop() ?? file).catch(() => {});
   const load = textMode ? () => import("./text/viewer").then(m => m.default) : resolveViewer(file);
+  /** Any file can still be looked at as text; the unsupported and the failed screens both offer it. */
+  const textFallback = (path: string) => {
+    const text = document.createElement("button"); text.textContent = "텍스트로 열기";
+    text.onclick = () => { location.search = "?file=" + encodeURIComponent(path) + "&text=1"; };
+    app.querySelector(".empty")!.append(text);
+  };
   if (!load) {
     message("지원하지 않는 형식", file);
-    const text = document.createElement("button"); text.textContent = "텍스트로 열기";
-    text.onclick = () => { location.search = "?file=" + encodeURIComponent(file!) + "&text=1"; };
-    app.querySelector(".empty")!.append(text);
+    textFallback(file);
     return;
   }
   try {
@@ -68,6 +72,7 @@ async function show() {
     viewer = v;
   } catch (e) {
     message("파일을 열 수 없습니다", String(e));
+    if (!textMode) textFallback(file);
   }
 }
 

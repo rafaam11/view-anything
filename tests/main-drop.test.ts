@@ -206,3 +206,13 @@ test("empty window: a 3D first file mounts in place (no reload) and the rest of 
   await settle();
   expect(threeViewer.accept).toHaveBeenLastCalledWith([B], { newWindow: false });
 });
+
+test("a viewer that fails to mount offers opening the file as text", async () => {
+  mdViewer.mount.mockRejectedValueOnce(new Error("CSV 셀이 100,000개를 초과합니다."));
+  await start(MD);
+  expect(document.body.textContent).toContain("초과");
+  const button = [...document.querySelectorAll("button")].find((b) => b.textContent === "텍스트로 열기")!;
+  button.click();
+  expect(new URLSearchParams(location.search).get("text")).toBe("1");
+  expect(fileParam()).toBe(MD);
+});

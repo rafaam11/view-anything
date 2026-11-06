@@ -10,7 +10,8 @@ import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const MAX_CELLS = 100_000;
+/** A 10 MiB, 1,000,000-cell file parses in about 0.1-0.2 s; the page shows 100 rows × 10 columns at a time. */
+const MAX_CELLS = 1_000_000;
 const PAGE_ROWS = 100;
 const PAGE_COLUMNS = 10;
 

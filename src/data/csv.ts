@@ -21,12 +21,12 @@ export function parseCsv(source: string, delimiter = ",", maxCells = Infinity): 
         if (source[pos + 1] === '"') { value += '"'; pos += 2; continue; }
         pos++; closed = true; break;
       }
-      if (!closed || (pos < source.length && source[pos] !== delimiter && source[pos] !== "\r" && source[pos] !== "\n")) throw new Error("CSV 인용부호 오류");
+      if (!closed) throw new Error("CSV 인용부호 오류");
+      // Text after the closing quote (an RFC 4180 violation Excel and scripts produce) is kept literally.
+      while (pos < source.length && source[pos] !== delimiter && source[pos] !== "\r" && source[pos] !== "\n") value += source[pos++];
     } else {
-      while (pos < source.length && source[pos] !== delimiter && source[pos] !== "\r" && source[pos] !== "\n") {
-        if (source[pos] === '"') throw new Error("CSV 인용부호 오류");
-        value += source[pos++];
-      }
+      // A stray quote inside an unquoted field (5" pipe) is an ordinary character.
+      while (pos < source.length && source[pos] !== delimiter && source[pos] !== "\r" && source[pos] !== "\n") value += source[pos++];
     }
     add({ value, start, end: pos });
     if (source[pos] === delimiter) {
