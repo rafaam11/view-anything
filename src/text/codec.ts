@@ -4,12 +4,23 @@ import { platform } from "../platform";
 export type TextMeta = DataText | { text: string; encoding: "cp949"; bom: false };
 export const normalize = (text: string) => text.replace(/\r\n|\r/g, "\n");
 
+/** Why bytes could not be shown as text: `encoding` may be solved by choosing CP949, `binary` cannot. */
+export class TextDecodeError extends Error {
+  constructor(message: string, readonly kind: "binary" | "encoding") { super(message); }
+}
+
+/** Control characters other than tab, newlines, form feed and ESC (ANSI colour codes in logs) mean binary. */
 export function validateText(text: string): void {
-  if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(text)) throw new Error("바이너리 또는 지원하지 않는 텍스트입니다.");
+  if (/[\x00-\x08\x0b\x0e-\x1a\x1c-\x1f\x7f]/.test(text)) throw new TextDecodeError("바이너리 또는 지원하지 않는 텍스트입니다.", "binary");
+}
+
+function decodeUtf(bytes: Uint8Array): DataText {
+  try { return decodeDataText(bytes); }
+  catch { throw new TextDecodeError("UTF-8/UTF-16으로 읽을 수 없습니다.", "encoding"); }
 }
 
 export async function decodeText(bytes: Uint8Array, cp949: boolean): Promise<TextMeta> {
-  const meta: TextMeta = cp949 ? { text: await platform.decodeCp949(bytes), encoding: "cp949", bom: false } : decodeDataText(bytes);
+  const meta: TextMeta = cp949 ? { text: await platform.decodeCp949(bytes), encoding: "cp949", bom: false } : decodeUtf(bytes);
   validateText(meta.text);
   return meta;
 }

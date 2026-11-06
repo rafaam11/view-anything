@@ -71,3 +71,9 @@ test("mixed line endings and binary content are protected", async () => {
   disk = new Uint8Array([0x41, 0]); await viewer.mount(document.body, "binary");
   expect(button("편집").disabled).toBe(true); expect(source().value).toBe("");
 });
+test("undecodable bytes point to the encoding setting, binary bytes do not", async () => {
+  disk = new Uint8Array([0xc7, 0xd1]); document.body.replaceChildren(); await viewer.mount(document.body, "cp.txt");
+  expect(status()).toContain("CP949");
+  disk = new Uint8Array([0x41, 0, 0x42]); document.body.replaceChildren(); await viewer.mount(document.body, "bin.txt");
+  expect(status()).toContain("바이너리"); expect(status()).not.toContain("CP949");
+});

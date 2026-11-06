@@ -34,3 +34,11 @@ test("CP949 is only explicit and encoding errors propagate", async () => {
 test("edited files cannot exceed the viewer limit", async () => {
   await expect(encodeText({ text: "", encoding: "utf8", bom: false }, "x".repeat(10 * 1024 * 1024 + 1))).rejects.toThrow("10 MiB");
 });
+test("ANSI colour codes and form feeds are text", async () => {
+  const bytes = new TextEncoder().encode("\x1b[31mred\x1b[0m\fnext\n");
+  expect((await decodeText(bytes, false)).text).toContain("red");
+});
+test("binary and undecodable bytes are told apart", async () => {
+  await expect(decodeText(new Uint8Array([0x41, 0, 0x42]), false)).rejects.toMatchObject({ kind: "binary" });
+  await expect(decodeText(new Uint8Array([0xc7, 0xd1]), false)).rejects.toMatchObject({ kind: "encoding" });
+});
