@@ -1,3 +1,4 @@
+import "./ui/tokens.css";
 import "./styles.css";
 import "./ui/chrome.css";
 import { getCurrentWebview } from "@tauri-apps/api/webview";

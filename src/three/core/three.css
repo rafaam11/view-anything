@@ -79,7 +79,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-low);
 }
 .va3d-progress .va3d-progress-text { display: flex; gap: 12px; justify-content: space-between; }
 .va3d-progress .va3d-progress-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -117,8 +117,8 @@
   align-items: flex-start;
   padding: 8px 10px;
   color: var(--fg);
-  background: color-mix(in srgb, #d1242f 12%, var(--bg));
-  border: 1px solid #d1242f;
+  background: var(--error-bg);
+  border: 1px solid color-mix(in srgb, var(--danger-text) 45%, transparent);
   border-radius: 6px;
 }
 .va3d-banner span { flex: 1; word-break: break-word; }
@@ -189,7 +189,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.16);
+  box-shadow: var(--shadow-popover);
 }
 .va3d-menu-item {
   display: grid;
@@ -229,7 +229,7 @@
 .va3d-clip-value { text-align: right; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 
 /* Selected tree row (click in 3D or on the row). */
-.va3d-node.selected > .va3d-row { background: color-mix(in srgb, #3e7bfa 22%, transparent); }
+.va3d-node.selected > .va3d-row { background: var(--fill-selected); }
 .va3d-row { cursor: default; }
 
 /* Scene and cloud tools share the collapsible right panel. */
@@ -270,7 +270,7 @@
 .va3d-frame-field select { width: 100%; font-size: 0.8rem; }
 .va3d-frame-field select:disabled { opacity: 0.6; }
 .va3d-remove { flex: none; padding: 0 5px !important; color: var(--muted) !important; }
-.va3d-remove:hover { color: #d1242f !important; }
+.va3d-remove:hover { color: var(--danger-text) !important; }
 .va3d-loading { flex: none; color: var(--muted); font-size: 0.75rem; }
 .va3d-node.loading > .va3d-row > .va3d-name { color: var(--muted); }
 /* Hidden nodes, and everything under them, are dimmed. */

@@ -3,6 +3,7 @@
 // production build only takes index.html, so nothing here ships. No Tauri command is called.
 //   ?theme=light|dark   ?view=doc|3d   ?menu=open   ?scene=settings|restart|restart-dirty|pdf-password
 // The 3D stylesheet is only loaded in 3D windows, so the 3D view is a separate page state.
+import "../ui/tokens.css";
 import "../styles.css";
 import "../ui/chrome.css";
 import "../titlebar.css";

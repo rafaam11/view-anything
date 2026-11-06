@@ -3,14 +3,14 @@
 .text-bar { justify-content:space-between; }
 .text-root button, .text-root input { color:var(--fg); background:var(--bg); border:1px solid var(--border); padding:3px 8px; font:inherit; }
 .text-bar > button { border:0; cursor:pointer; }
-.text-root .text-source { flex:1; min-height:120px; width:100%; box-sizing:border-box; resize:none; background:var(--bg); color:var(--fg); border:0; outline:none; padding:12px 16px; font-family:var(--va-text-font, "Cascadia Mono", Consolas, monospace); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; }
+.text-root .text-source { flex:1; min-height:120px; width:100%; box-sizing:border-box; resize:none; background:var(--bg); color:var(--fg); border:0; outline:none; padding:12px 16px; font-family:var(--va-text-font, var(--font-mono)); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; }
 .text-root [hidden] { display:none !important; }
 .text-root [role=status] { margin:0; padding:8px 16px; font-size:13px; overflow-wrap:anywhere; }
 .text-root [role=status]:empty { display:none; }
 /* Syntax colours: the <pre> under the textarea mirrors its box (font, padding, wrapping, scrollbars). */
 .text-root .text-stack { flex:1; position:relative; display:flex; min-height:120px; background:var(--bg); }
 .text-root .text-stack .text-source { position:relative; z-index:1; background:transparent; }
-.text-root .text-highlight { position:absolute; inset:0; margin:0; padding:12px 16px; box-sizing:border-box; overflow:hidden; scrollbar-color:transparent transparent; pointer-events:none; visibility:hidden; color:var(--fg); font-family:var(--va-text-font, "Cascadia Mono", Consolas, monospace); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; white-space:pre-wrap; overflow-wrap:break-word; }
+.text-root .text-highlight { position:absolute; inset:0; margin:0; padding:12px 16px; box-sizing:border-box; overflow:hidden; scrollbar-color:transparent transparent; pointer-events:none; visibility:hidden; color:var(--fg); font-family:var(--va-text-font, var(--font-mono)); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; white-space:pre-wrap; overflow-wrap:break-word; }
 .text-root .text-stack[data-wrap=off] .text-highlight { white-space:pre; overflow-wrap:normal; }
 /* Same scrollbars on both boxes whether or not colours are showing at the moment, so typing never changes the wrap width. */
 .text-root .text-stack[data-mirror=on] .text-source, .text-root .text-stack[data-mirror=on] .text-highlight { overflow-y:scroll; overflow-x:hidden; }

@@ -1,0 +1,111 @@
+/*
+ * Design tokens: the only place theme colours are defined. Windows 11 style (Fluent): subtle
+ * filled controls, an accent-filled primary button, 6px control corners, 8px surfaces.
+ * Loaded first by the app (main.ts) and inlined into exported HTML (export-runtime/main.ts),
+ * which sets data-theme="system" so the page follows the OS like before.
+ * The two dark blocks must stay identical (tests/tokens-css.test.ts).
+ */
+:root {
+  --bg: #ffffff;
+  --bg-overlay: #ffffff;
+  --bg-inset: #f6f8fa;
+  --fg: #1f2328;
+  --muted: #6e7781;
+  --border: #d0d7de;
+  --accent: #005fb8;
+  --accent-text: #005fb8;
+  --danger-text: #c42b1c;
+  --warning: #9d5d00;
+  --warning-bg: #fff4ce;
+  --error-bg: #fde7e9;
+  --backdrop: rgb(0 0 0 / 0.3);
+  --shadow-low: 0 0 2px rgb(0 0 0 / 0.12), 0 2px 4px rgb(0 0 0 / 0.14);
+  --shadow-popover: 0 0 2px rgb(0 0 0 / 0.12), 0 8px 16px rgb(0 0 0 / 0.14);
+  --shadow-dialog: 0 0 8px rgb(0 0 0 / 0.12), 0 32px 64px rgb(0 0 0 / 0.14);
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-comment: #6e7781;
+  --hl-number: #0550ae;
+  --hl-title: #8250df;
+  color-scheme: light;
+
+  /* Theme-independent: derived from the colours above, so they follow the theme. */
+  --on-accent: #ffffff;
+  --on-danger: #ffffff;
+  --danger: #c42b1c;
+  --danger-active: #a92317;
+  --danger-hover: color-mix(in srgb, var(--danger) 90%, #000);
+  --accent-hover: color-mix(in srgb, var(--accent) 90%, var(--bg));
+  --accent-active: color-mix(in srgb, var(--accent) 80%, var(--bg));
+  --fill-control: color-mix(in srgb, var(--fg) 7%, transparent);
+  --fill-control-hover: color-mix(in srgb, var(--fg) 11%, transparent);
+  --fill-control-active: color-mix(in srgb, var(--fg) 5%, transparent);
+  --fill-control-disabled: color-mix(in srgb, var(--fg) 4%, transparent);
+  --fill-subtle-hover: color-mix(in srgb, var(--fg) 8%, transparent);
+  --fill-subtle-active: color-mix(in srgb, var(--fg) 5%, transparent);
+  --fill-selected: color-mix(in srgb, var(--accent-text) 18%, transparent);
+  --info-bg: color-mix(in srgb, var(--accent-text) 10%, var(--bg));
+  --focus-ring: 2px solid var(--fg);
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --font-ui: system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+  /* Same list as FONTS.mono in src/settings/preferences.ts. */
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "D2Coding", monospace;
+  --font-size-ui: 13px;
+  --font-size-small: 12px;
+  --font-size-title: 20px;
+  --control-h: 28px;
+  --control-h-lg: 32px;
+  accent-color: var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --bg: #0d1117;
+    --bg-overlay: #161b22;
+    --bg-inset: #010409;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --border: #30363d;
+    --accent: #0067c0;
+    --accent-text: #60cdff;
+    --danger-text: #ff99a4;
+    --warning: #fce100;
+    --warning-bg: #433519;
+    --error-bg: #442726;
+    --backdrop: rgb(0 0 0 / 0.5);
+    --shadow-low: 0 0 2px rgb(0 0 0 / 0.24), 0 2px 4px rgb(0 0 0 / 0.28);
+    --shadow-popover: 0 0 2px rgb(0 0 0 / 0.24), 0 8px 16px rgb(0 0 0 / 0.28);
+    --shadow-dialog: 0 0 8px rgb(0 0 0 / 0.24), 0 32px 64px rgb(0 0 0 / 0.28);
+    --hl-keyword: #ff7b72;
+    --hl-string: #a5d6ff;
+    --hl-comment: #8b949e;
+    --hl-number: #79c0ff;
+    --hl-title: #d2a8ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --bg-overlay: #161b22;
+  --bg-inset: #010409;
+  --fg: #e6edf3;
+  --muted: #8b949e;
+  --border: #30363d;
+  --accent: #0067c0;
+  --accent-text: #60cdff;
+  --danger-text: #ff99a4;
+  --warning: #fce100;
+  --warning-bg: #433519;
+  --error-bg: #442726;
+  --backdrop: rgb(0 0 0 / 0.5);
+  --shadow-low: 0 0 2px rgb(0 0 0 / 0.24), 0 2px 4px rgb(0 0 0 / 0.28);
+  --shadow-popover: 0 0 2px rgb(0 0 0 / 0.24), 0 8px 16px rgb(0 0 0 / 0.28);
+  --shadow-dialog: 0 0 8px rgb(0 0 0 / 0.24), 0 32px 64px rgb(0 0 0 / 0.28);
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-comment: #8b949e;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  color-scheme: dark;
+}

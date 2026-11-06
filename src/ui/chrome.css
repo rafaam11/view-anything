@@ -14,14 +14,13 @@
 .va-status { margin:0; padding:6px 12px; font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
 .va-viewer .va-icon-button { display:inline-grid; place-items:center; flex:none; width:30px; height:30px; padding:5px; border:0; background:transparent; }
 .va-icon-button svg { width:20px; height:20px; pointer-events:none; }
-.va-viewer .text-source, .va-viewer .data-source { font-family:"Cascadia Mono",Consolas,monospace; }
 .va-viewer .va-viewer-toolbar .va3d-menu-item { justify-content:flex-start; }
 .va-viewer .pdf-outline { border-color:var(--border); }
 .va-viewer .pdf-outline button { width:100%; border:0; background:transparent; }
 .va-settings, .pdf-password { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:24px; max-width:calc(100vw - 64px); }
-.va-settings::backdrop, .pdf-password::backdrop { background:#0006; }
+.va-settings::backdrop, .pdf-password::backdrop { background:var(--backdrop, rgb(0 0 0 / 0.3)); }
 @media(max-width:600px) { .va-viewer-toolbar { padding-inline:6px; } }
-.empty button { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:6px 12px; font:13px system-ui,sans-serif; cursor:pointer; }
+.empty button { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:6px 12px; font:13px var(--font-ui); cursor:pointer; }
 /* 최근 파일: the file-menu section and the empty window list. */
 .va-recent { display:grid; gap:0; min-width:0; }
 .va-recent .va3d-menu-item { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }

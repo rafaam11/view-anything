@@ -3,6 +3,7 @@
 // then shows the scene with the app's shared core: stage, scene panel (no remove, no frame
 // presets), 보기 menu (display modes, sections, standard views), dimensions and cursor readout.
 // No Tauri, no network: everything it needs is in the page.
+import tokensCss from "../../ui/tokens.css?inline";
 import threeCss from "../core/three.css?inline";
 import { BufferAttribute, type BufferGeometry, type Mesh, type Object3D, type Points, type PointsMaterial } from "three";
 import { renderableSizes } from "../core/build-objects";
@@ -22,14 +23,10 @@ import { findNode, setVisible, type SceneFile, type SceneModel, type TreeNode } 
 import { fromBase64 } from "../export/codec";
 import { parseState, type ExportNode, type ExportState } from "../export/state";
 
-/** Theme variables of the app (styles.css); the page follows the OS light/dark setting. */
+/** Page layout of the exported HTML; colours come from the app's tokens (tokens.css). */
 const BASE_CSS = `
-:root { --bg: #ffffff; --fg: #1f2328; --muted: #6e7781; --border: #d0d7de; color-scheme: light; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --border: #30363d; color-scheme: dark; }
-}
 html, body { margin: 0; height: 100%; }
-body { background: var(--bg); color: var(--fg); font-family: system-ui, "Segoe UI", "Malgun Gothic", sans-serif; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); }
 .va-notice { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: var(--muted); }
 .va3d-frame-label { color: var(--muted); font-size: 0.75rem; padding: 0 6px; margin-left: 4px; border-left: 1px solid var(--border); align-self: center; white-space: nowrap; }
 `;
@@ -227,8 +224,10 @@ class ExportedViewer {
 }
 
 async function main(): Promise<void> {
+  // The tokens' system theme follows the OS light/dark setting, as exported pages always have.
+  document.documentElement.dataset.theme = "system";
   const style = document.createElement("style");
-  style.textContent = BASE_CSS + threeCss;
+  style.textContent = tokensCss + BASE_CSS + threeCss;
   document.head.append(style);
   const host = document.getElementById("va-app") ?? document.body;
   let state: ExportState;
