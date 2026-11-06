@@ -22,7 +22,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 ## 개발
 - `npm install` → `npm run tauri dev`
 - 빌드: `npm run tauri build`
-- 검증: `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run check:bundle`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, `cargo test --manifest-path src-tauri/Cargo.toml`. CI의 `ci.yml`은 Rust 1.99.0으로 고정돼 있으니 로컬에서도 `cargo +1.99.0 …`으로 돌린다. 버전을 올릴 때는 `ci.yml`과 이 줄을 함께 바꾸고 새 clippy 지적을 같은 커밋에서 고친다.
+- 검증: `npm test`, `npx tsc --noEmit`, `npm run lint`(Biome 정확성 규칙만, 포매터 없음, `biome.json`에서 코드 스타일과 충돌하는 규칙은 끔), `npm run build`, `npm run check:bundle`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, `cargo test --manifest-path src-tauri/Cargo.toml`. CI의 `ci.yml`은 Rust 1.99.0으로 고정돼 있으니 로컬에서도 `cargo +1.99.0 …`으로 돌린다. 버전을 올릴 때는 `ci.yml`과 이 줄을 함께 바꾸고 새 clippy 지적을 같은 커밋에서 고친다.
 - `desktop` workflow는 Windows NSIS 설치·서명 업데이트·제거와 Linux deb/AppImage의 실제 WebKit GUI를 GitHub-hosted 일회용 runner에서 시험한다. `scripts/desktop/`의 별도 npm 의존성은 앱 번들에 넣지 않는다. 사용자 PC/self-hosted에서는 설치 스크립트가 거부되며 환경 변수를 위조해 우회하지 않는다. 시험 키는 RUNNER_TEMP에만 만들고 packages/evidence artifact에 넣지 않는다. `package_run`으로 기존 시험 패키지를 재사용할 때는 현재 앱 입력의 fingerprint가 일치해야 한다.
 - `npm run build:runtime`: HTML 내보내기용 뷰어 런타임(`vite.runtime.config.ts` → `build/runtime/va-runtime.js`, IIFE 한 파일)을 빌드한다. `build`와 `predev`가 먼저 실행하므로 보통 직접 돌릴 일은 없다. 앱의 내보내기 코드가 이 파일을 `?raw`로 인라인하므로 앱 빌드 전에 있어야 한다.
 - 측정 스크립트(커밋하지 않는 데이터만 만든다): `node scripts/bench-stl.mjs [삼각형 수]`(임시 폴더에 합성 바이너리 STL을 만들어 parseMesh 시간 측정), `node scripts/bench-edges.mjs [삼각형 수]`(엣지 추출 시간, three EdgesGeometry와 결과 비교).

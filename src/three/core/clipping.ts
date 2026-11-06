@@ -1,7 +1,7 @@
 // Section planes (X/Y/Z, one per axis) on the display frame. Each enabled axis keeps the part of
 // the scene at or below its value (display coordinates); three clips in world space, so planes
 // are mapped through the display root matrix. Caps are not filled (non-goal).
-import { Plane, Vector3, type Matrix4 } from "three";
+import { Plane, type Vector3, type Matrix4 } from "three";
 
 export type Axis = 0 | 1 | 2;
 export const AXES: readonly Axis[] = [0, 1, 2];

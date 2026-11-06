@@ -1,5 +1,5 @@
 import "./pointcloud.css";
-import { Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, PointsMaterial, Vector3 } from "three";
+import { Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, type PointsMaterial, Vector3 } from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { platform } from "../../platform";
 import { registerUpdateGuard } from "../../update/guard";

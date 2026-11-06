@@ -113,7 +113,7 @@ test("Escape closes and returns focus to the title; a press outside closes", () 
 });
 
 test("keyboard: Alt+F / Alt+V open, arrows move between items and menus, disabled items are skipped", () => {
-  const { titles, dropdowns, bar } = setup();
+  const { dropdowns, bar } = setup();
   expect(bar.handleKey(new KeyboardEvent("keydown", { key: "f", code: "KeyF", altKey: true }))).toBe(true);
   expect(dropdowns[0].hidden).toBe(false);
   const items = [...dropdowns[0].querySelectorAll<HTMLElement>('[role="menuitem"]')];

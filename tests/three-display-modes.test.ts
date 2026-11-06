@@ -1,7 +1,7 @@
 // Display modes: material state per mode, cached edge geometry, the 5M-triangle edge limit.
 import { expect, test, vi } from "vitest";
 import { bvhData, edgePositions, GeometryJobs, type JobRunner } from "../src/three/core/geometry-jobs";
-import { BoxGeometry, Group, LineSegments, Mesh, MeshStandardMaterial, Plane, Points, PointsMaterial } from "three";
+import { BoxGeometry, Group, type LineSegments, Mesh, MeshStandardMaterial, type Plane, Points, PointsMaterial } from "three";
 import { canShowEdges, DisplayModes, EDGE_TRIANGLE_LIMIT, EdgeCache } from "../src/three/core/display-modes";
 
 function scene() {

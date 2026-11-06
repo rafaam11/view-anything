@@ -32,5 +32,6 @@ export function resolveViewer(path: string): (() => Promise<Viewer>) | null {
   const dot = name.lastIndexOf(".");
   if (dot < 0) return null;
   const ext = name.slice(dot + 1).toLowerCase();
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is ES2022 and tsconfig targets the ES2020 lib; `in` would accept "toString"
   return Object.prototype.hasOwnProperty.call(viewers, ext) ? viewers[ext] : null;
 }

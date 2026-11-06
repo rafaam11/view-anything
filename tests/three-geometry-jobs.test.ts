@@ -156,7 +156,7 @@ test("inputOf reads interleaved and normalized (quantized glTF) positions as pla
 
 test("cancelling a running job aborts it through the runner's signal; the queue goes on", async () => {
   const signals: AbortSignal[] = [];
-  const runner: JobRunner = (kind, input, signal) =>
+  const runner: JobRunner = (_kind, input, signal) =>
     new Promise((resolve, reject) => {
       signals.push(signal!);
       if (signals.length > 1) return resolve(edgePositions(input));

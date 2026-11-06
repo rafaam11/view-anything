@@ -188,7 +188,7 @@ function toAlert(quote: Element): void {
   if (first?.type !== "element" || first.tagName !== "p") return;
   const lead = first.children[0];
   const marker = lead?.type === "text" ? ALERT_MARKER.exec(lead.value) : null;
-  if (!lead || lead.type !== "text" || !marker) return;
+  if (lead?.type !== "text" || !marker) return;
   const rest = lead.value.slice(marker[0].length);
   const body = [...(rest ? [{ type: "text" as const, value: rest }] : []), ...first.children.slice(1)];
   // A hard break after the marker only separates it from the text.

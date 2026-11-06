@@ -11,7 +11,7 @@ const NAN_KEY = Number.MAX_VALUE;
 
 function q(v: number): number {
   const r = Math.round(v * PRECISION);
-  return r === r ? r : NAN_KEY;
+  return Number.isNaN(r) ? NAN_KEY : r;
 }
 
 function mix(h: number): number {

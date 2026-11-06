@@ -206,7 +206,7 @@ export class ScenePanel {
     const file = this.files.get(fileId);
     if (!file) return;
     let menu = item.querySelector<HTMLElement>(":scope > .va3d-frame-menu");
-    if (menu && !menu.hidden) return this.showFrameMenu(item, menu, false);
+    if (menu && !menu.hidden) { this.showFrameMenu(item, menu, false); return; }
     if (!menu) {
       menu = el("div", "va3d-frame-menu");
       const frame = this.select("frame", "원본 좌표계", [["as-is", "그대로"], ...FRAME_PRESETS.map((p): [string, string] => [p, FRAME_LABELS[p]])]);
@@ -320,7 +320,7 @@ export class ScenePanel {
       if (rowEl && !target?.closest("button, select, label") && id && this.rows.get(id)?.node) this.handlers.select?.(id);
       return;
     }
-    if (b.dataset.action === "panel") return this.setCollapsed(!this.root.classList.contains("collapsed"));
+    if (b.dataset.action === "panel") { this.setCollapsed(!this.root.classList.contains("collapsed")); return; }
     const item = b.closest<HTMLElement>(".va3d-node");
     const id = item?.dataset.id;
     if (!item || !id) return;

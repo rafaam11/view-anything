@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Quaternion, Vector3 } from "three";
+import { type PerspectiveCamera, Quaternion, Vector3 } from "three";
 import { ArcballControls } from "three/addons/controls/ArcballControls.js";
 
 export type NavigationMode = "arcball" | "fly";

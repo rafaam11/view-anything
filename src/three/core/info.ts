@@ -1,6 +1,6 @@
 // Dimensions and cursor readout: bounding boxes in display coordinates, triangle counts, number
 // formatting, and BVH-accelerated picking (three-mesh-bvh, built lazily per geometry).
-import { Box3, Matrix4, Raycaster, Sphere, Vector3, type BufferGeometry, type Camera, type Intersection, type Mesh, type Object3D, type Vector2 } from "three";
+import { Box3, Matrix4, Raycaster, Sphere, type Vector3, type BufferGeometry, type Camera, type Intersection, type Mesh, type Object3D, type Vector2 } from "three";
 import { MeshBVH } from "three-mesh-bvh";
 import { bvhFrom, GeometryJobs, PRIORITY, triangles } from "./geometry-jobs";
 import { UNIT_LABELS, type Unit } from "./frames";

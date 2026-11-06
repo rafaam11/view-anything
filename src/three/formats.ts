@@ -29,6 +29,7 @@ function extensionOf(path: string): string | null {
 
 export function formatOf(path: string): ThreeDFormat | null {
   const ext = extensionOf(path);
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is ES2022 and tsconfig targets the ES2020 lib; `in` would accept "toString"
   return ext !== null && Object.prototype.hasOwnProperty.call(BY_EXTENSION, ext) ? BY_EXTENSION[ext] : null;
 }
 

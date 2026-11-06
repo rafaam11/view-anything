@@ -1,7 +1,8 @@
 /** Byte-preserving document state, independent of the viewer and native I/O. */
 export interface DocumentIO {
   read(): Promise<Uint8Array>;
-  write(bytes: Uint8Array, expected: Uint8Array): Promise<boolean | void>;
+  /** `false` means the file changed underneath (a conflict); `true` or nothing means written. */
+  write(bytes: Uint8Array, expected: Uint8Array): Promise<boolean | undefined>;
 }
 
 export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {

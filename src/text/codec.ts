@@ -14,6 +14,7 @@ export class TextDecodeError extends Error {
  * line breaks from some exports), FF, CR, SUB (the DOS end-of-file mark) and ESC (ANSI colours).
  */
 export function validateText(text: string): void {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: detecting control characters is the point of this check
   if (/[\x00-\x08\x0e-\x19\x1c-\x1f\x7f]/.test(text)) throw new TextDecodeError("바이너리 또는 지원하지 않는 텍스트입니다.", "binary");
 }
 

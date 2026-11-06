@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const CARGO_VERSION_RE = /^(\[package\][^\[]*?^version\s*=\s*")([^"]+)(")/ms;
+const CARGO_VERSION_RE = /^(\[package\][^[]*?^version\s*=\s*")([^"]+)(")/ms;
 
 export function readVersions(root) {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;

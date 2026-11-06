@@ -52,7 +52,7 @@ async function readBody(res: Response, onProgress: ProgressFn): Promise<ArrayBuf
     }
     buf.set(value, loaded);
     loaded += value.length;
-    onProgress(loaded, total > loaded ? total : loaded);
+    onProgress(loaded, Math.max(total, loaded));
   }
   onProgress(loaded, loaded);
   return loaded === buf.length ? buf.buffer : buf.buffer.slice(0, loaded);

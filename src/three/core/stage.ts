@@ -338,7 +338,7 @@ export class Stage {
       dir = new Vector3(o[0], o[1], o[2]);
     } else {
       dir = this.camera.position.clone().sub(this.controls.target);
-      if (dir.lengthSq() === 0) return this.fitAll("iso");
+      if (dir.lengthSq() === 0) { this.fitAll("iso"); return; }
       dir.normalize();
     }
     const distance = fitDistance(this.bounds.radius, this.camera.fov, this.camera.aspect) * FIT_MARGIN;
