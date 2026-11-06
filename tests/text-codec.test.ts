@@ -42,3 +42,7 @@ test("binary and undecodable bytes are told apart", async () => {
   await expect(decodeText(new Uint8Array([0x41, 0, 0x42]), false)).rejects.toMatchObject({ kind: "binary" });
   await expect(decodeText(new Uint8Array([0xc7, 0xd1]), false)).rejects.toMatchObject({ kind: "encoding" });
 });
+test("vertical tabs and DOS end-of-file marks are text", async () => {
+  const bytes = new TextEncoder().encode("cell\x0bnext line\x1a");
+  expect((await decodeText(bytes, false)).text).toContain("next line");
+});

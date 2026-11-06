@@ -9,9 +9,12 @@ export class TextDecodeError extends Error {
   constructor(message: string, readonly kind: "binary" | "encoding") { super(message); }
 }
 
-/** Control characters other than tab, newlines, form feed and ESC (ANSI colour codes in logs) mean binary. */
+/**
+ * Control characters mean binary, except the ones real text files carry: tab, LF, VT (in-cell
+ * line breaks from some exports), FF, CR, SUB (the DOS end-of-file mark) and ESC (ANSI colours).
+ */
 export function validateText(text: string): void {
-  if (/[\x00-\x08\x0b\x0e-\x1a\x1c-\x1f\x7f]/.test(text)) throw new TextDecodeError("바이너리 또는 지원하지 않는 텍스트입니다.", "binary");
+  if (/[\x00-\x08\x0e-\x19\x1c-\x1f\x7f]/.test(text)) throw new TextDecodeError("바이너리 또는 지원하지 않는 텍스트입니다.", "binary");
 }
 
 /** UTF-8/UTF-16 decode whose failure is a `TextDecodeError`, for viewers without a CP949 option. */
