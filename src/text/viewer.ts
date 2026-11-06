@@ -13,6 +13,7 @@ import { revealSelection } from "./selection";
 import { highlightHtml, languageFor, LIVE_HIGHLIGHT_CHARS, withinHighlightLimit } from "./highlight";
 import "../ui/chrome.css";
 import { textButton } from "../ui/icons";
+import { findBar } from "../ui/find-bar";
 import { toast } from "../ui/toast";
 import { CONFLICT_RELOAD, COPY_SAVED, DISCARD, DISCARD_CLOSE, DISCARD_RELOAD, SAVED, errorMessage } from "../ui/strings";
 
@@ -70,7 +71,13 @@ const viewer: Viewer = {
       } catch { if (sequence === paintSequence) plain(); }
     };
     editor.addEventListener("scroll", syncScroll);
-    const cancelSearch = () => { searchSequence++; if (status.textContent === "검색 중…") status.textContent = ""; };
+    const finder = findBar({
+      label: "텍스트 검색",
+      step: (back) => { void find(back).catch(report); },
+      input: () => cancelSearch(),
+      close: () => { cancelSearch(); editor.focus(); },
+    });
+    const cancelSearch = () => { searchSequence++; if (finder.count.textContent === "검색 중…") finder.count.textContent = ""; };
     const display = () => {
       cancelSearch(); editor.wrap = preferences().textWrap ? "soft" : "off"; stack.dataset.wrap = editor.wrap;
       if (meta) void paint();
@@ -118,8 +125,7 @@ const viewer: Viewer = {
       if (!await discard(DISCARD_RELOAD, "다시 읽기")) return;
       doc.reset(await read()); cp949 = value === "cp949"; editing = false; edit.textContent = "편집"; await render();
     }) });
-    const searchBar = document.createElement("div"); searchBar.className = "text-search va-search"; searchBar.hidden = true;
-    const search = document.createElement("input"); search.type = "search"; search.placeholder = "검색"; search.setAttribute("aria-label", "텍스트 검색");
+    const search = finder.input;
     const find = async (back = false) => {
       const sequence = ++searchSequence;
       const q = search.value; if (!q) return;
@@ -127,23 +133,15 @@ const viewer: Viewer = {
       const from = back ? editor.selectionStart - 1 : editor.selectionEnd;
       let at = back ? (from < 0 ? -1 : text.lastIndexOf(q, from)) : text.indexOf(q, from);
       if (at < 0) at = back ? text.lastIndexOf(q) : text.indexOf(q);
-      status.textContent = at < 0 ? "검색 결과 없음" : "검색 중…";
+      finder.count.textContent = at < 0 ? "결과 없음" : "검색 중…";
       if (at >= 0) {
         editor.focus(); editor.setSelectionRange(at, at + q.length);
         const current = () => sequence === searchSequence && editor.selectionStart === at && editor.selectionEnd === at + q.length;
-        if (await revealSelection(editor, at, q.length, current)) status.textContent = `${at + 1}번째 문자`;
-        else if (sequence === searchSequence) status.textContent = "";
+        if (await revealSelection(editor, at, q.length, current)) finder.count.textContent = `${at + 1}번째 문자`;
+        else if (sequence === searchSequence) finder.count.textContent = "";
       }
     };
-    searchBar.append(search);
-    for (const [label, back] of [["이전", true], ["다음", false]] as const) {
-      const b = textButton(label); b.onclick = () => { void find(back).catch(report); }; searchBar.append(b);
-    }
-    search.oninput = cancelSearch;
-    search.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); void find(e.shiftKey).catch(report); } };
-    const closeSearch = textButton("닫기");
-    closeSearch.onclick = () => { cancelSearch(); searchBar.hidden = true; editor.focus(); }; searchBar.append(closeSearch);
-    const showSearch = () => { searchBar.hidden = false; search.focus(); search.select(); };
+    const showSearch = finder.open;
     const run = (action: () => Promise<void>) => () => { void action().catch(report); };
     const menus = new Menubar([
       { label: "파일", accessKey: "f", items: [
@@ -159,7 +157,7 @@ const viewer: Viewer = {
       { label: "보기", accessKey: "v", items: [{ label: "찾기…", shortcut: "Ctrl+F", run: showSearch }] },
     ]);
     bar.prepend(menus.root);
-    root.append(bar, searchBar, status, stack); el.replaceChildren(root);
+    root.append(bar, finder.element, status, stack); el.replaceChildren(root);
     const doSave = async () => exclusive(async () => {
       if (!editing || !meta || !dirty()) return;
       doc.edit(await encodeText(meta, editor.value));
@@ -176,7 +174,7 @@ const viewer: Viewer = {
     window.addEventListener("keydown", e => {
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); if (!e.repeat) void doSave().catch(report); }
       if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); showSearch(); }
-      if (e.key === "Escape" && !searchBar.hidden) { cancelSearch(); searchBar.hidden = true; editor.focus(); }
+      if (e.key === "Escape" && finder.isOpen) finder.close();
       if (menus.handleKey(e)) return;
       if (editing && (e.key === "F5" || e.key.startsWith("Browser") || (e.ctrlKey && e.key.toLowerCase() === "r") || (e.altKey && ["ArrowLeft", "ArrowRight"].includes(e.key)))) { e.preventDefault(); e.stopPropagation(); }
     }, true);

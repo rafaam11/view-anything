@@ -169,7 +169,7 @@ test("the panel debounces typing; Enter shows the first result, then moves", () 
     document.body.append(panel.element);
     panel.open();
     const input = panel.element.querySelector("input")!;
-    const count = panel.element.querySelector(".md-find-count")!;
+    const count = panel.element.querySelector(".va-find-count")!;
     const enter = (shiftKey = false) => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey, cancelable: true }));
     input.value = "one";
     input.dispatchEvent(new Event("input"));

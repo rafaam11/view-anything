@@ -105,14 +105,6 @@
 
 .md-content mark.md-find-hit { background: var(--find-hit); color: inherit; border-radius: 2px; }
 .md-content mark.md-find-current { background: var(--find-current); color: var(--fg); }
-/* Over the text rather than beside it, and under the menus that open from the bar. */
-.md-root .md-find {
-  position: fixed; top: calc(var(--va-titlebar-height, 0px) + 44px); right: 24px; z-index: 4;
-  flex-wrap: nowrap; max-width: calc(100vw - 48px); box-sizing: border-box; padding: 4px 6px 4px 8px;
-  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow-popover);
-}
-.md-find input { flex: 1 1 200px; width: 200px; }
-.md-find-count { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .hljs-keyword, .hljs-built_in, .hljs-literal, .hljs-selector-tag { color: var(--hl-keyword); }
 .hljs-string, .hljs-regexp, .hljs-attr { color: var(--hl-string); }

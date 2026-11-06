@@ -38,7 +38,7 @@ test('navigates, searches text and follows outline destinations', async () => {
   find(root, '이전 페이지').click(); await vi.waitFor(() => expect(page.value).toBe('1'));
   root.querySelector<HTMLInputElement>('input[type=search]')!.value = 'needle'; find(root, '다음 결과').click();
   await vi.waitFor(() => expect(page.value).toBe('2'));
-  expect(root.querySelector('[role=status]')!.textContent).toContain('2페이지');
+  expect(root.querySelector('.va-find-count')!.textContent).toBe('2페이지 · 1/1');
   await vi.waitFor(() => expect(root.querySelector('.textLayer mark')?.textContent).toBe('needle'));
 });
 test('rejects oversized, encrypted and damaged PDFs', async () => {

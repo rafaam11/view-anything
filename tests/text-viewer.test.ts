@@ -16,7 +16,7 @@ const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(r => 
 const button = (text: string) => [...document.querySelectorAll("button")].find(b => (b.querySelector(".va3d-menu-label")?.textContent ?? b.textContent) === text)!;
 const source = () => document.querySelector("textarea")!;
 const edit = (text: string) => { source().value = text; source().dispatchEvent(new Event("input")); };
-const status = () => document.querySelector('[role="status"]')!.textContent;
+const status = () => document.querySelector('.text-root > p[role="status"]')!.textContent;
 beforeEach(async () => {
   vi.clearAllMocks(); vi.spyOn(window,"addEventListener"); applyPreferences(DEFAULTS,false); disk = new TextEncoder().encode("한글\r\nline\r\n");
   document.body.replaceChildren();
@@ -46,7 +46,7 @@ test("each discard prompt names what happens: close, reload", async () => {
 test("read mode is immutable and cancelling a dirty close keeps edits", async () => {
   expect(source().readOnly).toBe(true);
   expect(document.querySelector("select")).toBeNull();
-  expect(document.querySelector<HTMLElement>(".text-search")!.hidden).toBe(true);
+  expect(document.querySelector<HTMLElement>(".va-find")!.hidden).toBe(true);
   expect(status()).toBe("");
   button("편집").click(); await settle(); edit("changed\n");
   expect(await close()).toBe(false); expect(source().value).toBe("changed\n");
@@ -141,4 +141,19 @@ test("large edits stay plain while typing and get colours again after saving", a
   expect(stack.getAttribute("data-highlight")).not.toBe("on");
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }));
   await vi.waitFor(() => expect(stack.getAttribute("data-highlight")).toBe("on"), { timeout: 5000 });
+});
+test("Ctrl+F opens the shared find bar; results show in its count and Esc closes it", async () => {
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, cancelable: true }));
+  const bar = document.querySelector<HTMLElement>(".va-find")!;
+  expect(bar.hidden).toBe(false);
+  const input = bar.querySelector<HTMLInputElement>("input[type=search]")!;
+  expect(document.activeElement).toBe(input);
+  input.value = "없는 말"; input.dispatchEvent(new Event("input"));
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await settle();
+  expect(bar.querySelector(".va-find-count")!.textContent).toBe("결과 없음");
+  expect(status()).toBe("");
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  expect(bar.hidden).toBe(true);
+  expect(bar.querySelector(".va-find-count")!.textContent).toBe("");
 });

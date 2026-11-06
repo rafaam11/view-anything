@@ -19,6 +19,7 @@ import { iconButton, menuButton, textButton, type ButtonVariant } from "../ui/ic
 import { mountTitlebar } from "../titlebar";
 import { updateBadge, confirmRestart } from "../update/badge";
 import { createFind } from "../md/find";
+import { findBar } from "../ui/find-bar";
 import { buildToolbar } from "../three/core/view-menu";
 import { Banner } from "../three/core/banner";
 import { initializeDialogInput, showDialog } from "../ui/dialog";
@@ -39,7 +40,7 @@ style.textContent = [
   ".g-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }",
   ".g-section .va3d { position: relative; inset: auto; height: 220px; }",
   ".g-section .va-update { position: static; display: inline-flex; }",
-  ".g-section .md-find { position: static; }",
+  ".g-section .va-find { position: static; }",
   ".g-section .md-root { min-height: 0; }",
   ".g-section .text-root { height: auto; }",
   ".g-section .empty { position: static; height: auto; }",
@@ -94,18 +95,14 @@ if (!view3d) {
   if (params.get("menu") === "open") bar.querySelector<HTMLButtonElement>(".va3d-menu-title")?.click();
 }
 
-// 2. Find bars: Markdown (icons), PDF (mixed), text (words).
+// 2. The shared find bar: empty (Markdown) and with a result (PDF).
 {
   const md = document.createElement("div"); md.className = "md-root va-viewer";
   const find = createFind(document.createElement("article")); md.append(find.element); find.open();
   const pdfWrap = document.createElement("div"); pdfWrap.className = "va-viewer";
-  const pdf = document.createElement("div"); pdf.className = "va-search";
-  pdf.append(input("search", "정합"), button("이전 결과"), button("다음 결과"), iconButton("검색 닫기", "close"));
-  pdfWrap.append(pdf);
-  const text = document.createElement("div"); text.className = "text-root va-viewer";
-  const tbar = document.createElement("div"); tbar.className = "text-search va-search";
-  tbar.append(input("search", "dataclass"), button("이전"), button("다음"), button("닫기")); text.append(tbar);
-  section("찾기 막대 (Markdown · PDF · 텍스트)", md, pdfWrap, text);
+  const pdf = findBar({ label: "문서 검색", step: () => {} }); pdf.open(); pdf.input.value = "정합"; pdf.count.textContent = "2페이지 · 1/3";
+  pdfWrap.append(pdf.element);
+  section("찾기 막대 (Markdown · PDF · 텍스트 공용)", md, pdfWrap);
 }
 
 // 3. Markdown read mode: edit toggle, TOC toggle, read-only banner.

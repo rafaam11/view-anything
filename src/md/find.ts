@@ -1,4 +1,4 @@
-import { iconButton } from "../ui/icons";
+import { findBar } from "../ui/find-bar";
 import { matchRanges } from "../ui/match";
 
 const HIT = "md-find-hit", CURRENT = "md-find-current";
@@ -127,55 +127,24 @@ export function createFinder(root: Element) {
   };
 }
 
-/** The floating panel: over the text, so opening it moves neither the text nor the sticky toc. */
+/** The shared floating find bar over the text, so opening it moves neither the text nor the toc. */
 export function createFind(root: Element) {
   const finder = createFinder(root);
-  const element = document.createElement("div");
-  element.className = "md-find va-search";
-  element.setAttribute("role", "search");
-  element.hidden = true;
-  const input = document.createElement("input");
-  input.type = "search";
-  input.placeholder = "찾기";
-  input.setAttribute("aria-label", "문서 내 찾기");
-  const count = document.createElement("span");
-  count.className = "md-find-count";
-  count.setAttribute("role", "status");
-  const previous = iconButton("이전 결과", "previous", "Shift+Enter");
-  const next = iconButton("다음 결과", "next", "Enter");
-  const close = iconButton("찾기 닫기", "close", "Esc");
-  element.append(input, count, previous, next, close);
-
   const show = () => {
-    count.textContent = !finder.query ? "" : finder.count ? `${finder.index + 1}/${finder.count}` : "결과 없음";
+    bar.count.textContent = !finder.query ? "" : finder.count ? `${finder.index + 1}/${finder.count}` : "결과 없음";
   };
-  const go = (delta: 1 | -1) => { finder.step(delta); show(); };
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const cancel = () => { clearTimeout(timer); timer = undefined; };
-  const flush = () => { cancel(); finder.apply(input.value); show(); };
-  input.oninput = () => { cancel(); timer = setTimeout(flush, 100); };
-  input.onkeydown = (e) => {
-    if (e.key !== "Enter" || e.isComposing) return;
-    e.preventDefault();
-    // Typed faster than the debounce: this Enter shows the first result, it does not skip it.
-    if (timer !== undefined) flush();
-    else go(e.shiftKey ? -1 : 1);
-  };
-  previous.onclick = () => go(-1);
-  next.onclick = () => go(1);
-  const hide = () => {
-    cancel();
-    finder.clear();
-    input.value = "";
-    show();
-    element.hidden = true;
-  };
-  close.onclick = hide;
+  const bar = findBar({
+    label: "문서 내 찾기",
+    debounce: 100,
+    input: (query) => { finder.apply(query); show(); },
+    step: (back) => { finder.step(back ? -1 : 1); show(); },
+    close: () => finder.clear(),
+  });
   return {
-    element,
-    get isOpen() { return !element.hidden; },
-    open() { element.hidden = false; input.focus(); input.select(); },
-    close: hide,
+    element: bar.element,
+    get isOpen() { return bar.isOpen; },
+    open: bar.open,
+    close: bar.close,
     refresh() { finder.refresh(); show(); },
   };
 }

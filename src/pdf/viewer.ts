@@ -5,7 +5,9 @@ import { platform } from '../platform';
 import type { Viewer } from '../registry';
 import { documentBar } from '../ui/chrome';
 import { iconButton, textButton } from '../ui/icons';
+import { findBar } from '../ui/find-bar';
 import '../ui/dialog.css';
+import { errorMessage } from '../ui/strings';
 import { matchRanges } from '../ui/match';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -43,7 +45,7 @@ const viewer: Viewer = {
       await loading.destroy();
       if (passwordCancelled) throw new Error('PDF 암호 입력을 취소했습니다.');
       if (e instanceof Error && e.name === 'PasswordException') throw new Error('암호로 보호된 PDF는 열 수 없습니다.');
-      throw new Error(`PDF를 읽을 수 없습니다: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(`PDF를 읽을 수 없습니다: ${errorMessage(e)}`);
     }
     const root = document.createElement('div'); root.className = 'pdf-root va-viewer';
     const toolbar = document.createElement('header'); toolbar.className = 'pdf-toolbar';
@@ -51,12 +53,12 @@ const viewer: Viewer = {
     const pageInput = document.createElement('input'); pageInput.type = 'number'; pageInput.min = '1'; pageInput.max = String(doc.numPages); pageInput.setAttribute('aria-label', '페이지');
     const total = document.createElement('span'); total.textContent = `/ ${doc.numPages}`;
     const zoomOut = iconButton('축소', 'minus'); const zoomLabel = document.createElement('span'); const zoomIn = iconButton('확대', 'plus');
-    const searchInput = document.createElement('input'); searchInput.type = 'search'; searchInput.maxLength = 512; searchInput.placeholder = '문서 검색'; searchInput.setAttribute('aria-label', '문서 검색');
-    const search = textButton('다음 결과'), searchPrev = textButton('이전 결과'); const status = document.createElement('span'); status.setAttribute('role', 'status');
-    const searchBar = document.createElement('div'); searchBar.className = 'va-search'; searchBar.hidden = true;
-    const closeSearch = iconButton('검색 닫기', 'close'); closeSearch.onclick = () => { searchBar.hidden = true; };
-    searchBar.append(searchInput, searchPrev, search, closeSearch); status.className = 'va-status';
-    const showSearch = () => { searchBar.hidden = false; searchInput.focus(); };
+    const status = document.createElement('span'); status.setAttribute('role', 'status'); status.className = 'va-status';
+    /** A new or cleared query starts over from the current page. */
+    const resetSearch = () => { ++searchGeneration; lastQuery = ''; lastFoundPage = 0; lastFoundIndex = -1; markMatches(); };
+    const searchBar = findBar({ label: '문서 검색', maxLength: 512, step: (back) => void find(back ? -1 : 1), input: () => { searchBar.count.textContent = ''; resetSearch(); }, close: resetSearch });
+    const searchInput = searchBar.input;
+    const showSearch = searchBar.open;
     const content = document.createElement('div'); content.className = 'pdf-content';
     const outline = document.createElement('nav'); outline.className = 'pdf-outline'; outline.setAttribute('aria-label', '목차');
     const scroll = document.createElement('div'); scroll.className = 'pdf-scroll';
@@ -70,9 +72,9 @@ const viewer: Viewer = {
     window.addEventListener('keydown', e => {
       if (document.querySelector('dialog[open]')) return;
       if (e.ctrlKey && e.key.toLowerCase() === 'f') { e.preventDefault(); showSearch(); }
-      else if (e.key === 'Escape') searchBar.hidden = true;
+      else if (e.key === 'Escape' && searchBar.isOpen) searchBar.close();
     });
-    content.append(outline, scroll); root.append(toolbar, searchBar, status, content); el.replaceChildren(root);
+    content.append(outline, scroll); root.append(toolbar, searchBar.element, status, content); el.replaceChildren(root);
     let pageNumber = 1, scale = 1, generation = 0, searchGeneration = 0, task: RenderTask | null = null;
     let renderBarrier: Promise<unknown> = Promise.resolve();
     let lastQuery = '', lastFoundPage = 0, lastFoundIndex = -1, textLayer: TextLayer | null = null;
@@ -123,7 +125,7 @@ const viewer: Viewer = {
         const text = await page.getTextContent(); if (id !== generation) return;
         const layer = new TextLayer({ textContentSource: text, container: freshLayer, viewport }); textLayer = layer;
         await layer.render(); if (id === generation) { pageText = layer.textContentItemsStr; separators = text.items.filter(item => 'str' in item).map(item => 'hasEOL' in item && item.hasEOL ? ' ' : ''); scroll.scrollTop = 0; markMatches(); }
-      } catch (e) { if (id === generation) status.textContent = `페이지 표시 오류: ${e instanceof Error ? e.message : String(e)}`; }
+      } catch (e) { if (id === generation) status.textContent = `페이지 표시 오류: ${errorMessage(e)}`; }
     };
     const go = (n: number) => { if (!Number.isFinite(n)) return; pageNumber = Math.max(1, Math.min(doc.numPages, Math.trunc(n))); void render(); };
     prev.onclick = () => go(pageNumber - 1); next.onclick = () => go(pageNumber + 1);
@@ -132,8 +134,8 @@ const viewer: Viewer = {
     zoomIn.onclick = () => { scale = Math.min(3, Math.round((scale + 0.25) * 100) / 100); void render(); };
     const find = async (direction: 1 | -1) => {
       const query = searchInput.value.trim(), id = ++searchGeneration;
-      if (!query) { status.textContent = '검색어를 입력하세요.'; return; }
-      status.textContent = '검색 중…';
+      if (!query) { searchBar.count.textContent = ''; return; }
+      searchBar.count.textContent = '검색 중…';
       try {
         const start = pageNumber;
         for (let offset = 0; offset < doc.numPages; offset++) {
@@ -144,15 +146,12 @@ const viewer: Viewer = {
           const matches = matchRanges(value, query);
           const current = query === lastQuery && n === lastFoundPage && offset === 0 ? lastFoundIndex : direction > 0 ? -1 : matches.length;
           const index = current + direction;
-          if (index >= 0 && index < matches.length) { lastQuery = query; lastFoundPage = n; lastFoundIndex = index; status.textContent = `${n}페이지 ${index + 1}/${matches.length}`; if (n !== pageNumber) go(n); else markMatches(); return; }
+          if (index >= 0 && index < matches.length) { lastQuery = query; lastFoundPage = n; lastFoundIndex = index; searchBar.count.textContent = `${n}페이지 · ${index + 1}/${matches.length}`; if (n !== pageNumber) go(n); else markMatches(); return; }
         }
         if (query === lastQuery && lastFoundPage === pageNumber) { lastQuery = ''; return find(direction); }
-        status.textContent = '검색 결과가 없습니다.';
-      } catch (e) { if (id === searchGeneration) status.textContent = `검색 오류: ${e instanceof Error ? e.message : String(e)}`; }
+        searchBar.count.textContent = '결과 없음';
+      } catch (e) { if (id === searchGeneration) { searchBar.count.textContent = ''; status.textContent = `검색 오류: ${errorMessage(e)}`; } }
     };
-    search.onclick = () => void find(1); searchPrev.onclick = () => void find(-1);
-    searchInput.oninput = () => { ++searchGeneration; lastQuery = ''; lastFoundPage = 0; lastFoundIndex = -1; markMatches(); };
-    searchInput.onkeydown = e => { if (e.key === 'Enter') search.click(); };
     let outlineCount = 0;
     const addOutline = (items: OutlineItem[], host: HTMLElement, depth: number) => {
       if (depth > 20) return;

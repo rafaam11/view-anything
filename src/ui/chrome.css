@@ -4,6 +4,12 @@
 .va-viewer [role=status]:empty { display:none; }
 .va-search { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--border); font-size:var(--font-size-ui); }
 .va-search input { min-width:100px; flex:1; max-width:360px; }
+/* Find bar (ui/find-bar.ts): over the content under the toolbar, below the menus that open from it. */
+.va-find { position:fixed; top:calc(var(--va-titlebar-height, 0px) + 44px); right:24px; z-index:4; display:flex; align-items:center; gap:4px; max-width:calc(100vw - 48px); box-sizing:border-box; padding:4px 6px 4px 8px; background:var(--bg-overlay); color:var(--fg); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-popover); font-size:var(--font-size-ui); }
+.va-find[hidden] { display:none; }
+.va-find input { flex:1 1 200px; width:200px; min-width:80px; }
+.va-find-count { color:var(--muted); font-size:var(--font-size-small); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.va-find-count:empty { display:none; }
 .va-status { margin:0; padding:6px 12px; font-size:var(--font-size-small); color:var(--muted); overflow-wrap:anywhere; }
 .va-viewer .va-viewer-toolbar .va3d-menu-item { justify-content:flex-start; }
 /* File-menu commands from menuButton: the shortcut is generated text, so the button text stays the label. */

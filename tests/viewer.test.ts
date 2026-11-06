@@ -220,7 +220,7 @@ const openDialog = () => {
   document.body.append(dialog);
   return dialog;
 };
-const panelOf = (el: Element) => el.querySelector<HTMLElement>(".md-find")!;
+const panelOf = (el: Element) => el.querySelector<HTMLElement>(".va-find")!;
 function search(el: Element, query: string) {
   const input = panelOf(el).querySelector("input")!;
   input.value = query;
@@ -272,7 +272,7 @@ test("ctrl+f searches the read view without changing its text; escape takes it a
   expect(press({ key: "f" }).defaultPrevented).toBe(true);
   expect(panelOf(v.el).hidden).toBe(false);
   search(v.el, "one");
-  expect(panelOf(v.el).querySelector(".md-find-count")!.textContent).toBe("1/2");
+  expect(panelOf(v.el).querySelector(".va-find-count")!.textContent).toBe("1/2");
   expect(v.article.querySelectorAll("mark").length).toBe(3);
   expect(v.article.textContent).toBe(before);
   expect(press({ key: "Escape", ctrlKey: false }).defaultPrevented).toBe(true);
@@ -313,10 +313,10 @@ test("a reload redraws the search on the new content, keeping the position", asy
   press({ key: "f" });
   search(v.el, "one");
   panelOf(v.el).querySelector<HTMLInputElement>("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-  expect(panelOf(v.el).querySelector(".md-find-count")!.textContent).toBe("2/3");
+  expect(panelOf(v.el).querySelector(".va-find-count")!.textContent).toBe("2/3");
   rewrite(path, "one one one one\n");
   window.dispatchEvent(new Event("focus"));
-  await vi.waitFor(() => expect(panelOf(v.el).querySelector(".md-find-count")!.textContent).toBe("2/4"));
+  await vi.waitFor(() => expect(panelOf(v.el).querySelector(".va-find-count")!.textContent).toBe("2/4"));
   expect(v.article.querySelectorAll("mark").length).toBe(4);
   expect(v.article.querySelectorAll(".md-find-current").length).toBe(1);
 });
