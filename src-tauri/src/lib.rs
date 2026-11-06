@@ -32,7 +32,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use percent_encoding::{percent_decode, utf8_percent_encode, NON_ALPHANUMERIC};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-use args::file_arg;
+use args::parse_launch;
 
 static WINDOW_SEQ: AtomicUsize = AtomicUsize::new(0);
 static FILE_WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -404,9 +404,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
-            if let Some(p) = file_arg(&argv) {
+            let launch = parse_launch(&argv);
+            if let Some(p) = launch.path {
                 let p = if p.is_absolute() { p } else { Path::new(&cwd).join(p) };
-                if let Err(e) = create_window(app, Some(p)) {
+                if let Err(e) = create_window_mode(app, Some(p), launch.text) {
                     eprintln!("failed to open window: {e}");
                 }
             } else {
@@ -441,7 +442,8 @@ pub fn run() {
         ])
         .setup(|app| {
             let argv: Vec<String> = std::env::args().collect();
-            create_window(app.handle(), file_arg(&argv))?;
+            let launch = parse_launch(&argv);
+            create_window_mode(app.handle(), launch.path, launch.text)?;
             Ok(())
         })
         .run(tauri::generate_context!())
