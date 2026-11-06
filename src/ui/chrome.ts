@@ -1,22 +1,20 @@
 import "./chrome.css";
 import { Menubar, type MenuItem } from "../three/core/menubar";
-import { recentMenuBlock } from "./recent-menu";
+import { fileMenu } from "./file-menu";
 
-/** Reuse each viewer's existing commands and guards; the shell only changes their placement. */
-export function documentBar(bar: HTMLElement, options: { toggle?: HTMLButtonElement; files?: HTMLButtonElement[]; view?: MenuItem[]; tools?: MenuItem[]; controls?: HTMLElement[] } = {}): Menubar {
+/**
+ * The document viewers' toolbar: 파일 (the shared list, then this viewer's commands) and 보기 on
+ * the left, controls and the 편집 toggle on the right. `files` are buttons the viewer shows or
+ * hides itself; `actions` are plain menu commands.
+ */
+export function documentBar(bar: HTMLElement, options: { toggle?: HTMLButtonElement; files?: HTMLButtonElement[]; actions?: MenuItem[]; view?: MenuItem[]; controls?: HTMLElement[] } = {}): Menubar {
   bar.classList.add("va-viewer-toolbar");
   const files = document.createElement("div");
   for (const b of options.files ?? []) { b.classList.add("va3d-menu-item"); files.append(b); }
+  const actions: MenuItem[] = [...(options.files?.length ? [{ element: files, label: "파일 작업" }] : []), ...(options.actions ?? [])];
   const menus = new Menubar([
-    { label: "파일", accessKey: "f", items: [
-      { label: "열기…", shortcut: "Ctrl+O", run: () => window.dispatchEvent(new CustomEvent("va:open")) },
-      { label: "텍스트로 열기…", shortcut: "Ctrl+Shift+O", run: () => window.dispatchEvent(new CustomEvent("va:open", { detail: { text: true } })) },
-      { separator: true },
-      recentMenuBlock(() => menus.close()),
-      ...(options.files?.length ? [{ separator: true } as const, { element: files, label: "파일 작업" }] : []),
-    ] },
+    { label: "파일", accessKey: "f", items: fileMenu(() => menus.close(), { actions }) },
     ...(options.view?.length ? [{ label: "보기", accessKey: "v", items: options.view }] : []),
-    ...(options.tools?.length ? [{ label: "도구", accessKey: "e", items: options.tools }] : []),
   ]);
   const controls = document.createElement("div"); controls.className = "va-viewer-controls";
   controls.append(...(options.controls ?? []), ...(options.toggle ? [options.toggle] : []));
@@ -27,8 +25,4 @@ export function documentBar(bar: HTMLElement, options: { toggle?: HTMLButtonElem
     else menus.handleKey(e);
   });
   return menus;
-}
-
-export function command(button: HTMLButtonElement): MenuItem {
-  return { label: button.textContent ?? "", run: () => button.click(), disabled: () => button.disabled };
 }

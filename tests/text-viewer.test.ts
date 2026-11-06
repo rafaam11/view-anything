@@ -62,7 +62,7 @@ test("external write is not replaced and recovery copy retains edits", async () 
   button("저장").click(); await settle();
   expect(platform.writeFileChecked).not.toHaveBeenCalled();
   expect(platform.notice).toHaveBeenCalledWith(expect.stringContaining("외부에서 바뀌었거나"), "warning"); expect(source().value).toBe("mine\n");
-  button("다른 이름으로 저장").click(); await settle();
+  button("다른 이름으로 저장…").click(); await settle();
   expect(platform.writeFileNew).toHaveBeenCalledWith("copy.txt", new TextEncoder().encode("mine\r\n"));
   expect(await close()).toBe(false);
 });
@@ -141,6 +141,11 @@ test("large edits stay plain while typing and get colours again after saving", a
   expect(stack.getAttribute("data-highlight")).not.toBe("on");
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }));
   await vi.waitFor(() => expect(stack.getAttribute("data-highlight")).toBe("on"), { timeout: 5000 });
+});
+test("the toolbar is the shared document bar: file menu first, 편집 on the right", () => {
+  const bar = document.querySelector(".text-bar")!;
+  expect(bar.firstElementChild!.classList.contains("va3d-menubar")).toBe(true);
+  expect([...bar.querySelectorAll(".va-viewer-controls button")].map((b) => b.textContent)).toEqual(["편집"]);
 });
 test("Ctrl+F opens the shared find bar; results show in its count and Esc closes it", async () => {
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, cancelable: true }));

@@ -21,7 +21,7 @@ import { loadGltfFile, loadMeshFile } from "./load";
 import { workerRunner } from "./geometry-worker";
 import type { CloudController } from "./cloud/controller";
 import { pointCount } from "./core/info";
-import { recentMenuBlock } from "../ui/recent-menu";
+import { fileMenu } from "../ui/file-menu";
 import { toast } from "../ui/toast";
 import { errorMessage } from "../ui/strings";
 
@@ -99,13 +99,6 @@ interface Entry {
   controller: AbortController;
 }
 
-/**
- * App-level hooks for the 파일 menu. `onCheckUpdate` is wired by the auto-update task; while it is
- * null, "업데이트 확인" stays disabled.
- */
-export const menuHooks: { onCheckUpdate: (() => void) | null } = {
-  onCheckUpdate: () => window.dispatchEvent(new Event("va:check-update")),
-};
 
 /** Ctrl+Shift+E (KeyboardEvent.code, so a Korean IME layout still works). */
 export function isExportKey(e: Pick<KeyboardEvent, "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
@@ -172,21 +165,13 @@ export class ThreeViewer {
       {
         label: "파일",
         accessKey: "f",
-        items: [
-          { label: "열기…", shortcut: "Ctrl+O", run: () => open(false) },
-          { label: "장면에 추가…", run: () => open(true) },
-          { label: "HTML로 내보내기…", shortcut: "Ctrl+Shift+E", run: () => void this.exportHtml() },
-          { label: "화면을 PNG로 저장…", run: () => void this.savePng(), disabled: () => this.exporting },
-          { separator: true },
-          recentMenuBlock(() => this.menubar.close()),
-          { separator: true },
-          {
-            label: "업데이트 확인",
-            run: () => menuHooks.onCheckUpdate?.(),
-            disabled: () => menuHooks.onCheckUpdate === null,
-            title: "다음 작업에서 연결",
-          },
-        ],
+        items: fileMenu(() => this.menubar.close(), {
+          open: [{ label: "장면에 추가…", run: () => open(true) }],
+          actions: [
+            { label: "HTML로 내보내기…", shortcut: "Ctrl+Shift+E", run: () => void this.exportHtml() },
+            { label: "화면을 PNG로 저장…", run: () => void this.savePng(), disabled: () => this.exporting },
+          ],
+        }),
       },
       {
         label: "보기",

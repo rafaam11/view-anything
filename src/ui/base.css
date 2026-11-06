@@ -94,6 +94,9 @@
 .va-icon-button:disabled { background: transparent; color: var(--muted); }
 .va-icon-button[aria-pressed="true"] { background: var(--fill-selected); }
 
+/* A command's shortcut, right-aligned in its menu row: generated text, so the button text stays the label. */
+:where(button[data-shortcut]):not(:where(.md-editor *))::after { content: attr(data-shortcut); margin-left: auto; padding-left: 16px; color: var(--muted); font-size: var(--font-size-small); }
+
 /* 3. Banners: info by default; warning and error by data-kind. */
 .va-banner {
   display: flex;

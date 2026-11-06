@@ -40,7 +40,7 @@ import viewer from "../src/data/csv-viewer";
 import { textSettings } from "../src/settings/document";
 
 const encode = (s: string) => new TextEncoder().encode(s);
-const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으로 저장", "다시 읽기", "이전 페이지", "다음 페이지", "이전 열", "다음 열"].map(label => [...root.querySelectorAll("button")].find(b => b.textContent === label)!);
+const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으로 저장…", "다시 읽기", "이전 페이지", "다음 페이지", "이전 열", "다음 열"].map(label => [...root.querySelectorAll("button")].find(b => b.textContent === label)!);
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
 
 test("CSV edits preserve untouched bytes and external conflicts retain local changes", async () => {
@@ -48,6 +48,7 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
   const root = document.createElement("div");
   await viewer.mount(root, "test.csv");
   const buttons = controls(root);
+  expect(buttons[1].dataset.shortcut).toBe("Ctrl+S"); // shown beside 저장 in the file menu
   buttons[0].click(); await settle();
   const cells = root.querySelectorAll("textarea");
   cells[2].value = "beta"; cells[2].dispatchEvent(new Event("input"));

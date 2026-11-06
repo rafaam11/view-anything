@@ -16,12 +16,13 @@ export function updateBadge(version: string, request: (action: "check" | "instal
   menu.className = "va-update-menu";
   menu.hidden = true;
   function close() { menu.hidden = true; chip.setAttribute("aria-expanded", "false"); }
-  function item(label: string, run: () => void) {
-    const b = textButton(label, "ghost");
+  function item(label: string, run: () => void, shortcut?: string) {
+    const b = textButton(label, "ghost", shortcut ? { shortcut } : {});
+    if (shortcut) b.dataset.shortcut = shortcut;
     b.onclick = () => { close(); run(); };
     menu.append(b);
   }
-  item("업데이트 확인", () => request("check"));
+  item("업데이트 확인", () => request("check"), "Ctrl+Shift+U");
   item("릴리스 노트", () => open(RELEASES));
   item("GitHub 저장소", () => open(REPOSITORY));
   const v = document.createElement("span");

@@ -58,8 +58,8 @@ const viewer: Viewer = {
     const bar = document.createElement("header"); bar.className = "data-bar";
     const title = document.createElement("strong"); title.textContent = name;
     const toggle = textButton("편집");
-    const save = menuButton("저장"); save.hidden = true;
-    const copy = menuButton("다른 이름으로 저장"); copy.hidden = true;
+    const save = menuButton("저장", "Ctrl+S"); save.hidden = true;
+    const copy = menuButton("다른 이름으로 저장…"); copy.hidden = true;
     const reload = menuButton("다시 읽기"); reload.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status");
     documentBar(bar, { toggle, files: [save, copy, reload] });

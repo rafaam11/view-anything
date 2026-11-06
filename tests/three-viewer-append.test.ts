@@ -327,7 +327,7 @@ test("removing the file that holds the selection clears it (panel included)", as
   expect(root.querySelector(".va3d-dims")!.textContent).toBe("");
 });
 
-test("menubar: file actions and update check dispatch app events; no bottom view button", async () => {
+test("menubar: the shared file menu dispatches app events; no update item, no bottom view button", async () => {
   const v = make();
   expect(root.querySelector(".va3d-view-button")).toBeNull();
   expect(root.querySelector(".va3d-bottom .va3d-view-controls")).toBeNull();
@@ -338,19 +338,14 @@ test("menubar: file actions and update check dispatch app events; no bottom view
   window.addEventListener("va:open", onOpen);
   titles[0].click();
   const items = () => [...root.querySelectorAll<HTMLButtonElement>(".va3d-menu:not([hidden]) .va3d-menu-item")];
-  expect(items().map((b) => b.querySelector(".va3d-menu-label")!.textContent)).toEqual(["열기…", "장면에 추가…", "HTML로 내보내기…", "화면을 PNG로 저장…", "업데이트 확인"]);
-  const update = items()[4];
-  expect(update.getAttribute("aria-disabled")).not.toBe("true");
-  const check = vi.fn();
-  window.addEventListener("va:check-update", check, { once: true });
-  update.click();
-  expect(check).toHaveBeenCalledOnce();
-  titles[0].click();
+  expect(items().map((b) => b.querySelector(".va3d-menu-label")!.textContent)).toEqual(["열기…", "텍스트로 열기…", "장면에 추가…", "HTML로 내보내기…", "화면을 PNG로 저장…"]);
   items()[0].click();
   titles[0].click();
   items()[1].click();
+  titles[0].click();
+  items()[2].click();
   window.removeEventListener("va:open", onOpen);
-  expect(events).toEqual([{ append: false }, { append: true }]);
+  expect(events).toEqual([null, { text: true }, { append: true }]);
   // The 보기 menu holds the display mode / section controls and the panel toggle.
   titles[1].click();
   const view = root.querySelector<HTMLElement>(".va3d-menu:not([hidden])")!;

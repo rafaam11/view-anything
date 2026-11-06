@@ -196,7 +196,7 @@ test("missing original is not recreated and edited markdown can be saved as a co
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
   await settle();
   expect(disk.has(path)).toBe(false);
-  const copy = [...v.el.querySelectorAll("button")].find(b => b.textContent === "다른 이름으로 저장")!;
+  const copy = [...v.el.querySelectorAll("button")].find(b => b.textContent === "다른 이름으로 저장…")!;
   copy.click(); await settle();
   expect(new TextDecoder().decode(disk.get("D:\\q\\recovery.md"))).toContain("new");
   expect(disk.has(path)).toBe(false);

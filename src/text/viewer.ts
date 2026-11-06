@@ -5,8 +5,7 @@ import { saveCopy } from "../data/save-copy";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { decodeHint, decodeText, encodeText, normalize, lineEndings, type TextMeta } from "./codec";
-import { Menubar } from "../three/core/menubar";
-import { recentMenuBlock } from "../ui/recent-menu";
+import { documentBar } from "../ui/chrome";
 import { registerTextSettings } from "../settings/document";
 import { preferences } from "../settings/preferences";
 import { revealSelection } from "./selection";
@@ -33,7 +32,7 @@ const viewer: Viewer = {
     const bar = document.createElement("header"); bar.className = "text-bar va-viewer-toolbar";
     const button = (label: string, run: () => Promise<void>) => {
       const b = textButton(label);
-      b.onclick = () => { void run().catch(report); }; bar.append(b); return b;
+      b.onclick = () => { void run().catch(report); }; return b;
     };
     const status = document.createElement("p"); status.setAttribute("role", "status");
     const report = (e: unknown) => { status.textContent = errorMessage(e); };
@@ -143,20 +142,15 @@ const viewer: Viewer = {
     };
     const showSearch = finder.open;
     const run = (action: () => Promise<void>) => () => { void action().catch(report); };
-    const menus = new Menubar([
-      { label: "파일", accessKey: "f", items: [
-        { label: "열기…", shortcut: "Ctrl+O", run: () => window.dispatchEvent(new CustomEvent("va:open")) },
-        { label: "텍스트로 열기…", shortcut: "Ctrl+Shift+O", run: () => window.dispatchEvent(new CustomEvent("va:open", { detail: { text: true } })) },
-        { separator: true },
-        recentMenuBlock(() => menus.close()),
-        { separator: true },
+    documentBar(bar, {
+      toggle: edit,
+      actions: [
         { label: "저장", shortcut: "Ctrl+S", run: run(async () => doSave()), disabled: () => !editing || busy || !meta },
-        { label: "다른 이름으로 저장", run: run(doCopy), disabled: () => !editing || busy || !meta },
+        { label: "다른 이름으로 저장…", run: run(doCopy), disabled: () => !editing || busy || !meta },
         { label: "다시 읽기", run: run(reload), disabled: () => busy },
-      ] },
-      { label: "보기", accessKey: "v", items: [{ label: "찾기…", shortcut: "Ctrl+F", run: showSearch }] },
-    ]);
-    bar.prepend(menus.root);
+      ],
+      view: [{ label: "찾기…", shortcut: "Ctrl+F", run: showSearch }],
+    });
     root.append(bar, finder.element, status, stack); el.replaceChildren(root);
     const doSave = async () => exclusive(async () => {
       if (!editing || !meta || !dirty()) return;
@@ -175,7 +169,6 @@ const viewer: Viewer = {
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); if (!e.repeat) void doSave().catch(report); }
       if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); showSearch(); }
       if (e.key === "Escape" && finder.isOpen) finder.close();
-      if (menus.handleKey(e)) return;
       if (editing && (e.key === "F5" || e.key.startsWith("Browser") || (e.ctrlKey && e.key.toLowerCase() === "r") || (e.altKey && ["ArrowLeft", "ArrowRight"].includes(e.key)))) { e.preventDefault(); e.stopPropagation(); }
     }, true);
     for (const event of ["mousedown", "mouseup"]) window.addEventListener(event, e => { if (editing && [3, 4].includes((e as MouseEvent).button)) e.preventDefault(); }, true);
