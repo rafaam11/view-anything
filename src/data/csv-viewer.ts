@@ -79,18 +79,29 @@ const viewer: Viewer = {
       previousColumns.disabled = columnPage === 0; nextColumns.disabled = columnPage + 1 >= columns;
       pages.hidden = count === 1 && columns === 1;
     };
-    /** Decode with the chosen encoding; a file that cannot be read stays open, read-only, with a hint. */
+    let mounted = false;
+    /** Nothing editable can be shown: keep the window, drop to read mode with no stale cells, and say why. */
+    const unreadable = (message: string) => {
+      meta = null; source = ""; rows = []; columnCount = 0; decodeFailed = true;
+      editing = false; edit.textContent = "편집"; edit.disabled = true; save.hidden = copy.hidden = true; reload.hidden = false;
+      body.replaceChildren(); pages.hidden = true; status.textContent = message; refresh();
+    };
+    /** Decode with the chosen encoding and parse; the table only changes once both succeeded. */
     const render = async () => {
       changes = new Map(); invalid = false; page = columnPage = 0;
-      try { meta = await decodeText(doc.bytes, cp949); }
+      let decoded: TextMeta;
+      try { decoded = await decodeText(doc.bytes, cp949); }
+      catch (e) { unreadable(decodeHint(e)); return; }
+      let parsed: CsvRows;
+      try { parsed = parseCsv(decoded.text, ",", MAX_CELLS); }
       catch (e) {
-        meta = null; source = ""; rows = []; columnCount = 0; decodeFailed = true;
-        body.replaceChildren(); pages.hidden = true; edit.disabled = true; status.textContent = decodeHint(e); refresh();
-        return;
+        if (!mounted) throw e; // the first render fails the mount, so the app offers "텍스트로 열기"
+        unreadable(String(e)); return;
       }
-      if (decodeFailed || !status.textContent) status.textContent = cp949 ? "CP949로 읽음" : "";
+      const note = cp949 ? "CP949로 읽음" : "";
+      if (decodeFailed || !status.textContent || status.textContent === "CP949로 읽음") status.textContent = note;
       decodeFailed = false; edit.disabled = false;
-      source = meta.text; rows = parseCsv(source, ",", MAX_CELLS);
+      meta = decoded; source = decoded.text; rows = parsed;
       columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0); showPage();
     };
     previous.onclick = () => { if (page > 0) { page--; showPage(); } };
@@ -137,10 +148,10 @@ const viewer: Viewer = {
       finally { busy = false; }
     })().catch(report); };
     reload.onclick = () => { void (async () => {
-      if (!editing || busy) return; busy = true;
+      if (busy) return; busy = true; // also offered in read mode after a file became unreadable
       try {
         if (dirty() && !await platform.confirmDiscard("편집 내용을 버리고 파일을 다시 읽을까요?")) return;
-        doc.reset(await read()); await render(); reload.hidden = true;
+        reload.hidden = true; doc.reset(await read()); await render();
       } finally { busy = false; }
     })().catch(report); };
     window.addEventListener("keydown", e => {
@@ -167,6 +178,7 @@ const viewer: Viewer = {
     });
     await platform.onCloseRequested(confirmLeave);
     await render();
+    mounted = true;
   },
 };
 export default viewer;

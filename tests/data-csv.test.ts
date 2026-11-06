@@ -17,7 +17,8 @@ test("preserves untouched CSV quoting, mixed line endings, and quoted newlines",
 
 test("handles trailing empty fields and rejects an unterminated quote", () => {
   expect(parseCsv("a,b,")[0].map((c) => c.value)).toEqual(["a", "b", ""]);
-  expect(() => parseCsv('"unfinished')).toThrow();});
+  expect(() => parseCsv('"unfinished')).toThrow();
+});
 
 test("applies multiple changes without changing intervening tokens and rejects duplicate empty fields", () => {
   const input = 'a,"b,b",c\r\nx,y,';

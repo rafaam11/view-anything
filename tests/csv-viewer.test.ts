@@ -109,3 +109,28 @@ test("a CP949 CSV asks for the encoding setting, then opens and saves losslessly
   expect(state.disk).toEqual(cp.encode("이름,값\r\n나,1\n"));
   expect(state.alerts).toEqual([]);
 });
+
+test("a file that stops parsing after a reload closes editing instead of saving stale cells", async () => {
+  state.disk = encode("a,b\n1,2\n"); state.alerts = [];
+  const root = document.createElement("div");
+  await viewer.mount(root, "late.csv");
+  const buttons = controls(root); buttons[0].click(); await settle();
+  expect(root.querySelectorAll("textarea")).toHaveLength(4);
+  state.disk = encode('"broken\n');
+  buttons[3].click(); await settle(); // 다시 읽기: nothing was edited, so no confirmation
+  expect(root.querySelectorAll("textarea")).toHaveLength(0);
+  expect(buttons[0].textContent).toBe("편집");
+  expect(buttons[0].disabled).toBe(true);
+  expect(root.querySelector('[role="status"]')!.textContent).toContain("CSV");
+  expect(state.disk).toEqual(encode('"broken\n'));
+});
+
+test("switching back to UTF clears the CP949 note", async () => {
+  state.disk = encode("a,b\n1,2\n");
+  const root = document.createElement("div");
+  await viewer.mount(root, "ascii.csv");
+  await textSettings()!.changeEncoding("cp949"); await settle();
+  expect(root.querySelector('[role="status"]')!.textContent).toContain("CP949로 읽음");
+  await textSettings()!.changeEncoding("utf"); await settle();
+  expect(root.querySelector('[role="status"]')!.textContent).not.toContain("CP949");
+});

@@ -4,7 +4,7 @@ import { platform } from "../platform";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { encodeDataText, type DataText } from "./text";
-import { decodeHint, decodeUtfText } from "../text/codec";
+import { decodeUtfText, TextDecodeError } from "../text/codec";
 import { FileDocument } from "./document";
 import { restoreLineEndings } from "./line-endings";
 import { saveCopy } from "./save-copy";
@@ -70,9 +70,12 @@ const viewer: Viewer = {
       invalid = false;
       try { meta = decodeUtfText(doc.bytes); }
       catch (error) {
-        // Stay open and read-only: the hint names the way to look inside (JSON/YAML have no CP949 option).
-        editor.value = ""; body.replaceChildren(); toggle.disabled = true;
-        status.textContent = `${decodeHint(error)} 텍스트로 열기(Ctrl+Shift+O)로 내용을 확인할 수 있습니다.`;
+        // Stay open, in read mode, with nothing to save: JSON/YAML have no encoding option here, the
+        // text viewer has one, so the hint points there.
+        const reason = error instanceof TextDecodeError ? error.message : String(error);
+        editing = false; toggle.textContent = "편집"; toggle.disabled = true; save.hidden = copy.hidden = true;
+        editor.value = ""; editor.hidden = true; body.hidden = false; body.replaceChildren();
+        status.textContent = `${reason} 텍스트로 열기(Ctrl+Shift+O)로 연 뒤 설정에서 CP949를 선택할 수 있습니다.`;
         refresh(); return;
       }
       toggle.disabled = false; editor.value = meta.text;
