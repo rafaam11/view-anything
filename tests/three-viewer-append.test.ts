@@ -3,11 +3,14 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
 const titles: string[] = [];
+const png = vi.hoisted(() => ({ saveDialog: vi.fn(async (_o: unknown): Promise<string | null> => null), writeFileRaw: vi.fn(async (_p: string, _d: Uint8Array) => {}) }));
 vi.mock("../src/platform", () => ({
   platform: {
     assetUrl: (p: string) => "asset://" + p,
     readFileRaw: async () => new ArrayBuffer(0),
     setWindowTitle: async (t: string) => void titles.push(t),
+    saveDialog: png.saveDialog,
+    writeFileRaw: png.writeFileRaw,
   },
 }));
 
@@ -71,6 +74,7 @@ function fakeStage() {
       revealSignals.push(signal);
       if (revealGate) await revealGate;
     }),
+    snapshot: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" })),
   };
 }
 
@@ -328,8 +332,8 @@ test("menubar: file actions and update check dispatch app events; no bottom view
   window.addEventListener("va:open", onOpen);
   titles[0].click();
   const items = () => [...root.querySelectorAll<HTMLButtonElement>(".va3d-menu:not([hidden]) .va3d-menu-item")];
-  expect(items().map((b) => b.querySelector(".va3d-menu-label")!.textContent)).toEqual(["열기…", "장면에 추가…", "HTML로 내보내기…", "업데이트 확인"]);
-  const update = items()[3];
+  expect(items().map((b) => b.querySelector(".va3d-menu-label")!.textContent)).toEqual(["열기…", "장면에 추가…", "HTML로 내보내기…", "화면을 PNG로 저장…", "업데이트 확인"]);
+  const update = items()[4];
   expect(update.getAttribute("aria-disabled")).not.toBe("true");
   const check = vi.fn();
   window.addEventListener("va:check-update", check, { once: true });
@@ -434,4 +438,21 @@ test("load + remove, repeated: every geometry, material, texture, edge line and 
       expect(stage.content.children).toHaveLength(0);
     }
   }
+});
+
+test("파일 > 화면을 PNG로 저장 writes the snapshot where the user chose, and a cancel writes nothing", async () => {
+  make();
+  const open = () => {
+    root.querySelector<HTMLButtonElement>(".va3d-menubar .va3d-menu-title")!.click();
+    [...root.querySelectorAll<HTMLButtonElement>(".va3d-menu:not([hidden]) .va3d-menu-item")].find((b) => b.textContent?.includes("PNG"))!.click();
+  };
+  png.saveDialog.mockResolvedValueOnce(null);
+  open(); await settle();
+  expect(png.saveDialog).toHaveBeenLastCalledWith(expect.objectContaining({ defaultPath: "scene.png" }));
+  expect(png.writeFileRaw).not.toHaveBeenCalled();
+  png.saveDialog.mockResolvedValueOnce("D:\\out\\view.png");
+  open(); await settle();
+  expect(stage.snapshot).toHaveBeenCalledOnce();
+  expect(png.writeFileRaw).toHaveBeenCalledWith("D:\\out\\view.png", new Uint8Array([1, 2, 3]));
+  expect(root.textContent).toContain("PNG로 저장했습니다");
 });

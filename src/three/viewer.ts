@@ -22,6 +22,13 @@ import type { CloudController } from "./cloud/controller";
 import { pointCount } from "./core/info";
 import { recentMenuBlock } from "../ui/recent-menu";
 
+/** Where 파일 > 화면을 PNG로 저장 suggests the image: next to the first model, else scene.png. */
+export function screenshotPath(first: string | undefined): string {
+  if (!first) return "scene.png";
+  const name = first.split(/[\\/]/).pop() ?? first, dot = name.lastIndexOf(".");
+  return first.slice(0, first.length - name.length) + (dot > 0 ? name.slice(0, dot) : name) + ".png";
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (className) e.className = className;
@@ -211,6 +218,7 @@ export class ThreeViewer {
           { label: "열기…", shortcut: "Ctrl+O", run: () => open(false) },
           { label: "장면에 추가…", run: () => open(true) },
           { label: "HTML로 내보내기…", shortcut: "Ctrl+Shift+E", run: () => void this.exportHtml() },
+          { label: "화면을 PNG로 저장…", run: () => void this.savePng(), disabled: () => this.exporting },
           { separator: true },
           recentMenuBlock(() => this.menubar.close()),
           { separator: true },
@@ -325,6 +333,17 @@ export class ThreeViewer {
    * 파일 > HTML로 내보내기: the visible scene as one offline HTML file. Not while files load (their
    * objects are not all there yet). The exporter (glTF, meshopt, runtime) is a lazy chunk.
    */
+  async savePng(): Promise<void> {
+    if (this.exporting) return;
+    try {
+      const target = await platform.saveDialog({ title: "화면을 PNG로 저장", defaultPath: screenshotPath(this.model.files[0]?.path), filters: [{ name: "PNG", extensions: ["png"] }] });
+      if (!target) return;
+      const blob = await this.stage.snapshot();
+      await platform.writeFileRaw(target, new Uint8Array(await blob.arrayBuffer()));
+      this.banner.show("PNG로 저장했습니다");
+    } catch (e) { this.banner.show(`PNG로 저장하지 못했습니다: ${String(e)}`); }
+  }
+
   async exportHtml(): Promise<void> {
     if (this.exporting) return;
     if (this.clouds?.isBusy()) { this.banner.show("포인트클라우드 작업이 끝난 뒤 내보내세요."); return; }

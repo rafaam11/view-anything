@@ -24,6 +24,7 @@ import { Navigation } from "./navigation";
 import { displayRootMatrix, objectMatrix, type FramePreset, type ObjectFrame, type Unit } from "./frames";
 import { fitDistance, standardViewDirection, standardViewUp, type StandardView } from "./views";
 import { batchByBudget, clipPlanes, gridSpec, minOrbitDistance, orbitDirection } from "./stage-math";
+import { snapshotCanvas } from "./snapshot";
 
 export class WebGLUnavailableError extends Error {
   constructor() {
@@ -204,6 +205,11 @@ export class Stage {
   /** Display-frame direction -> world direction. */
   private worldVector(v: readonly number[]): Vector3 {
     return new Vector3(v[0], v[1], v[2]).transformDirection(this.displayMatrix);
+  }
+
+  /** PNG of the view as it is now (drawn once more right before the capture). */
+  snapshot(): Promise<Blob> {
+    return snapshotCanvas(() => this.render(), this.renderer.domElement);
   }
 
   requestRender(): void {

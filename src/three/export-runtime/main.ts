@@ -13,6 +13,7 @@ import { ScenePanel } from "../core/panel";
 import { ViewTools } from "../core/view-tools";
 import { workerRunner } from "../geometry-worker";
 import { Menubar } from "../core/menubar";
+import { downloadBlob } from "../core/snapshot";
 import { buildToolbar, focusCanvas, navigationSelect, viewMenuItems } from "../core/view-menu";
 import { keyAction, type KeyAction } from "../core/keys";
 import { FRAME_LABELS, FRAME_SHORT_LABELS, UNIT_LABELS } from "../core/frames";
@@ -128,12 +129,16 @@ class ExportedViewer {
       {
         label: "보기",
         accessKey: "v",
-        items: viewMenuItems({
-          run: (a) => this.run(a),
-          panelShown: () => !this.panel.collapsed,
-          setPanelShown: (shown) => this.panel.setCollapsed(!shown),
-          controls: this.tools.controls,
-        }),
+        items: [
+          ...viewMenuItems({
+            run: (a) => this.run(a),
+            panelShown: () => !this.panel.collapsed,
+            setPanelShown: (shown) => this.panel.setCollapsed(!shown),
+            controls: this.tools.controls,
+          }),
+          { separator: true },
+          { label: "화면을 PNG로 저장", run: () => void stage.snapshot().then((blob) => downloadBlob(blob, "scene.png")).catch((e) => window.alert(String(e))) },
+        ],
       },
     ], { focusAfter: () => focusCanvas(stage.canvas) });
     const status = el("div", "va3d-status");
