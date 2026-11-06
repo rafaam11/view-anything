@@ -61,13 +61,23 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 
 ## 이미지·데이터
 - 최근 파일은 `src/recent.ts`(localStorage `va.recent.v1`, 20개)와 `src/ui/recent-menu.ts`가 빈 창과 파일 메뉴에 표시하고, 열기는 `va:open-path` 이벤트로 main.ts의 드롭 라우팅을 탄다.
-- 공통 뷰어 메뉴·도구줄은 `src/ui/chrome.ts`/`chrome.css`, 아이콘은 `src/ui/icons.ts`를 쓴다. 앱과 HTML의 메뉴는 `src/ui/menu.css`를 공유하며 Tauri를 참조하지 않는다. 파일명은 제목줄에만 표시하고 저장은 파일 메뉴, 검색·자르기·썸네일은 요청 시 표시한다.
+- 공통 뷰어 메뉴·도구줄은 `src/ui/chrome.ts`/`chrome.css`, 아이콘은 `src/ui/icons.ts`를 쓴다. 앱과 HTML의 메뉴는 `src/ui/menu.css`를 공유하며 Tauri를 참조하지 않는다. HTML 런타임은 IIFE 빌드가 CSS import를 버리므로 tokens·base·menu·three CSS를 `?inline`으로 직접 넣는다. 파일명은 제목줄에만 표시하고 저장은 파일 메뉴, 검색·자르기·썸네일은 요청 시 표시한다.
 - `src/text/`는 10 MiB까지 일반 텍스트·코드를 읽고 안전 편집한다. UTF 원문/BOM/줄바꿈을 보존하며 혼합 줄바꿈은 읽기 전용이다. CP949는 명시적으로 선택하고 Rust `text_codec.rs`의 무손실 변환을 쓴다. `Ctrl+Shift+O`와 명령줄 `--text`는 확장자와 무관한 명시적 텍스트 열기다. 코드 확장자는 `highlight.ts`가 highlight.js core·언어를 지연 import해 textarea 뒤 `<pre>`에 칠한다. 두 상자의 글꼴·여백·스크롤바는 같아야 하므로 토큰 색 규칙에 글꼴 속성(기울임·굵게)을 넣지 않는다(`tests/text-highlight-css.test.ts`).
 - `src/settings/`는 제목줄 설정 버튼과 `Ctrl+,`로 연다. `va.preferences.v1`에 Markdown·텍스트 각각의 글꼴 프리셋·크기와 Markdown 본문 폭, 텍스트 자동 줄바꿈을 저장하고 열린 창에도 동기화한다. 현재 뷰어에 맞는 항목만 제공하며 빈 창은 두 표시 그룹을 제공한다. 본문 CSS 변수와 textarea의 soft/off 줄바꿈으로 읽기·편집에 적용하며 원문과 편집 이력은 바꾸지 않는다. 문자 인코딩은 현재 파일에만 적용하고 표시 설정의 초기화와 분리한다.
 - `src/image/`는 원본을 보호하고 편집 결과를 별도 PNG로 저장한다. GIF/SVG 편집은 정적 결과다. 아이콘 도구줄, Ctrl+휠 포인터 기준 확대, 드래그 팬, Ctrl+0 맞춤, Ctrl+C 원본 해상도 이미지 복사, Ctrl+Shift+C 파일 경로 복사를 지원한다. 클립보드 이미지는 raw PNG IPC를 사용하고 Rust 백그라운드에서 디코딩·쓰기하며, 텍스트는 Rust `copy_text`로 쓴다. 클립보드 읽기 권한은 부여하지 않는다. 자르기·회전·반전은 편집 모드에서만 가능하다. 드래그 자르기의 좌표 계산은 DOM 없는 `crop.ts`에 두고, 영역의 원본은 숫자 입력칸이다. 상태줄 정보는 `info.ts`가 만들며 편집 중에는 원본 파일 용량을 표시하지 않는다. 체커보드는 CSS 배경이라 저장·복사 결과에 들어가지 않고, 400% 이상의 픽셀 표시는 SVG에 적용하지 않는다.
 - `src/data/`는 JSON/YAML 원문, CSV 수정 셀, UTF-8/UTF-16과 줄바꿈을 보존한다. 저장 직전 바이트 확인과 네이티브 조건부 원자 교체를 쓰며, 외부 프로세스와의 검증·교체 사이 경쟁은 완전히 제거할 수 없다.
 - CSV는 100행 단위로 표시하고 수정은 저장 시 한 번에 적용한다. Markdown·데이터 복사본 저장은 기존 대상 교체를 거부하며 하드 링크 미지원 파일시스템에서는 실패한다.
 - 3D 조작은 `core/navigation.ts`의 Arcball/Fly를 앱과 HTML이 공유한다. 장면 트리와 앱 점군 도구는 오른쪽 통합 패널에 둔다.
+
+## UI 규칙 (Windows 11 방식)
+- 테마 색은 `src/ui/tokens.css`에만 정의한다. 다크 값은 시스템 블록과 `[data-theme=dark]` 블록에 같게 두고, 다른 CSS는 `var(--…)`만 쓴다(`tests/tokens-css.test.ts`).
+- 컨트롤 모양은 `src/ui/base.css`가 정한다. `:where()` baseline이 모든 버튼·입력에 기본 모양을 주고, `.va-btn`(보조)·`-primary`·`-danger`·`-ghost`, `.va-icon-button`(28px), `.va-banner[data-kind]`를 쓴다. 컨테이너 규칙(`.foo button`)은 배치만 정하고 모양은 정하지 않는다. 예외는 제목줄, 업데이트 칩, 이미지 썸네일, 3D 트리 행뿐이다(`tests/base-css.test.ts`).
+- 버튼은 `textButton`·`menuButton`·`iconButton`(`src/ui/icons.ts`)으로 만든다. 직접 `createElement("button")`하지 않는다(`tests/buttons.test.ts`). 단축키는 라벨에 괄호로 넣지 않고 `menuButton`의 `data-shortcut`이나 메뉴 항목의 `shortcut`으로 오른쪽에 표시한다. 말줄임(…)은 추가 입력을 받는 명령에만 붙인다.
+- 확인·안내는 OS 대화상자 대신 앱 대화상자(`src/ui/dialog.ts`)를 쓴다. `platform.confirm`·`confirmDiscard`·`confirmDanger`·`notice`·`alert`가 창을 올린 뒤 띄운다. 버튼은 실행할 일을 이름으로 쓰고(버리기·닫기·다시 읽기·교체), 안전한 쪽에 포커스를 두며 Esc도 그 값이다. 순서는 실행 버튼, 그다음 취소다. `initializeDialogInput`이 대화상자가 열린 동안 앱 단축키를 막는다. 설정과 PDF 암호도 같은 `.va-dialog` 표면을 쓴다.
+- 피드백 규칙: ① 저장·복사·내보내기 성공은 `toast`(`src/ui/toast.ts`). ② 읽기 전용 사유·혼합 줄바꿈·CP949·구문 오류·진행률 같은 지속 상태는 상태줄이나 warning 배너. ③ 사용자 동작의 실패는 `alert`. ④ 외부 변경 충돌은 `notice(…, "warning")`. ⑤ 되돌릴 수 없는 동작은 confirm 계열, 안전한 쪽이 기본. ⑥ 배경 작업의 안내·실패는 3D 배너(`src/three/core/banner.ts`, info/warning/error)나 상태줄이며 모달을 쓰지 않는다.
+- 여러 뷰어가 쓰는 문구(저장·버리기·충돌)는 `src/ui/strings.ts`에 두고, 오류는 `errorMessage`로 "Error: " 없이 보여 준다.
+- 찾기는 `src/ui/find-bar.ts` 하나(Markdown·PDF·텍스트)이고, 파일 메뉴 순서는 `src/ui/file-menu.ts`(열기… → 텍스트로 열기… → 뷰어별 열기 → 최근 파일 → 뷰어별 명령)가 정한다.
+- 시각 확인: `npx vite --port 1430` 후 `/ui-gallery.html?theme=dark&scene=…`(개발 전용, 빌드 입력 아님). `node scripts/ui-shots.mjs <폴더>`가 라이트·다크와 100·150% 배율로 갤러리를 찍는다.
 
 ## 꼭 지킬 것
 - 심플함이 최우선이다. 기본 화면은 본문에 집중하고 인코딩·글꼴 같은 세부 옵션은 설정에 둔다. 검색창은 필요할 때만 열고 저장·다시 읽기는 메뉴로 제공한다.
@@ -78,7 +88,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 
 ## 버전·릴리스 (multi-cli-work 방식)
 - 자동 업데이트: `src/update/`(상태·배지·다중 창 저장 보호), `src-tauri/src/update.rs`(프로세스당 관리 창). updater/process JS는 lazy import한다. `scripts/make-latest-json.mjs`가 서명된 NSIS/AppImage에서 manifest를 만든다. 공개키만 설정에 넣고 비밀키·비밀번호는 레포 밖 또는 GitHub Secrets에 둔다.
-- 업데이트 입력 잠금은 `src/update/guard.ts`의 작은 모듈을 main에서 제목줄·뷰어 단축키보다 먼저 초기화한다. 잠금 중 앱 단축키·열기·드롭·설정 변경을 막고 업데이트 대화상자의 Tab/Enter/Space/Escape만 허용한다. 취소하면 기존 inert 상태와 미저장 편집을 보존해 해제한다. 파일 연결 클래스 이름은 앱 식별자로 구분하며 일반적인 전역 이름으로 바꾸지 않는다.
+- 업데이트 입력 잠금은 `src/update/guard.ts`의 작은 모듈을 main에서 제목줄·뷰어 단축키보다 먼저 초기화한다. 잠금 중 앱 단축키·열기·드롭·설정 변경을 막고, 앱 메시지 대화상자(`.va-message`: 재시작 확인과 그사이 뜬 닫기 확인)의 Tab/Enter/Space/Escape/←→만 허용한다. 재시작 확인 전에 소유 창이 최소화돼 있으면 복원한다. 취소하면 기존 inert 상태와 미저장 편집을 보존해 해제한다. 파일 연결 클래스 이름은 앱 식별자로 구분하며 일반적인 전역 이름으로 바꾸지 않는다.
 - Windows NSIS의 `windows/file-associations.nsh` hook은 파일 연결 매크로만 교체한다. 업데이트 시 최초 연결 백업을 보존하고 이후 선택한 다른 앱을 유지하며, 제거 시 우리 클래스가 현재 연결인 경우에만 복원한다. 구버전 클래스 이관은 실행 명령이 동일한 경우로 제한한다. 이 경로의 회귀는 일회용 Windows 설치→서명 업데이트→제거에서 검증한다.
 - 버전 체계는 SemVer `vX.Y.Z`. 기능 추가는 minor, 수정만 있으면 patch를 올린다.
 - 버전은 `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` 세 곳에 있다. 항상 함께 올린다.
