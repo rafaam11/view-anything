@@ -58,7 +58,7 @@ https://github.com/user-attachments/assets/a1ab8e74-6d9b-43c4-acfb-16e3d72ae6b8
 | 3D | `.step` `.stp` `.iges` `.igs` `.stl` `.obj` `.ply` `.gltf` `.glb` | 장면에 추가 · 표시 모드 · 단면 · 치수 · HTML로 내보내기 |
 | 포인트클라우드 | `.pcd` `.ply` `.las` `.laz` | 색 · 점 조회 · 선택 · Voxel/SOR/반경 필터 · ICP 정합 · 다른 이름 저장 |
 
-확장자가 없거나 등록되지 않은 형식은 `Ctrl+Shift+O`의 **텍스트로 열기**로 엽니다. 일반 열기에서 미등록 형식을 고른 경우에도 **텍스트로 열기** 버튼을 제공합니다.
+확장자가 없거나 등록되지 않은 형식은 `Ctrl+Shift+O`의 **텍스트로 열기**로 엽니다. 일반 열기에서 미등록 형식을 고르거나 파일을 열 수 없을 때도 **이 파일을 텍스트로 열기** 버튼을 제공합니다.
 
 ## 형식별 기능
 
@@ -139,6 +139,7 @@ PCD/PLY/LAS/LAZ. 원본 RGB · 높이 · intensity · 분류(ASPRS 범례) 표�
 | 공통 | `Ctrl+,` | 설정 |
 | 공통 | `Ctrl+Shift+T` | 테마 순환(다크 → 라이트 → 시스템) |
 | 공통 | `F11` | 전체 화면 |
+| 공통 | `Ctrl+Shift+U` | 업데이트 확인 |
 | Markdown | `Ctrl+E` · `Ctrl+S` · `Ctrl+F` | 읽기 ↔ 편집 · 저장 · 찾기(읽기 모드) |
 | Markdown | `Ctrl+휠` · `Ctrl+=` · `Ctrl+-` · `Ctrl+0` | 글자 크기 조절 · 크게 · 작게 · 기본 크기 |
 | 텍스트 · 데이터 | `Ctrl+S` · `Ctrl+F` | 저장 · 찾기(텍스트) |
@@ -181,7 +182,8 @@ Windows 설치 · 서명 업데이트 · 제거와 Linux deb/AppImage의 실제 
 
 ## 릴리스 노트
 
-- [v0.15.0](docs/release/v0.15.0.md) — 최신
+- [v0.16.0](docs/release/v0.16.0.md) — 최신
+- [v0.15.0](docs/release/v0.15.0.md)
 - [v0.14.0](docs/release/v0.14.0.md)
 - [v0.13.1](docs/release/v0.13.1.md)
 - [v0.13.0](docs/release/v0.13.0.md)
