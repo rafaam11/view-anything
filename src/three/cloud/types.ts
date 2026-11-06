@@ -42,10 +42,16 @@ export function createUploadPacer(now: () => number = () => performance.now(), b
   };
 }
 
-/** One yield: the next animation frame, or a timer while the window is hidden (frames stop then). */
+/**
+ * One yield to the browser: the next animation frame. A hidden window has nothing to draw, its
+ * frames stop and its timers are throttled to about a second, so it does not wait at all (each
+ * chunk's IPC round trip already yields); a frame wait also ends when the window becomes hidden.
+ */
 export function nextFrame(hidden: () => boolean = () => document.hidden): Promise<void> {
+  if (hidden()) return Promise.resolve();
   return new Promise<void>((resolve) => {
-    if (hidden()) setTimeout(resolve, 0);
-    else requestAnimationFrame(() => resolve());
+    const done = () => { document.removeEventListener("visibilitychange", done); resolve(); };
+    document.addEventListener("visibilitychange", done);
+    requestAnimationFrame(done);
   });
 }

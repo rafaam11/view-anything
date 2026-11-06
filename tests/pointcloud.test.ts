@@ -43,10 +43,24 @@ test("the upload pacer yields only after its time budget", () => {
   pacer.reset(); t = 20; expect(pacer.shouldYield()).toBe(false);
 });
 
-test("pacer yields through a timer while the document is hidden", async () => {
+test("a hidden document does not wait for frames or throttled timers", async () => {
   const raf = vi.fn(); vi.stubGlobal("requestAnimationFrame", raf);
-  try { await nextFrame(() => true); expect(raf).not.toHaveBeenCalled(); }
-  finally { vi.unstubAllGlobals(); }
+  vi.useFakeTimers();
+  try { await nextFrame(() => true); expect(raf).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0); }
+  finally { vi.useRealTimers(); vi.unstubAllGlobals(); }
+});
+
+test("a frame wait ends when the window is hidden meanwhile", async () => {
+  const raf = vi.fn(() => 1); vi.stubGlobal("requestAnimationFrame", raf);
+  try {
+    let done = false;
+    const wait = nextFrame(() => false).then(() => { done = true; });
+    await Promise.resolve();
+    expect(done).toBe(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await wait;
+    expect(done).toBe(true);
+  } finally { vi.unstubAllGlobals(); }
 });
 
 test("a visible document yields to the next animation frame", async () => {
