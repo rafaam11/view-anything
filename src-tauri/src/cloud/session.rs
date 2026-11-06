@@ -805,7 +805,7 @@ pub struct Display {
     pub height: [f64; 4],
     pub range: [f64; 2],
 }
-/// ASPRS LAS classification colours for codes 0-18; anything else is light grey. The legend in
+/// ASPRS LAS 1.4 classification colours for codes 0-22; anything else is light grey. The legend in
 /// `src/three/cloud/classes.ts` lists the same values (a test compares the two).
 pub fn classification_color(code: u8) -> [u8; 3] {
     match code {
@@ -828,6 +828,10 @@ pub fn classification_color(code: u8) -> [u8; 3] {
         16 => [255, 105, 180],
         17 => [210, 105, 30],
         18 => [255, 0, 0],
+        19 => [72, 61, 139],
+        20 => [189, 183, 107],
+        21 => [240, 248, 255],
+        22 => [112, 128, 144],
         _ => [200, 200, 200],
     }
 }

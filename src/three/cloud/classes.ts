@@ -1,4 +1,4 @@
-/** ASPRS LAS point classes 0-18 for the colour legend. Rust `classification_color` paints the same colours. */
+/** ASPRS LAS 1.4 point classes 0-22 for the colour legend. Rust `classification_color` paints the same colours. */
 export interface PointClass { code: number; name: string; rgb: [number, number, number] }
 
 export const CLASSES: PointClass[] = [
@@ -21,4 +21,11 @@ export const CLASSES: PointClass[] = [
   { code: 16, name: "전선 연결부", rgb: [255, 105, 180] },
   { code: 17, name: "교량 상판", rgb: [210, 105, 30] },
   { code: 18, name: "높은 잡음", rgb: [255, 0, 0] },
+  { code: 19, name: "고가 구조물", rgb: [72, 61, 139] },
+  { code: 20, name: "무시된 지면", rgb: [189, 183, 107] },
+  { code: 21, name: "눈", rgb: [240, 248, 255] },
+  { code: 22, name: "시간 제외", rgb: [112, 128, 144] },
 ];
+
+/** Every other code (23-255, user-defined classes) shares one grey. */
+export const OTHER_CLASS = { name: "그 외", rgb: [200, 200, 200] as [number, number, number] };

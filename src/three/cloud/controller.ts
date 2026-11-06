@@ -10,7 +10,7 @@ import { disposeObject, type BuiltFile } from "../core/build-objects";
 import { CloudClient, buildCloud } from "./client";
 import { editedPath, type Action, type CloudDisplay, type CloudMeta, type Operation, type Region } from "./types";
 import { pickCloud } from "./pick";
-import { CLASSES } from "./classes";
+import { CLASSES, OTHER_CLASS } from "./classes";
 
 type History = { kind: "filter" } | { kind: "alignment"; before: Matrix4; after: Matrix4 };
 interface Entry { meta: CloudMeta; path: string; display: CloudDisplay; size: number; alignment: Matrix4; savedAlignment: Matrix4; undo: History[]; redo: History[]; stale?: boolean }
@@ -78,7 +78,7 @@ export class CloudController {
     this.label("색상", this.color); this.color.onchange = () => void this.changeDisplay();
     // Class names and colours come from the app's own table; file-derived text never reaches this list.
     this.legend.className = "va-cloud-legend"; this.legend.hidden = true; this.legend.setAttribute("aria-label", "분류 범례");
-    for (const c of CLASSES) { const item = el("li"), chip = el("span"); chip.style.background = `rgb(${c.rgb.join(",")})`; item.append(chip, `${c.code} ${c.name}`); this.legend.append(item); }
+    for (const c of [...CLASSES, OTHER_CLASS]) { const item = el("li"), chip = el("span"); chip.style.background = `rgb(${c.rgb.join(",")})`; item.append(chip, "code" in c ? `${c.code} ${c.name}` : c.name); this.legend.append(item); }
     this.body.append(this.legend);
     this.size.type = "range"; this.size.min = "1"; this.size.max = "10"; this.size.value = "2"; this.label("점 크기 (px)", this.size);
     this.size.oninput = () => { const e = this.entry(); if (!e || !this.selected) return; e.size = Number(this.size.value); this.host.built(this.selected)?.group.traverse((o) => { const material = (o as Mesh).material as PointsMaterial; if (material?.isPointsMaterial) { material.size = e.size; o.userData.vaPointSize = e.size; } }); this.host.stage.requestRender(); };

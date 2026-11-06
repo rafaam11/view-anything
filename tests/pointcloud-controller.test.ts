@@ -128,6 +128,7 @@ test("the classification colour mode follows the field and shows a legend", asyn
   color.value = "classification"; color.dispatchEvent(new Event("change"));
   await vi.waitFor(() => expect(mocks.build).toHaveBeenLastCalledWith(expect.anything(), "f2", expect.objectContaining({ mode: "classification" }), expect.anything(), expect.anything()));
   await vi.waitFor(() => expect(legend.hidden).toBe(false));
-  expect(legend.querySelectorAll("li")).toHaveLength(19);
+  expect(legend.querySelectorAll("li")).toHaveLength(24);
+  expect(legend.querySelector("li:last-child")!.textContent).toBe("그 외");
   expect(legend.querySelector("li")!.textContent).toBe("0 미분류");
 });
