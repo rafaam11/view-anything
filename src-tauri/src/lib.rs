@@ -305,13 +305,14 @@ fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     let result = (|| {
         let mut f = f;
         // The replacement keeps the target's permissions (the Unix executable bit); a read-only
-        // target is refused as it is rather than silently made writable.
+        // target is refused as it is rather than silently made writable. Copying is best effort:
+        // some mounts (gvfs SMB/MTP, FUSE drives) refuse chmod, and the save must still succeed.
         if let Ok(meta) = std::fs::metadata(path) {
             let perm = meta.permissions();
             if perm.readonly() {
                 return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "읽기 전용 파일입니다"));
             }
-            f.set_permissions(perm)?;
+            let _ = f.set_permissions(perm);
         }
         f.write_all(data)?;
         f.sync_all()?;
