@@ -4,7 +4,7 @@
 .pdf-content { min-height: 0; flex: 1; display: flex; }
 .pdf-outline { flex: 0 0 220px; overflow: auto; border-right: 1px solid var(--border); padding: .5rem; }
 .pdf-outline[hidden] { display: none; }
-.pdf-outline button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.pdf-outline button { width: 100%; max-width: 100%; justify-content: flex-start; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .pdf-scroll { flex: 1; min-width: 0; overflow: auto; background: var(--bg-inset); padding: 1rem; text-align: center; }
 .pdf-scroll canvas { display: block; margin: auto; background: white; }
 .pdf-page { position: relative; margin: auto; }

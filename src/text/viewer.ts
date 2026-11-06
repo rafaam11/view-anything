@@ -12,6 +12,7 @@ import { preferences } from "../settings/preferences";
 import { revealSelection } from "./selection";
 import { highlightHtml, languageFor, LIVE_HIGHLIGHT_CHARS, withinHighlightLimit } from "./highlight";
 import "../ui/chrome.css";
+import { textButton } from "../ui/icons";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const viewer: Viewer = {
@@ -28,7 +29,7 @@ const viewer: Viewer = {
     const root = document.createElement("section"); root.className = "text-root va-viewer";
     const bar = document.createElement("header"); bar.className = "text-bar va-viewer-toolbar";
     const button = (label: string, run: () => Promise<void>) => {
-      const b = document.createElement("button"); b.textContent = label;
+      const b = textButton(label);
       b.onclick = () => { void run().catch(report); }; bar.append(b); return b;
     };
     const status = document.createElement("p"); status.setAttribute("role", "status");
@@ -134,11 +135,11 @@ const viewer: Viewer = {
     };
     searchBar.append(search);
     for (const [label, back] of [["이전", true], ["다음", false]] as const) {
-      const b = document.createElement("button"); b.textContent = label; b.onclick = () => { void find(back).catch(report); }; searchBar.append(b);
+      const b = textButton(label); b.onclick = () => { void find(back).catch(report); }; searchBar.append(b);
     }
     search.oninput = cancelSearch;
     search.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); void find(e.shiftKey).catch(report); } };
-    const closeSearch = document.createElement("button"); closeSearch.textContent = "닫기";
+    const closeSearch = textButton("닫기");
     closeSearch.onclick = () => { cancelSearch(); searchBar.hidden = true; editor.focus(); }; searchBar.append(closeSearch);
     const showSearch = () => { searchBar.hidden = false; search.focus(); search.select(); };
     const run = (action: () => Promise<void>) => () => { void action().catch(report); };

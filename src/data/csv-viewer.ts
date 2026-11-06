@@ -8,6 +8,7 @@ import { registerTextSettings } from "../settings/document";
 import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
+import { menuButton, textButton } from "../ui/icons";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 /** A 10 MiB, 1,000,000-cell file parses in about 0.1-0.2 s; the page shows 100 rows × 10 columns at a time. */
@@ -24,19 +25,19 @@ const viewer: Viewer = {
     const root = document.createElement("div"); root.className = "data-root va-viewer";
     const bar = document.createElement("header"); bar.className = "data-bar";
     const title = document.createElement("strong"); title.textContent = name;
-    const edit = document.createElement("button"); edit.textContent = "편집";
-    const save = document.createElement("button"); save.textContent = "저장"; save.hidden = true;
-    const copy = document.createElement("button"); copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
-    const reload = document.createElement("button"); reload.textContent = "다시 읽기"; reload.hidden = true;
+    const edit = textButton("편집");
+    const save = menuButton("저장"); save.hidden = true;
+    const copy = menuButton("다른 이름으로 저장"); copy.hidden = true;
+    const reload = menuButton("다시 읽기"); reload.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status");
     documentBar(bar, { toggle: edit, files: [save, copy, reload] });
     const body = document.createElement("div"); body.className = "data-table-wrap";
     const pages = document.createElement("nav"); pages.className = "data-pages"; pages.setAttribute("aria-label", "CSV 페이지");
-    const previous = document.createElement("button"); previous.textContent = "이전 페이지";
-    const next = document.createElement("button"); next.textContent = "다음 페이지";
+    const previous = textButton("이전 페이지", "ghost");
+    const next = textButton("다음 페이지", "ghost");
     const pageLabel = document.createElement("span");
-    const previousColumns = document.createElement("button"); previousColumns.textContent = "이전 열";
-    const nextColumns = document.createElement("button"); nextColumns.textContent = "다음 열";
+    const previousColumns = textButton("이전 열", "ghost");
+    const nextColumns = textButton("다음 열", "ghost");
     const columnLabel = document.createElement("span"); pages.append(previous, pageLabel, next, previousColumns, columnLabel, nextColumns);
     status.className = "va-status"; root.append(bar, status, pages, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false, cp949 = false, decodeFailed = false;

@@ -12,9 +12,7 @@
 .va3d::before { content:""; position:absolute; inset:0 0 auto; height:36px; box-sizing:border-box; background:var(--bg); border-bottom:1px solid var(--border); z-index:2; }
 .va3d .va3d-canvas { top:36px; }
 .va3d > .va3d-menubar { top:0; left:12px; height:36px; border:0; border-radius:0; padding:0; max-width:none; background:transparent; }
-.va3d > .va3d-toolbar { top:3px; border:0; padding:0; background:transparent; z-index:3; }
-.va3d-toolbar .va-icon-button { display:grid; place-items:center; width:30px; height:30px; padding:5px; }
-.va3d-toolbar .va-icon-button svg { width:20px; height:20px; }
+.va3d > .va3d-toolbar { top:4px; border:0; padding:0; background:transparent; z-index:3; }
 
 .va3d-toolbar {
   position: absolute;
@@ -27,24 +25,9 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-.va3d-toolbar button {
-  font: inherit;
-  color: var(--fg);
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-.va3d-toolbar button:hover { background: var(--border); }
 /* Display frame ("좌표계") and unit: compact; the open list shows the full preset labels. */
 .va3d-display { display: flex; gap: 2px; align-items: center; margin-left: 4px; padding-left: 4px; border-left: 1px solid var(--border); }
 .va3d-toolbar select, .va3d-frame-menu select {
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
   padding: 2px 4px;
   min-width: 0;
 }
@@ -122,8 +105,8 @@
   border-radius: 6px;
 }
 .va3d-banner span { flex: 1; word-break: break-word; }
-.va3d-banner .va3d-banner-action { flex: none; border: 1px solid currentColor; border-radius: 4px; padding: 0 8px; }
-.va3d-banner button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 0 4px; }
+.va3d-banner .va3d-banner-action { flex: none; }
+.va3d-banner .va-icon-button { margin: -4px -6px -4px 0; }
 
 /* Bottom bar (below the panel, which ends 28px above the bottom): the status line. */
 .va3d-bottom {
@@ -247,17 +230,19 @@
   overflow: hidden;
 }
 .va3d-panel.collapsed { bottom: auto; width: auto; }
-.va3d-panel button { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; border-radius: 3px; }
-.va3d-panel button:hover { background: var(--border); }
+/* Tree rows and the panel head draw their own compact glyph buttons; the cloud tools use the shared buttons. */
+.va3d-row button, .va3d-panel-head button { font: inherit; color: var(--fg); background: transparent; border: 0; border-radius: var(--radius-sm); padding: 1px 6px; }
+.va3d-row button:hover, .va3d-panel-head button:hover { background: var(--fill-subtle-hover); }
+.va3d-row button:active, .va3d-panel-head button:active { background: var(--fill-subtle-active); }
 .va3d-panel-head { display: flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; border-bottom: 1px solid var(--border); }
 .va3d-panel.collapsed .va3d-panel-head { border-bottom: 0; }
-.va3d-panel-toggle { padding: 2px 6px; color: var(--muted) !important; }
+.va3d-panel-head .va3d-panel-toggle { padding: 2px 6px; color: var(--muted) !important; }
 .va3d-panel-title { color: var(--muted); font-size: 0.75rem; }
 .va3d-tree { flex: 1; overflow: auto; padding: 2px 0; }
 .va3d-panel:has(.va-cloud:not([hidden])) .va3d-tree { flex: 0 1 35%; min-height: 60px; }
 .va3d-panel.collapsed .va-cloud { display: none; }
 .va3d-row { display: flex; align-items: center; gap: 2px; padding-right: 4px; min-height: 22px; white-space: nowrap; }
-.va3d-row:hover { background: color-mix(in srgb, var(--border) 45%, transparent); }
+.va3d-row:hover { background: var(--fill-subtle-hover); }
 .va3d-twisty, .va3d-twisty-space { flex: none; width: 18px; padding: 0 !important; text-align: center; color: var(--muted) !important; }
 .va3d-eye { flex: none; width: 20px; padding: 0 !important; font-size: 0.7rem; }
 .va3d-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -265,7 +250,7 @@
 .va3d-more { flex: none; padding: 0 5px !important; color: var(--muted) !important; }
 .va3d-more:hover { color: var(--fg) !important; }
 /* File ⋯ menu: source frame and unit, inline under the file row. */
-.va3d-frame-menu { display: grid; gap: 4px; margin: 2px 6px 4px 26px; padding: 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+.va3d-frame-menu { display: grid; gap: 4px; margin: 2px 6px 4px 26px; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
 .va3d-frame-field { display: grid; grid-template-columns: 5.5em 1fr; gap: 6px; align-items: center; color: var(--muted); font-size: 0.75rem; }
 .va3d-frame-field select { width: 100%; font-size: 0.8rem; }
 .va3d-frame-field select:disabled { opacity: 0.6; }

@@ -35,9 +35,9 @@
   color: inherit;
 }
 .va-titlebar button svg { width: 18px; height: 18px; pointer-events: none; }
-.va-titlebar button[aria-pressed="true"] { background: color-mix(in srgb, var(--fg) 16%, transparent); }
-.va-titlebar button:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
-.va-titlebar button:active { background: color-mix(in srgb, var(--fg) 20%, transparent); }
-.va-titlebar button:focus-visible { outline: 2px solid var(--fg); outline-offset: -3px; }
-.va-titlebar button[data-action="close"]:hover { background: #c42b1c; color: #fff; }
-.va-titlebar button[data-action="close"]:active { background: #a92317; color: #fff; }
+.va-titlebar button[aria-pressed="true"] { background: var(--fill-selected); }
+.va-titlebar button:hover { background: var(--fill-subtle-hover); }
+.va-titlebar button:active { background: var(--fill-subtle-active); }
+.va-titlebar button:focus-visible { outline: var(--focus-ring); outline-offset: -3px; }
+.va-titlebar button[data-action="close"]:hover { background: var(--danger); color: var(--on-danger); }
+.va-titlebar button[data-action="close"]:active { background: var(--danger-active); color: var(--on-danger); }

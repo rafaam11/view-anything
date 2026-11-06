@@ -9,6 +9,7 @@ import { FileDocument } from "./document";
 import { restoreLineEndings } from "./line-endings";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
+import { menuButton, textButton } from "../ui/icons";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_NODES = 20_000;
@@ -54,10 +55,10 @@ const viewer: Viewer = {
     const root = document.createElement("div"); root.className = "data-root va-viewer";
     const bar = document.createElement("header"); bar.className = "data-bar";
     const title = document.createElement("strong"); title.textContent = name;
-    const toggle = document.createElement("button"); toggle.textContent = "편집";
-    const save = document.createElement("button"); save.textContent = "저장"; save.hidden = true;
-    const copy = document.createElement("button"); copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
-    const reload = document.createElement("button"); reload.textContent = "다시 읽기"; reload.hidden = true;
+    const toggle = textButton("편집");
+    const save = menuButton("저장"); save.hidden = true;
+    const copy = menuButton("다른 이름으로 저장"); copy.hidden = true;
+    const reload = menuButton("다시 읽기"); reload.hidden = true;
     const status = document.createElement("span"); status.setAttribute("role", "status");
     documentBar(bar, { toggle, files: [save, copy, reload] });
     const body = document.createElement("div"); body.className = "data-tree-wrap";

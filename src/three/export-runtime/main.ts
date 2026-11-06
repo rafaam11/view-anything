@@ -4,6 +4,7 @@
 // presets), 보기 menu (display modes, sections, standard views), dimensions and cursor readout.
 // No Tauri, no network: everything it needs is in the page.
 import tokensCss from "../../ui/tokens.css?inline";
+import baseCss from "../../ui/base.css?inline";
 import threeCss from "../core/three.css?inline";
 import { BufferAttribute, type BufferGeometry, type Mesh, type Object3D, type Points, type PointsMaterial } from "three";
 import { renderableSizes } from "../core/build-objects";
@@ -227,7 +228,7 @@ async function main(): Promise<void> {
   // The tokens' system theme follows the OS light/dark setting, as exported pages always have.
   document.documentElement.dataset.theme = "system";
   const style = document.createElement("style");
-  style.textContent = tokensCss + BASE_CSS + threeCss;
+  style.textContent = tokensCss + baseCss + BASE_CSS + threeCss;
   document.head.append(style);
   const host = document.getElementById("va-app") ?? document.body;
   let state: ExportState;

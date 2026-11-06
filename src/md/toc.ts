@@ -1,4 +1,5 @@
 import type { Heading } from "./render";
+import { textButton } from "../ui/icons";
 
 const KEY = "va.toc.collapsed";
 
@@ -19,10 +20,8 @@ export function buildToc(headings: Heading[], article: HTMLElement, scroller?: H
   nav.className = "toc";
   nav.classList.toggle("collapsed", loadCollapsed());
 
-  const toggle = document.createElement("button");
-  toggle.className = "toc-toggle";
-  toggle.textContent = "목차";
-  toggle.title = "목차 접기/펼치기";
+  const toggle = textButton("목차", "ghost", { title: "목차 접기/펼치기" });
+  toggle.classList.add("toc-toggle");
   toggle.onclick = () => {
     const c = nav.classList.toggle("collapsed");
     try {

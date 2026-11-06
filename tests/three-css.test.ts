@@ -91,7 +91,7 @@ test("toolbar right side unchanged; narrow wrap leaves the menubar room", () => 
   (window as HappyWindow).happyDOM.setViewport({ width: 1200, height: 800 });
   layout("va3d-panel");
   const tb = getComputedStyle(document.querySelector<HTMLElement>(".va3d-toolbar")!);
-  expect(tb.top).toBe("3px");
+  expect(tb.top).toBe("4px"); // 28px icon buttons centred in the 36px bar
   expect(tb.right).toBe("8px");
   (window as HappyWindow).happyDOM.setViewport({ width: 600, height: 800 });
   layout("va3d-panel collapsed");

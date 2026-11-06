@@ -4,7 +4,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { platform } from '../platform';
 import type { Viewer } from '../registry';
 import { documentBar } from '../ui/chrome';
-import { iconButton } from '../ui/icons';
+import { iconButton, textButton } from '../ui/icons';
 import { matchRanges } from '../ui/match';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -12,7 +12,6 @@ const MAX_BYTES = 100 * 1024 * 1024;
 const MAX_PIXELS = 20_000_000;
 
 type OutlineItem = { title: string; dest: string | unknown[] | null; items: OutlineItem[] };
-const button = (label: string) => { const b = document.createElement('button'); b.textContent = label; return b; };
 
 const viewer: Viewer = {
   async mount(el, path) {
@@ -26,7 +25,7 @@ const viewer: Viewer = {
       const form = document.createElement('form'); form.method = 'dialog';
       const label = document.createElement('label'); label.textContent = reason === PasswordResponses.INCORRECT_PASSWORD ? '암호가 틀렸습니다. 다시 입력하세요.' : 'PDF 암호를 입력하세요.';
       const input = document.createElement('input'); input.type = 'password'; input.autocomplete = 'off'; input.setAttribute('aria-label', 'PDF 암호'); label.append(input);
-      const confirm = button('열기'), cancel = button('취소'); confirm.type = 'submit'; cancel.type = 'button';
+      const confirm = textButton('열기', 'primary'), cancel = textButton('취소'); confirm.type = 'submit';
       const abort = () => { passwordCancelled = true; input.value = ''; dialog.remove(); passwordDialog = null; void loading.destroy().catch(() => {}); };
       cancel.onclick = abort; dialog.addEventListener('cancel', e => { e.preventDefault(); abort(); });
       form.onsubmit = e => { e.preventDefault(); const password = input.value; input.value = ''; dialog.remove(); passwordDialog = null; submit(password); };
@@ -48,7 +47,7 @@ const viewer: Viewer = {
     const total = document.createElement('span'); total.textContent = `/ ${doc.numPages}`;
     const zoomOut = iconButton('축소', 'minus'); const zoomLabel = document.createElement('span'); const zoomIn = iconButton('확대', 'plus');
     const searchInput = document.createElement('input'); searchInput.type = 'search'; searchInput.maxLength = 512; searchInput.placeholder = '문서 검색'; searchInput.setAttribute('aria-label', '문서 검색');
-    const search = button('다음 결과'), searchPrev = button('이전 결과'); const status = document.createElement('span'); status.setAttribute('role', 'status');
+    const search = textButton('다음 결과'), searchPrev = textButton('이전 결과'); const status = document.createElement('span'); status.setAttribute('role', 'status');
     const searchBar = document.createElement('div'); searchBar.className = 'va-search'; searchBar.hidden = true;
     const closeSearch = iconButton('검색 닫기', 'close'); closeSearch.onclick = () => { searchBar.hidden = true; };
     searchBar.append(searchInput, searchPrev, search, closeSearch); status.className = 'va-status';
@@ -155,7 +154,7 @@ const viewer: Viewer = {
       for (const item of items.slice(0, 1000)) {
         if (++outlineCount > 2000) return;
         const line = document.createElement('div'); line.style.paddingInlineStart = `${depth}em`;
-        const link = button(item.title || '(제목 없음)'); link.disabled = !item.dest;
+        const link = textButton(item.title || '(제목 없음)', 'ghost'); link.disabled = !item.dest;
         link.onclick = async () => {
           try {
             const dest = typeof item.dest === 'string' ? await doc.getDestination(item.dest) : item.dest;

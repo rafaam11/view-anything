@@ -36,7 +36,7 @@ test("load error banner: retry action button runs once and hides the banner", ()
   expect(runs).toBe(1);
   expect(banner.root.hidden).toBe(true);
   banner.show("plain error");
-  expect([...banner.root.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["×"]);
+  expect([...banner.root.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual(["닫기"]);
 });
 
 test("describeLoadError: retryable step/iges failure says too big or damaged", () => {

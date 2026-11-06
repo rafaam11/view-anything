@@ -4,7 +4,7 @@ import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { equalBytes } from "../data/document";
 import { documentBar } from "../ui/chrome";
-import { iconButton } from "../ui/icons";
+import { iconButton, menuButton, textButton } from "../ui/icons";
 import { isFullscreen, toggleFullscreen } from "../fullscreen";
 import { dragRect, fitRect, hitTest, toImagePoint, type CropDrag, type Handle, type Point, type Rect } from "./crop";
 import { ImageHistory, transformImage, type ImageState } from "./history";
@@ -19,7 +19,6 @@ const PIXEL_SCALE = 4;
 const CROP_CURSOR: Record<CropDrag, string> = { new:"crosshair", move:"move", n:"ns-resize", s:"ns-resize", e:"ew-resize", w:"ew-resize", ne:"nesw-resize", sw:"nesw-resize", nw:"nwse-resize", se:"nwse-resize" };
 const nameOf = (p: string) => p.split(/[\\/]/).pop() ?? p;
 const pathKey = (p: string) => { const normalized = p.replace(/\\/g, "/"); return /^(?:[a-z]:|\/\/)/i.test(normalized) ? normalized.toLowerCase() : normalized; };
-const button = (text: string) => { const b = document.createElement("button"); b.textContent = text; return b; };
 
 const viewer: Viewer = {
   async mount(el, initial) {
@@ -33,7 +32,7 @@ const viewer: Viewer = {
     const prev = iconButton("이전 이미지", "previous", "ArrowLeft"), next = iconButton("다음 이미지", "next", "ArrowRight");
     const zoomOut = iconButton("축소", "minus"), zoomIn = iconButton("확대", "plus"), fit = iconButton("화면에 맞춤", "fit", "Ctrl+0");
     const rotate = iconButton("오른쪽으로 회전", "rotate"), rotateLeft = iconButton("왼쪽으로 회전", "rotate-left"), flip = iconButton("좌우 반전", "flip"), flipVertical = iconButton("상하 반전", "flip-vertical"), cropToggle = iconButton("자르기", "crop");
-    const copy = iconButton("이미지 복사", "copy", "Ctrl+C"), toggle = iconButton("이미지 편집", "edit"), save = button("PNG로 저장"), crop = button("자르기 적용");
+    const copy = iconButton("이미지 복사", "copy", "Ctrl+C"), toggle = iconButton("이미지 편집", "edit"), save = menuButton("PNG로 저장"), crop = textButton("자르기 적용");
     const undo = iconButton("실행 취소", "undo", "Ctrl+Z"), redo = iconButton("다시 실행", "redo", "Ctrl+Y");
     const zoomLabel = document.createElement("span"); zoomLabel.className = "image-zoom";
     const coords = document.createElement("div"); coords.className = "image-coords va-search"; coords.hidden = true;
@@ -58,8 +57,8 @@ const viewer: Viewer = {
     thumbs.hidden = true; status.className = "va-status";
     const info = document.createElement("span"); info.className = "va-status image-info";
     const footer = document.createElement("footer"); footer.className = "image-footer"; footer.append(status, info);
-    const actual = button("원본 크기 (100%)"); actual.onclick = () => setZoom(1);
-    const copyPathItem = button("파일 경로 복사 (Ctrl+Shift+C)"); copyPathItem.onclick = () => { menus.close(); copyPath(); };
+    const actual = textButton("원본 크기 (100%)"); actual.onclick = () => setZoom(1);
+    const copyPathItem = menuButton("파일 경로 복사 (Ctrl+Shift+C)"); copyPathItem.onclick = () => { menus.close(); copyPath(); };
     const menus = documentBar(bar, { files:[save, copyPathItem], controls:[prev, next, zoomOut, zoomLabel, zoomIn, fit, copy, undo, redo, rotateLeft, rotate, flip, flipVertical, cropToggle, toggle], view:[
       { label:"화면에 맞춤", run:() => fit.click() }, { label:"원본 크기 (100%)", run:() => actual.click() },
       { label:"썸네일", checked:() => !thumbs.hidden, run:() => { thumbs.hidden = !thumbs.hidden; renderThumbs(); applyScale(); } },
@@ -272,7 +271,7 @@ const viewer: Viewer = {
       thumbs.replaceChildren();
       if (thumbs.hidden) return;
       for (const file of available.slice(0, 1000)) {
-        const b = button(""); b.title = nameOf(file); b.setAttribute("aria-label", nameOf(file)); b.dataset.path = file;
+        const b = textButton("", "ghost"); b.title = nameOf(file); b.setAttribute("aria-label", nameOf(file)); b.dataset.path = file;
         const thumb = document.createElement("img"); thumb.loading = "lazy";
         const asset = platform.assetUrl(file); thumb.src = `${asset}${asset.includes("?") ? "&" : "?"}va-refresh=${thumbRevision}`; thumb.alt = ""; b.append(thumb);
         b.onclick = () => { void navigate(file).catch(report); }; thumbs.append(b);

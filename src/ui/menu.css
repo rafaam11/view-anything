@@ -1,16 +1,20 @@
 /* Shared by app viewers and the standalone 3D runtime. */
 .va3d-menubar { display:flex; align-items:center; gap:2px; font:var(--font-size-ui)/1.4 var(--font-ui); }
 .va3d-menu-wrap { position:relative; }
-.va3d-menubar .va3d-menu-title { font:inherit; color:var(--fg); background:transparent; border:0; border-radius:4px; padding:4px 10px; cursor:pointer; }
-.va3d-menubar .va3d-menu-title:hover, .va3d-menubar .va3d-menu-title.open { background:var(--border); }
-.va3d-menubar .va3d-menu { position:absolute; top:calc(100% + 4px); left:0; z-index:30; display:grid; min-width:230px; max-width:calc(100vw - 24px); padding:4px; background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:6px; box-shadow:var(--shadow-popover); }
+.va3d-menubar .va3d-menu-title { font:inherit; color:var(--fg); background:transparent; border:0; border-radius:var(--radius-sm); padding:4px 10px; cursor:default; }
+.va3d-menubar .va3d-menu-title:hover, .va3d-menubar .va3d-menu-title.open { background:var(--fill-subtle-hover); }
+.va3d-menubar .va3d-menu-title:active { background:var(--fill-subtle-active); }
+.va3d-menubar .va3d-menu { position:absolute; top:calc(100% + 4px); left:0; z-index:30; display:grid; min-width:230px; max-width:calc(100vw - 24px); padding:4px; background:var(--bg-overlay); color:var(--fg); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-popover); }
 .va3d-menubar [hidden] { display:none !important; }
-.va3d-menubar .va3d-menu-item { display:flex; align-items:center; width:100%; box-sizing:border-box; gap:6px; padding:6px 10px; border:0; border-radius:4px; color:var(--fg); background:transparent; text-align:left; font:inherit; white-space:nowrap; cursor:pointer; }
-.va3d-menubar .va3d-menu-item:hover, .va3d-menubar .va3d-menu-item:focus-visible { background:var(--border); }
-.va3d-menubar .va3d-menu-item:disabled, .va3d-menubar .va3d-menu-item[aria-disabled=true] { color:var(--muted); cursor:default; }
+.va3d-menubar .va3d-menu-item { display:flex; align-items:center; width:100%; box-sizing:border-box; gap:6px; padding:6px 10px; border:0; border-radius:var(--radius-sm); color:var(--fg); background:transparent; text-align:left; font:inherit; white-space:nowrap; cursor:default; }
+/* The row highlight is the keyboard focus mark too, as in Windows menus. */
+.va3d-menubar .va3d-menu-item:hover, .va3d-menubar .va3d-menu-item:focus-visible { background:var(--fill-subtle-hover); outline:none; }
+.va3d-menubar .va3d-menu-item:active { background:var(--fill-subtle-active); }
+.va3d-menubar .va3d-menu-item:disabled, .va3d-menubar .va3d-menu-item[aria-disabled=true] { color:var(--muted); }
+.va3d-menubar .va3d-menu-item:is(:disabled, [aria-disabled=true]):is(:hover, :active) { background:transparent; }
 .va3d-menu-label { flex:1; }
 .va3d-menubar .va3d-menu-mark:empty { display:none; }
-.va3d-menubar .va3d-menu-key { margin-left:auto; padding-left:16px; color:var(--muted); font-size:12px; }
+.va3d-menubar .va3d-menu-key { margin-left:auto; padding-left:16px; color:var(--muted); font-size:var(--font-size-small); }
 .va3d-menubar .va3d-menu-sep { height:1px; margin:4px 2px; border:0; background:var(--border); }
 .va3d-menubar .va3d-menu-block { padding:0; width:auto; }
 .va3d-menubar .va3d-menu { max-height:calc(100vh - var(--va-titlebar-height,0px) - 52px); overflow-y:auto; overscroll-behavior:contain; }

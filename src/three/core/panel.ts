@@ -27,6 +27,7 @@ function button(className: string, text: string, title: string, action: string):
   b.type = "button";
   b.textContent = text;
   b.title = title;
+  b.setAttribute("aria-label", title);
   b.dataset.action = action;
   return b;
 }

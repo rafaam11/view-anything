@@ -1,0 +1,109 @@
+/*
+ * Shared control layer (Windows 11 style). Two parts:
+ *  1. A zero-specificity baseline (:where) so no button, input or select is ever left with the
+ *     browser's default look; any class rule wins over it.
+ *  2. Classes for the look of a control: .va-btn (secondary), .va-btn-primary, .va-btn-danger,
+ *     .va-btn-ghost, .va-icon-button, .va-banner[data-kind].
+ * Container rules elsewhere (`.foo button`) only place controls (margin, width, flex); the look
+ * comes from here (tests/base-css.test.ts). The Markdown editor (Crepe) keeps its own controls.
+ * Loaded after tokens.css by the app and inlined into exported HTML.
+ */
+
+/* 1. Baseline */
+:where(button, input, select, textarea):not(:where(.md-editor *)) { font: inherit; color: inherit; }
+/* Controls keep the UI size wherever they sit; text areas follow their container (editors set their own). */
+:where(button, input, select):not(:where(.md-editor *)) { font-size: var(--font-size-ui); }
+:where(button):not(:where(.md-editor *)) {
+  background: var(--fill-control);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 4px 12px;
+  cursor: default;
+}
+:where(button:hover:not(:disabled)):not(:where(.md-editor *)) { background: var(--fill-control-hover); }
+:where(button:active:not(:disabled)):not(:where(.md-editor *)) { background: var(--fill-control-active); }
+:where(button:disabled):not(:where(.md-editor *)) { background: var(--fill-control-disabled); color: var(--muted); }
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select, textarea):not(:where(.md-editor *)) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  box-sizing: border-box;
+}
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select):not(:where(.md-editor *)) { min-height: var(--control-h); }
+:where(input[type="search"]):not(:where(.md-editor *)) { appearance: none; }
+/* Text fields mark focus with the Windows underline instead of a ring. */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):focus, select:focus, textarea:focus):not(:where(.md-editor *)) {
+  outline: none;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+:where(button, a, [tabindex], input[type="checkbox"], input[type="radio"], input[type="range"]):focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* 2. Buttons. Variants come after the base so `.va-btn:disabled` still wins over a variant fill. */
+.va-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--fill-control);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-size-ui);
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: default;
+}
+.va-btn:hover:not(:disabled) { background: var(--fill-control-hover); }
+.va-btn:active:not(:disabled) { background: var(--fill-control-active); color: var(--muted); }
+.va-btn-primary { background: var(--accent); color: var(--on-accent); }
+.va-btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.va-btn-primary:active:not(:disabled) { background: var(--accent-active); color: var(--on-accent); }
+.va-btn-danger { background: var(--danger); color: var(--on-danger); }
+.va-btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
+.va-btn-danger:active:not(:disabled) { background: var(--danger-active); color: var(--on-danger); }
+.va-btn-ghost { background: transparent; }
+.va-btn-ghost:hover:not(:disabled) { background: var(--fill-subtle-hover); }
+.va-btn-ghost:active:not(:disabled) { background: var(--fill-subtle-active); }
+.va-btn:disabled { background: var(--fill-control-disabled); color: var(--muted); }
+.va-btn-ghost:disabled { background: transparent; }
+
+.va-icon-button {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  cursor: default;
+}
+.va-icon-button svg { width: 18px; height: 18px; pointer-events: none; }
+.va-icon-button:hover:not(:disabled) { background: var(--fill-subtle-hover); }
+.va-icon-button:active:not(:disabled) { background: var(--fill-subtle-active); }
+.va-icon-button:disabled { background: transparent; color: var(--muted); }
+.va-icon-button[aria-pressed="true"] { background: var(--fill-selected); }
+
+/* 3. Banners: info by default; warning and error by data-kind. */
+.va-banner {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  color: var(--fg);
+  background: var(--info-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.va-banner[data-kind="warning"] { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.va-banner[data-kind="error"] { background: var(--error-bg); border-color: color-mix(in srgb, var(--danger-text) 45%, transparent); }

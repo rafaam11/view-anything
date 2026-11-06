@@ -13,6 +13,7 @@ import { bytesEqual, createRunner, planSave, shouldConfirmLeave, shouldReloadOnF
 import { saveCopy } from "../data/save-copy";
 import type { Editor } from "./editor";
 import { documentBar } from "../ui/chrome";
+import { menuButton, textButton } from "../ui/icons";
 import { applyPreferences, DEFAULTS, preferences } from "../settings/preferences";
 import { addCodeCopyButtons, imagesReady } from "./decorate";
 import { watchFile } from "./file-watch";
@@ -137,14 +138,10 @@ return {
     title.textContent = name;
     const actions = document.createElement("span");
     actions.className = "md-actions";
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "md-toggle md-mode-toggle";
-    toggle.textContent = "편집";
-    toggle.title = "편집 모드 (Ctrl+E)";
-    const copy = document.createElement("button");
-    copy.type = "button"; copy.className = "md-toggle"; copy.textContent = "다른 이름으로 저장"; copy.hidden = true;
-    const saveButton = document.createElement("button"); saveButton.textContent = "저장"; saveButton.hidden = true;
+    const toggle = textButton("편집", "secondary", { title: "편집 모드 (Ctrl+E)" });
+    toggle.classList.add("md-mode-toggle");
+    const copy = menuButton("다른 이름으로 저장"); copy.hidden = true;
+    const saveButton = menuButton("저장"); saveButton.hidden = true;
     /** The shared setting, so it also follows in other open Markdown windows and stays for next time. */
     const changeSize = (step: 1 | -1 | 0) => {
       const current = preferences().mdSize;

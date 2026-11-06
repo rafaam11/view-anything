@@ -2,6 +2,7 @@ import "./settings.css";
 import { preferences, applyPreferences, DEFAULTS, FONTS, type FontPreset, type MdWidth, type Preferences } from "./preferences";
 import { textSettings, settingsContext } from "./document";
 import { applyTheme, type ThemeMode } from "../theme";
+import { textButton } from "../ui/icons";
 
 let dialog: HTMLDialogElement | null = null;
 export function openSettings(): void {
@@ -57,7 +58,7 @@ export function openSettings(): void {
     wrap.onchange = () => save({ textWrap: wrap.checked });
     highlight.onchange = () => save({ textHighlight: highlight.checked });
     width.onchange = () => save({ mdWidth: width.value as MdWidth });
-    const reset = document.createElement("button"); reset.textContent = "기본값 복원"; reset.setAttribute("aria-label", `${name} 기본값 복원`);
+    const reset = textButton("기본값 복원"); reset.setAttribute("aria-label", `${name} 기본값 복원`);
     reset.onclick = () => save(isText ? { textFont: DEFAULTS.textFont, textSize: DEFAULTS.textSize, textWrap: DEFAULTS.textWrap, textHighlight: DEFAULTS.textHighlight } : { mdFont: DEFAULTS.mdFont, mdSize: DEFAULTS.mdSize, mdWidth: DEFAULTS.mdWidth });
     field.append(reset); syncers.push(sync); sync();
   };
@@ -75,7 +76,7 @@ export function openSettings(): void {
         .finally(() => { encoding.value = documentOptions.encoding(); encoding.disabled = false; });
     };
   }
-  const close = document.createElement("button"); close.textContent = "닫기"; close.onclick = () => d.close();
+  const close = textButton("닫기"); close.onclick = () => d.close();
   d.append(status, close); document.body.append(d);
   const sync = () => { for (const fn of syncers) fn(); };
   const onStorage = (e: StorageEvent) => { if (e.key === "va.theme" || e.key === null) syncTheme(); };

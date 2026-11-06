@@ -21,6 +21,7 @@ import { workerRunner } from "./geometry-worker";
 import type { CloudController } from "./cloud/controller";
 import { pointCount } from "./core/info";
 import { recentMenuBlock } from "../ui/recent-menu";
+import { iconButton, textButton } from "../ui/icons";
 
 /** Where 파일 > 화면을 PNG로 저장 suggests the image: next to the first model, else scene.png. */
 export function screenshotPath(first: string | undefined): string {
@@ -94,16 +95,13 @@ const BANNER_MAX = 300;
 export class Banner {
   readonly root = el("div", "va3d-banner");
   private readonly text = el("span");
-  private readonly action = el("button", "va3d-banner-action");
+  private readonly action = textButton("");
   private onAction: (() => void) | null = null;
 
   constructor() {
-    const close = el("button");
-    close.type = "button";
-    close.textContent = "×";
-    close.title = "닫기";
+    const close = iconButton("닫기", "close");
     close.addEventListener("click", () => (this.root.hidden = true));
-    this.action.type = "button";
+    this.action.classList.add("va3d-banner-action");
     this.action.addEventListener("click", () => {
       const run = this.onAction;
       this.onAction = null;

@@ -1,20 +1,22 @@
 import { AUTO_KEY, RELEASES, REPOSITORY, statusLabel, type UpdateStatus } from "./model";
 import "./update.css";
+import { textButton } from "../ui/icons";
 
 export function updateBadge(version: string, request: (action: "check" | "install") => void, open: (url: string) => void) {
   const root = document.createElement("aside");
   root.className = "va-update";
   root.setAttribute("aria-label", "앱 업데이트");
   const chip = document.createElement("button");
+  chip.type = "button";
   chip.setAttribute("aria-haspopup", "true");
   const action = document.createElement("button");
+  action.type = "button";
   const menu = document.createElement("div");
   menu.className = "va-update-menu";
   menu.hidden = true;
   function close() { menu.hidden = true; chip.setAttribute("aria-expanded", "false"); }
   function item(label: string, run: () => void) {
-    const b = document.createElement("button");
-    b.textContent = label;
+    const b = textButton(label, "ghost");
     b.onclick = () => { close(); run(); };
     menu.append(b);
   }
@@ -73,11 +75,9 @@ export function confirmRestart(dirty: boolean): Promise<boolean> {
     text.textContent = "지금 재시작하여 업데이트를 설치할까요?";
     const warning = document.createElement("p");
     warning.textContent = dirty ? "저장하지 않은 변경과 진행 중인 작업은 사라집니다. 저장하려면 취소하세요." : "";
-    const cancel = document.createElement("button");
-    cancel.textContent = "취소";
+    const cancel = textButton("취소");
     cancel.autofocus = true;
-    const restart = document.createElement("button");
-    restart.textContent = "재시작";
+    const restart = textButton("재시작", dirty ? "danger" : "primary");
     const finish = (ok: boolean) => { dialog.close(); dialog.remove(); resolve(ok); };
     cancel.onclick = () => finish(false);
     restart.onclick = () => finish(true);

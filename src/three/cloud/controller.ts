@@ -2,6 +2,7 @@ import "./pointcloud.css";
 import { Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, type PointsMaterial, Vector3 } from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { platform } from "../../platform";
+import { textButton } from "../../ui/icons";
 import { registerUpdateGuard } from "../../update/guard";
 import type { Stage } from "../core/stage";
 import type { ViewTools } from "../core/view-tools";
@@ -127,7 +128,7 @@ export class CloudController {
     registerUpdateGuard(() => this.dirty() || this.isBusy(), (approved) => { this.approved = approved; if (approved) this.cancel(); });
     void platform.onCloseRequested(async () => this.approved || (!(this.dirty() || this.isBusy())) || await platform.confirmDiscard("저장하지 않은 포인트클라우드 작업이 사라집니다. 닫을까요?"));
   }
-  private button(text: string, run: () => void) { const b = el("button", text); b.type = "button"; b.onclick = run; return b; }
+  private button(text: string, run: () => void) { const b = textButton(text); b.onclick = run; return b; }
   private label(text: string, input: HTMLElement, parent: HTMLElement = this.body) { const l = el("label", text); l.append(input); parent.append(l); }
   private number(text: string, value: string, min: number) { const i = el("input"); i.type = "number"; i.step = "any"; i.min = String(min); i.value = value; this.label(text, i, this.editBody); return i; }
   private entry() { return this.selected ? this.entries.get(this.selected) : undefined; }

@@ -1,4 +1,5 @@
 import "./ui/tokens.css";
+import "./ui/base.css";
 import "./styles.css";
 import "./ui/chrome.css";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -14,6 +15,7 @@ import { configureSettings } from "./settings/document";
 import { initializeUpdateInput, updateInputLocked } from "./update/guard";
 import { addRecent, removeRecent } from "./recent";
 import { OPEN_PATH_EVENT, recentList, type OpenPathDetail } from "./ui/recent-menu";
+import { textButton } from "./ui/icons";
 
 const app = document.getElementById("app")!;
 initializeUpdateInput();
@@ -51,7 +53,7 @@ async function show() {
   configureSettings(file, textMode);
   if (!file) {
     message("파일을 끌어다 놓거나 Ctrl+O");
-    const text = document.createElement("button"); text.textContent = "텍스트로 열기… (Ctrl+Shift+O)";
+    const text = textButton("텍스트로 열기… (Ctrl+Shift+O)");
     text.onclick = () => { void pickAndOpen(false, true); }; app.querySelector(".empty")!.append(text);
     app.querySelector(".empty")!.append(recentList());
     return;
@@ -61,7 +63,7 @@ async function show() {
   const load = textMode ? () => import("./text/viewer").then(m => m.default) : resolveViewer(file);
   /** Any file can still be looked at as text; the unsupported and the failed screens both offer it. */
   const textFallback = (path: string) => {
-    const text = document.createElement("button"); text.textContent = "텍스트로 열기";
+    const text = textButton("텍스트로 열기");
     text.onclick = () => { location.search = "?file=" + encodeURIComponent(path) + "&text=1"; };
     app.querySelector(".empty")!.append(text);
   };

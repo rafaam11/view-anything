@@ -15,6 +15,27 @@ const paths = {
   save: '<path d="M4 3h13l4 4v14H3V3Zm3 0v6h9V3M7 21v-7h10v7"/>',
   close: '<path d="m6 6 12 12M6 18 18 6"/>',
 } as const;
+export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+
+/** A labelled command button with the shared look (base.css). `shortcut` only describes the key; the caller handles it. */
+export function textButton(label: string, variant: ButtonVariant = "secondary", options: { shortcut?: string; title?: string } = {}): HTMLButtonElement {
+  const b = document.createElement("button"); b.type = "button";
+  b.className = variant === "secondary" ? "va-btn" : `va-btn va-btn-${variant}`;
+  b.textContent = label;
+  if (options.shortcut) b.setAttribute("aria-keyshortcuts", options.shortcut);
+  const title = options.title ?? (options.shortcut ? `${label} (${options.shortcut})` : "");
+  if (title) b.title = title;
+  return b;
+}
+
+/** A file-menu command; the shortcut shows on the right through CSS, so the text stays the label. */
+export function menuButton(label: string, shortcut?: string): HTMLButtonElement {
+  const b = document.createElement("button"); b.type = "button"; b.className = "va3d-menu-item";
+  b.textContent = label;
+  if (shortcut) { b.dataset.shortcut = shortcut; b.setAttribute("aria-keyshortcuts", shortcut); }
+  return b;
+}
+
 export function iconButton(label: string, icon: keyof typeof paths, shortcut?: string): HTMLButtonElement {
   const b = document.createElement("button"); b.type = "button"; b.className = "va-icon-button";
   b.title = shortcut ? `${label} (${shortcut})` : label; b.setAttribute("aria-label", label);
