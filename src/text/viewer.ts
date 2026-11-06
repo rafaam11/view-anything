@@ -10,6 +10,7 @@ import { recentMenuBlock } from "../ui/recent-menu";
 import { registerTextSettings } from "../settings/document";
 import { preferences } from "../settings/preferences";
 import { revealSelection } from "./selection";
+import { highlightHtml, languageFor, withinHighlightLimit } from "./highlight";
 import "../ui/chrome.css";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -34,8 +35,37 @@ const viewer: Viewer = {
     const report = (e: unknown) => { status.textContent = String(e); };
     const editor = document.createElement("textarea"); editor.className = "text-source";
     editor.spellcheck = false; editor.readOnly = true; editor.setAttribute("aria-label", "텍스트 내용");
+    // Syntax colours: a <pre> under the textarea shows the same text, highlighted; the textarea
+    // keeps editing, selection and search and only its glyphs turn transparent.
+    const stack = document.createElement("div"); stack.className = "text-stack";
+    const layer = document.createElement("pre"); layer.className = "text-highlight"; layer.setAttribute("aria-hidden", "true");
+    stack.append(layer, editor);
+    const language = languageFor(path);
+    let paintSequence = 0, paintTimer: ReturnType<typeof setTimeout> | undefined;
+    const plain = () => { stack.removeAttribute("data-highlight"); layer.replaceChildren(); };
+    const syncScroll = () => { layer.scrollTop = editor.scrollTop; layer.scrollLeft = editor.scrollLeft; };
+    const paint = async () => {
+      clearTimeout(paintTimer);
+      const sequence = ++paintSequence, text = editor.value;
+      if (!language || !meta || !preferences().textHighlight) { plain(); return; }
+      if (!withinHighlightLimit(text)) {
+        plain();
+        if (!status.textContent) status.textContent = "구문 강조는 1 MiB·2만 줄까지 적용합니다";
+        return;
+      }
+      try {
+        const html = await highlightHtml(text, language);
+        if (sequence !== paintSequence) return;
+        layer.innerHTML = html + (text.endsWith("\n") ? " " : ""); // keep the last empty line's height
+        stack.dataset.highlight = "on"; syncScroll();
+      } catch { if (sequence === paintSequence) plain(); }
+    };
+    editor.addEventListener("scroll", syncScroll);
     const cancelSearch = () => { searchSequence++; if (status.textContent === "검색 중…") status.textContent = ""; };
-    const display = () => { cancelSearch(); editor.wrap = preferences().textWrap ? "soft" : "off"; };
+    const display = () => {
+      cancelSearch(); editor.wrap = preferences().textWrap ? "soft" : "off"; stack.dataset.wrap = editor.wrap;
+      if (meta) void paint();
+    };
     display(); window.addEventListener("va:preferences", display);
     window.addEventListener("resize", cancelSearch);
     window.addEventListener("unload", () => { cancelSearch(); window.removeEventListener("va:preferences", display); window.removeEventListener("resize", cancelSearch); }, { once: true });
@@ -55,6 +85,7 @@ const viewer: Viewer = {
         status.textContent = mixed ? "혼합 줄바꿈 · 읽기 전용" : "";
       } catch (e) { editing = false; edit.textContent = "편집"; report(decodeHint(e)); }
       refresh();
+      await paint();
     };
     const exclusive = async (run: () => Promise<void>) => {
       if (busy || approved) return; busy = true; refresh();
@@ -119,7 +150,7 @@ const viewer: Viewer = {
       { label: "보기", accessKey: "v", items: [{ label: "찾기…", shortcut: "Ctrl+F", run: showSearch }] },
     ]);
     bar.prepend(menus.root);
-    root.append(bar, searchBar, status, editor); el.replaceChildren(root);
+    root.append(bar, searchBar, status, stack); el.replaceChildren(root);
     const doSave = async () => exclusive(async () => {
       if (!editing || !meta || !dirty()) return;
       doc.edit(await encodeText(meta, editor.value));
@@ -127,7 +158,12 @@ const viewer: Viewer = {
       if (result === "conflict") { status.textContent = "파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽으세요."; }
       else { meta = await decodeText(doc.bytes, cp949); status.textContent = "저장됨"; }
     });
-    editor.oninput = () => { cancelSearch(); status.textContent = ""; refresh(); };
+    editor.oninput = () => {
+      cancelSearch(); status.textContent = ""; refresh();
+      // Plain glyphs while typing, colours again after a short pause: the layer never lags behind the caret.
+      if (stack.dataset.highlight) { ++paintSequence; plain(); }
+      clearTimeout(paintTimer); paintTimer = setTimeout(() => { void paint(); }, 150);
+    };
     window.addEventListener("keydown", e => {
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); if (!e.repeat) void doSave().catch(report); }
       if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); showSearch(); }

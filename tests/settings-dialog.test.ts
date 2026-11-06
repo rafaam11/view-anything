@@ -57,3 +57,9 @@ test("a data viewer that registers an encoding gets the file group without text 
   configureSettings("table.csv");registerTextSettings({encoding:()=>"utf",changeEncoding:async()=>{}});openSettings();
   expect(legends()).toEqual(["일반","현재 파일"]);
 });
+test("the text group toggles syntax highlighting and its reset turns it back on",()=>{
+  configureSettings("a.py");openSettings();
+  const box=[...field("텍스트").querySelectorAll("label")].find(l=>l.textContent?.includes("구문 강조"))!.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  expect(box.checked).toBe(true);box.checked=false;box.dispatchEvent(new Event("change"));expect(preferences().textHighlight).toBe(false);
+  field("텍스트").querySelector("button")!.click();expect(preferences().textHighlight).toBe(true);
+});

@@ -132,6 +132,13 @@ test("other viewers may reach pdfjs but not three", () => {
 });
 
 
+test("the text viewer chunk loads highlight.js lazily, never inlined", () => {
+  const m = manifest({ "src/text/viewer.ts": { file: "assets/text-LLL.js", src: "src/text/viewer.ts", isDynamicEntry: true, imports: [] } });
+  const inlined = checkManifest(m, (f: string) => (f === "assets/text-LLL.js" ? "e.highlightAuto=function(){}" : "export{}"));
+  expect(inlined.some((p: string) => p.includes("src/text/viewer.ts") && p.includes("highlight"))).toBe(true);
+  expect(checkManifest(m, (f: string) => (f === "assets/text-LLL.js" ? "hljs.registerLanguage(n, l)" : "export{}"))).toEqual([]);
+});
+
 const dirs: string[] = [];
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });

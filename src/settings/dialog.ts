@@ -39,12 +39,14 @@ export function openSettings(): void {
     label(field, "본문 글꼴", font); label(field, "본문 글자 크기 (px)", size);
     const wrap = document.createElement("input"); wrap.type = "checkbox";
     if (isText) label(field, "자동 줄바꿈", wrap);
+    const highlight = document.createElement("input"); highlight.type = "checkbox";
+    if (isText) label(field, "구문 강조", highlight);
     const width = select([["narrow", "좁게"], ["normal", "보통"], ["wide", "넓게"], ["full", "창 너비"]]);
     if (!isText) label(field, "본문 폭", width);
     const preview = document.createElement("p"); preview.className = "va-settings-preview"; preview.textContent = `가나다 ABC 123 · ${name} 미리보기`; field.append(preview);
     const sync = () => {
       const p = preferences(), f = isText ? p.textFont : p.mdFont, s = isText ? p.textSize : p.mdSize;
-      font.value = f; size.value = String(s); wrap.checked = p.textWrap; width.value = p.mdWidth;
+      font.value = f; size.value = String(s); wrap.checked = p.textWrap; highlight.checked = p.textHighlight; width.value = p.mdWidth;
       preview.style.fontFamily = FONTS[f]; preview.style.fontSize = `${s}px`;
     };
     const update = () => {
@@ -53,9 +55,10 @@ export function openSettings(): void {
     };
     font.onchange = size.onchange = update;
     wrap.onchange = () => save({ textWrap: wrap.checked });
+    highlight.onchange = () => save({ textHighlight: highlight.checked });
     width.onchange = () => save({ mdWidth: width.value as MdWidth });
     const reset = document.createElement("button"); reset.textContent = "기본값 복원"; reset.setAttribute("aria-label", `${name} 기본값 복원`);
-    reset.onclick = () => save(isText ? { textFont: DEFAULTS.textFont, textSize: DEFAULTS.textSize, textWrap: DEFAULTS.textWrap } : { mdFont: DEFAULTS.mdFont, mdSize: DEFAULTS.mdSize, mdWidth: DEFAULTS.mdWidth });
+    reset.onclick = () => save(isText ? { textFont: DEFAULTS.textFont, textSize: DEFAULTS.textSize, textWrap: DEFAULTS.textWrap, textHighlight: DEFAULTS.textHighlight } : { mdFont: DEFAULTS.mdFont, mdSize: DEFAULTS.mdSize, mdWidth: DEFAULTS.mdWidth });
     field.append(reset); syncers.push(sync); sync();
   };
   const context = settingsContext();

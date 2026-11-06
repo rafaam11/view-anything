@@ -77,3 +77,38 @@ test("undecodable bytes point to the encoding setting, binary bytes do not", asy
   disk = new Uint8Array([0x41, 0, 0x42]); document.body.replaceChildren(); await viewer.mount(document.body, "bin.txt");
   expect(status()).toContain("바이너리"); expect(status()).not.toContain("CP949");
 });
+test("code files get a highlight layer that mirrors the source without changing it", async () => {
+  disk = new TextEncoder().encode("def f():\n    return 1\n"); document.body.replaceChildren(); await viewer.mount(document.body, "code.py");
+  const layer = document.querySelector<HTMLElement>(".text-highlight")!;
+  await vi.waitFor(() => expect(layer.querySelector(".hljs-keyword")?.textContent).toBe("def"));
+  expect(layer.textContent!.trimEnd()).toBe(source().value.trimEnd());
+  expect(layer.getAttribute("aria-hidden")).toBe("true");
+  expect(document.querySelector(".text-stack")!.getAttribute("data-highlight")).toBe("on");
+  expect(disk).toEqual(new TextEncoder().encode("def f():\n    return 1\n"));
+});
+test("the highlight follows edits after a short pause and leaves plain text alone", async () => {
+  disk = new TextEncoder().encode("x = 1\n"); document.body.replaceChildren(); await viewer.mount(document.body, "code.py");
+  button("편집").click(); await settle();
+  edit("import os\n");
+  await vi.waitFor(() => expect(document.querySelector(".text-highlight")!.textContent).toContain("import os"));
+  disk = new TextEncoder().encode("plain\n"); document.body.replaceChildren(); await viewer.mount(document.body, "notes.txt");
+  expect(document.querySelector(".text-stack")!.getAttribute("data-highlight")).not.toBe("on");
+});
+test("turning highlighting off in settings drops the layer and keeps the text", async () => {
+  disk = new TextEncoder().encode("def f(): pass\n"); document.body.replaceChildren(); await viewer.mount(document.body, "code.py");
+  await vi.waitFor(() => expect(document.querySelector(".text-stack")!.getAttribute("data-highlight")).toBe("on"));
+  applyPreferences({ textHighlight: false }, false);
+  await vi.waitFor(() => expect(document.querySelector(".text-stack")!.getAttribute("data-highlight")).not.toBe("on"));
+  expect(source().value).toBe("def f(): pass\n");
+  applyPreferences({ textHighlight: true }, false);
+  await vi.waitFor(() => expect(document.querySelector(".text-stack")!.getAttribute("data-highlight")).toBe("on"));
+});
+test("the layer scrolls and wraps with the source", async () => {
+  disk = new TextEncoder().encode("x = 1\n".repeat(50)); document.body.replaceChildren(); await viewer.mount(document.body, "code.py");
+  const stack = document.querySelector<HTMLElement>(".text-stack")!, layer = document.querySelector<HTMLElement>(".text-highlight")!;
+  expect(stack.getAttribute("data-wrap")).toBe("soft");
+  source().scrollTop = 40; source().scrollLeft = 7; source().dispatchEvent(new Event("scroll"));
+  expect(layer.scrollTop).toBe(40); expect(layer.scrollLeft).toBe(7);
+  applyPreferences({ textWrap: false }, false);
+  expect(stack.getAttribute("data-wrap")).toBe("off");
+});

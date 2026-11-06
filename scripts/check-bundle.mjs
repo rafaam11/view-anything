@@ -18,6 +18,12 @@ const OTHER_VIEWERS = ["src/pdf/viewer.ts", "src/image/viewer.ts", "src/text/vie
 const FORBIDDEN_3D = /three|occt/i;
 const CODE_MARKERS_3D = /__THREE__|occt-import-js\.wasm/;
 /**
+ * highlight.js core loads only when a code file is shown. `highlightAuto` is a core method the text
+ * viewer itself never calls (it does call `registerLanguage`, so that name cannot be the marker).
+ */
+const TEXT_VIEWER = "src/text/viewer.ts";
+const CODE_MARKERS_TEXT = /__THREE__|occt-import-js\.wasm|highlightAuto/;
+/**
  * Size budgets of the chunks that decide startup, in KiB (v0.14.0: entry 37, md viewer 707).
  * The entry chunk is the one every double-click pays for; the md viewer is the most opened.
  */
@@ -51,7 +57,7 @@ function walk(manifest, start, root, readChunk, forbidden = FORBIDDEN, markers =
       const code = readChunk(chunk.file);
       const hit = code === null ? null : markers.exec(code);
       if (code === null) problems.push(`${root}: chunk file ${chunk.file} is missing`);
-      else if (hit) problems.push(`${root} statically reaches ${label(key, chunk)} which inlines three/occt code (${hit[0]}) via ${path.join(" -> ")}`);
+      else if (hit) problems.push(`${root} statically reaches ${label(key, chunk)} which inlines lazy-only code (${hit[0]}) via ${path.join(" -> ")}`);
     }
     for (const next of chunk.imports ?? []) stack.push([next, [...path, next]]);
   }
@@ -71,7 +77,7 @@ export function checkManifest(manifest, readChunk) {
   for (const root of [...entries, ...(md ? [md] : [])]) problems.push(...walk(manifest, root, root, readChunk));
   for (const viewer of OTHER_VIEWERS) {
     const key = Object.keys(manifest).find((k) => k === viewer || manifest[k]?.src === viewer);
-    if (key) problems.push(...walk(manifest, key, key, readChunk, FORBIDDEN_3D, CODE_MARKERS_3D));
+    if (key) problems.push(...walk(manifest, key, key, readChunk, FORBIDDEN_3D, viewer === TEXT_VIEWER ? CODE_MARKERS_TEXT : CODE_MARKERS_3D));
   }
   if (readChunk) {
     const budgets = [...entries.map((k) => [k, BUDGET_KIB.entry]), ...(md ? [[md, BUDGET_KIB[MD_VIEWER]]] : [])];

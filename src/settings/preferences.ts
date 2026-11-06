@@ -1,7 +1,7 @@
 export type FontPreset = "system" | "serif" | "mono";
 export type MdWidth = "narrow" | "normal" | "wide" | "full";
-export interface Preferences { mdFont: FontPreset; mdSize: number; mdWidth: MdWidth; textFont: FontPreset; textSize: number; textWrap: boolean }
-export const DEFAULTS: Preferences = { mdFont: "system", mdSize: 16, mdWidth: "normal", textFont: "mono", textSize: 14, textWrap: true };
+export interface Preferences { mdFont: FontPreset; mdSize: number; mdWidth: MdWidth; textFont: FontPreset; textSize: number; textWrap: boolean; textHighlight: boolean }
+export const DEFAULTS: Preferences = { mdFont: "system", mdSize: 16, mdWidth: "normal", textFont: "mono", textSize: 14, textWrap: true, textHighlight: true };
 export const MD_WIDTHS: Record<MdWidth, string> = { narrow: "680px", normal: "780px", wide: "960px", full: "100%" };
 export const KEY = "va.preferences.v1";
 export const FONTS: Record<FontPreset, string> = {
@@ -19,6 +19,7 @@ export function parsePreferences(raw: string | null): Preferences {
       textFont: p?.textFont === "system" || p?.textFont === "serif" ? p.textFont : "mono",
       textSize: Number.isInteger(p?.textSize) && p.textSize >= 12 && p.textSize <= 24 ? p.textSize : 14,
       textWrap: typeof p?.textWrap === "boolean" ? p.textWrap : true,
+      textHighlight: typeof p?.textHighlight === "boolean" ? p.textHighlight : true,
     };
   } catch { return { ...DEFAULTS }; }
 }

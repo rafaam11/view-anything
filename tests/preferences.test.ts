@@ -24,7 +24,7 @@ test("old preferences migrate without losing Markdown choices; text options vali
 test("partial edits keep the other viewer settings and storage synchronization resets missing fields", () => {
   applyPreferences({...DEFAULTS,mdFont:"serif",mdSize:20},false);
   applyPreferences({textFont:"system",textSize:18,textWrap:false});
-  expect(preferences()).toEqual({mdFont:"serif",mdSize:20,mdWidth:"normal",textFont:"system",textSize:18,textWrap:false});
+  expect(preferences()).toEqual({mdFont:"serif",mdSize:20,mdWidth:"normal",textFont:"system",textSize:18,textWrap:false,textHighlight:true});
   const stop=initializePreferences();
   expect(document.documentElement.style.getPropertyValue("--va-text-size")).toBe("18px");
   window.dispatchEvent(new StorageEvent("storage",{key:KEY,newValue:null})); expect(preferences()).toEqual(DEFAULTS); stop();
@@ -44,4 +44,9 @@ test("storage failure retains usable in-memory preference", () => {
   const spy = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw Error("full"); });
   expect(applyPreferences({ mdFont: "mono", mdSize: 20 })).toBe(false);
   expect(preferences().mdSize).toBe(20); spy.mockRestore();
+});
+test("syntax highlighting is on by default and only a boolean turns it off", () => {
+  expect(DEFAULTS.textHighlight).toBe(true);
+  expect(parsePreferences('{"textHighlight":false}').textHighlight).toBe(false);
+  expect(parsePreferences('{"textHighlight":"no"}').textHighlight).toBe(true);
 });
