@@ -3,6 +3,9 @@ use std::io::{BufRead, Read, Write};
 
 pub const MAX_POINTS: usize = 10_000_000;
 pub const MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;
+/// Per-point session overhead (ID history, query index, display copies) that `Session::estimate()`
+/// adds to a cloud's own memory; the decoders' pre-checks use the same figure.
+pub const SESSION_BYTES_PER_POINT: usize = 320;
 pub type Result<T> = std::result::Result<T, String>;
 
 /// Refuse a file by its declared point count, before any body is read. `max_points` is what the

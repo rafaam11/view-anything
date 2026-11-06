@@ -47,7 +47,7 @@ impl Session {
         !Arc::ptr_eq(&self.active, &self.saved)
     }
     fn estimate(&self) -> usize {
-        self.cloud.memory() + self.cloud.len() * 320
+        self.cloud.memory() + self.cloud.len() * codec::SESSION_BYTES_PER_POINT
     }
     fn apply(&mut self, ids: Arc<Vec<u32>>) {
         self.undo.push(self.active.clone());

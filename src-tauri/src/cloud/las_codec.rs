@@ -67,10 +67,7 @@ pub fn into_cloud(las: LasCloud) -> Result<super::codec::Cloud> {
         });
     }
     let len = las.points.len();
-    let stride = 30usize
-        + if format.has_gps_time { 8 } else { 0 }
-        + if format.has_color { 6 } else { 0 }
-        + format.extra_bytes as usize;
+    let stride = display_stride(&format);
     let size = len
         .checked_mul(stride)
         .filter(|v| *v <= MAX_BYTES)
@@ -133,20 +130,38 @@ pub fn into_cloud(las: LasCloud) -> Result<super::codec::Cloud> {
     })
 }
 
-/// The two LAS limits, kept apart like the PCD/PLY decoder does: the raw point records against
-/// the 2 GiB decode cap, and the working memory (decoded `las::Point`s, extra bytes copied twice,
-/// and the same 348-byte per-point session overhead as PCD/PLY) against the app budget left.
-/// Comparing the working memory with 2 GiB used to refuse plain LAS files from about 4.5 million
-/// points, far below the documented ten million.
-pub fn las_budget(count: usize, record_len: usize, extra_bytes: usize, budget: usize) -> Result<()> {
-    if count.checked_mul(record_len).is_none_or(|n| n > MAX_BYTES) {
+/// Bytes per point of the display records `into_cloud` builds (x y z f64, intensity, four u8
+/// fields, then GPS time, RGB and the extra bytes when the format has them). It is never smaller
+/// than the file's own record length.
+pub fn display_stride(format: &las::point::Format) -> usize {
+    30 + if format.has_gps_time { 8 } else { 0 }
+        + if format.has_color { 6 } else { 0 }
+        + format.extra_bytes as usize
+}
+
+/// What an open LAS session is charged for `count` points, matching `Session::estimate()`:
+/// the decoded `las::Point`s with their extra bytes, the display records, the offsets and f64
+/// positions, and the per-point session overhead.
+pub fn las_estimate(count: usize, format: &las::point::Format) -> Option<usize> {
+    let per_point = std::mem::size_of::<las::Point>()
+        + format.extra_bytes as usize
+        + display_stride(format)
+        + 4
+        + 24
+        + super::codec::SESSION_BYTES_PER_POINT;
+    count.checked_mul(per_point)
+}
+
+/// The two LAS limits, checked from the header before any point is decoded: the display records
+/// against the 2 GiB decode cap, and the working memory against the app budget left. Comparing the
+/// working memory with 2 GiB used to refuse plain LAS files from about 4.5 million points, far
+/// below the documented ten million; estimating below the real charge let some files decode in
+/// full only to be refused afterwards.
+pub fn las_budget(count: usize, format: &las::point::Format, budget: usize) -> Result<()> {
+    if count.checked_mul(display_stride(format)).is_none_or(|n| n > MAX_BYTES) {
         return Err("LAS/LAZ 디코딩 데이터 한도를 초과합니다".into());
     }
-    let per_point = extra_bytes
-        .checked_mul(2)
-        .and_then(|n| n.checked_add(std::mem::size_of::<las::Point>() + 348))
-        .ok_or("메모리 한도 오류")?;
-    if count.checked_mul(per_point).is_none_or(|n| n > budget) {
+    if las_estimate(count, format).is_none_or(|n| n > budget) {
         return Err("LAS/LAZ 디코딩 메모리 한도를 초과합니다".into());
     }
     Ok(())
@@ -186,12 +201,7 @@ pub fn read<R: Read + Seek + Send + Sync + 'static>(
     }
     let count = usize::try_from(header.number_of_points()).map_err(|_| "점 개수가 너무 큽니다")?;
     point_limit(count, max_points)?;
-    las_budget(
-        count,
-        header.point_format().len() as usize,
-        header.point_format().extra_bytes as usize,
-        budget,
-    )?;
+    las_budget(count, header.point_format(), budget)?;
     let mut points = Vec::with_capacity(count);
     for i in 0..count {
         if i % 4096 == 0 {
@@ -373,23 +383,41 @@ mod tests {
         assert!(err.contains("장면 합계"), "{err}");
     }
 
+    fn format(n: u8, extra: u16) -> las::point::Format {
+        let mut f = las::point::Format::new(n).unwrap();
+        f.extra_bytes = extra;
+        f
+    }
+
     #[test]
     fn las_budget_admits_ten_million_plain_points() {
-        assert!(las_budget(10_000_000, 34, 0, 8 * 1024 * 1024 * 1024).is_ok());
+        assert!(las_budget(10_000_000, &format(3, 0), 8 * 1024 * 1024 * 1024).is_ok());
     }
 
     #[test]
     fn las_budget_rejects_records_over_two_gib_and_memory_over_budget() {
+        // Format 0 with 185 extra bytes: 205-byte records pass 2 GiB, the 215-byte display copy does not.
         assert!(
-            las_budget(10_000_000, 300, 0, usize::MAX)
+            las_budget(10_000_000, &format(0, 185), usize::MAX)
                 .unwrap_err()
                 .contains("데이터")
         );
         assert!(
-            las_budget(10_000_000, 34, 0, 1024 * 1024 * 1024)
+            las_budget(10_000_000, &format(3, 0), 1024 * 1024 * 1024)
                 .unwrap_err()
                 .contains("메모리")
         );
+    }
+
+    #[test]
+    fn las_estimate_matches_the_session_accounting_after_decoding() {
+        let colors = [(1, 2, 3), (4, 5, 6), (7, 8, 9)];
+        let cloud = read(las_with_colors(&colors), 1_000_000, MAX_POINTS, &mut |_, _| Ok(())).unwrap();
+        let format = *cloud.header.point_format();
+        let display = into_cloud(cloud).unwrap();
+        // What Session::estimate() charges once the cloud is open (the offsets table has one extra entry).
+        let charged = display.memory() + display.len() * super::super::codec::SESSION_BYTES_PER_POINT;
+        assert_eq!(las_estimate(colors.len(), &format).unwrap() + 4, charged);
     }
 
     #[test]
