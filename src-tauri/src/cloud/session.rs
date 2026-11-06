@@ -1120,6 +1120,7 @@ mod tests {
             positions: vec![[0., 0., 0.]; 3],
             editable: true,
             warning: None,
+            color_divisor: 1.,
         };
         let ids = Arc::new(vec![0, 1, 2]);
         Session {

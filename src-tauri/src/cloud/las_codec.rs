@@ -111,6 +111,15 @@ pub fn into_cloud(las: LasCloud) -> Result<super::codec::Cloud> {
         bytes.extend_from_slice(&point.extra_bytes);
     }
     offsets.push(u32::try_from(bytes.len()).map_err(|_| "LAS/LAZ 오프셋 한도 오류")?);
+    // Colour is 16-bit by the spec, but many writers store 0-255; a file whose channels never
+    // exceed 255 is shown as 8-bit instead of nearly black.
+    let brightest = las
+        .points
+        .iter()
+        .filter_map(|p| p.color)
+        .map(|c| c.red.max(c.green).max(c.blue))
+        .max()
+        .unwrap_or(0);
     Ok(Cloud {
         format: Format::Las(Box::new(las)),
         fields,
@@ -120,6 +129,7 @@ pub fn into_cloud(las: LasCloud) -> Result<super::codec::Cloud> {
         positions,
         editable: true,
         warning: None,
+        color_divisor: if brightest > 255 { 257. } else { 1. },
     })
 }
 
@@ -317,6 +327,39 @@ mod tests {
             assert_eq!(transformed.points, vec![expected]);
             assert_eq!(cloud.points[1], mk(4.));
         }
+    }
+
+    /// A point format 2 (RGB) LAS with one point per colour.
+    fn las_with_colors(colors: &[(u16, u16, u16)]) -> Cursor<Vec<u8>> {
+        let mut builder = las::Builder::from((1, 2));
+        builder.point_format = las::point::Format::new(2).unwrap();
+        let mut writer =
+            las::Writer::new(Cursor::new(Vec::new()), builder.into_header().unwrap()).unwrap();
+        for &(red, green, blue) in colors {
+            writer
+                .write_point(las::Point {
+                    color: Some(las::Color { red, green, blue }),
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+        let mut cursor = writer.into_inner().unwrap();
+        cursor.set_position(0);
+        cursor
+    }
+
+    #[test]
+    fn eight_bit_values_in_sixteen_bit_las_colors_are_not_darkened() {
+        let read_colors = |colors: &[(u16, u16, u16)]| {
+            into_cloud(read(las_with_colors(colors), 1_000_000, MAX_POINTS, &mut |_, _| Ok(())).unwrap())
+                .unwrap()
+        };
+        let eight_bit = read_colors(&[(255, 128, 0), (10, 20, 30)]);
+        assert_eq!(eight_bit.rgb(0), Some([255, 128, 0]));
+        assert_eq!(eight_bit.rgb(1), Some([10, 20, 30]));
+        let sixteen_bit = read_colors(&[(255, 128, 0), (65535, 0, 0)]);
+        assert_eq!(sixteen_bit.rgb(0), Some([0, 0, 0]));
+        assert_eq!(sixteen_bit.rgb(1), Some([255, 0, 0]));
     }
 
     #[test]

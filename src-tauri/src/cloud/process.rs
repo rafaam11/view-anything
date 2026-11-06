@@ -331,6 +331,7 @@ mod tests {
             positions: points.to_vec(),
             editable: true,
             warning: None,
+            color_divisor: 1.,
         }
     }
     #[test]

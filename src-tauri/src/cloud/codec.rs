@@ -141,6 +141,9 @@ pub struct Cloud {
     pub positions: Vec<[f64; 3]>,
     pub editable: bool,
     pub warning: Option<String>,
+    /// What 16-bit LAS colour channels are divided by for display: 257 for true 16-bit colour,
+    /// 1 when the file stores 8-bit values in the 16-bit fields (a common writer habit).
+    pub color_divisor: f64,
 }
 impl Cloud {
     pub fn len(&self) -> usize {
@@ -200,7 +203,7 @@ impl Cloud {
             if b.len() == f.scalar.size() {
                 let value = f.scalar.number(b);
                 rgb[channel] = if matches!(self.format, Format::Las(_)) && f.scalar == Scalar::U16 {
-                    (value / 257.).clamp(0., 255.) as u8
+                    (value / self.color_divisor).clamp(0., 255.) as u8
                 } else {
                     value.clamp(0., 255.) as u8
                 };
@@ -557,6 +560,7 @@ pub fn read_budget<R: BufRead>(
         bytes,
         offsets,
         positions: Vec::with_capacity(n),
+        color_divisor: 1.,
         editable,
         warning,
     };
