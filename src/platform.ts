@@ -1,9 +1,16 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, message, open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
+import { open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { THREE_D_EXTENSIONS } from "./three/formats";
 import { TEXT_EXTENSIONS } from "./text/formats";
+import { showDialog, type DialogKind } from "./ui/dialog";
+
+/** Shows an in-app message with the window raised first (a minimized owner would hide it). */
+async function ask<T extends string>(o: Parameters<typeof showDialog<T>>[0]): Promise<T> {
+  await platform.bringToFront();
+  return showDialog(o);
+}
 
 export const platform = {
   async copyImage(png: Uint8Array): Promise<void> {
@@ -99,47 +106,54 @@ export const platform = {
     document.title = title;
     await getCurrentWindow().setTitle(title);
   },
-  /** Native yes/no dialog (window.confirm is not dependable across Tauri webviews). */
-  async confirm(text: string): Promise<boolean> {
-    return ask(text, { title: "view-anything", kind: "warning" });
-  },
-  /** Discard confirmation where cancelling is the default: first (focused) button and Esc decline. */
-  async confirmDiscard(text: string): Promise<boolean> {
-    const r = await message(text, {
-      title: "view-anything",
-      kind: "warning",
-      buttons: { yes: "계속 편집", no: "버리기", cancel: "취소" },
-    });
-    return r === "버리기";
-  },
   /**
-   * Yes/no for a destructive action where the safe answer must be the default: the first
-   * (focused) button and Esc both decline; only clicking `dangerLabel` returns true.
+   * The questions below are in-app dialogs (src/ui/dialog.ts): the window is raised first, the
+   * safe answer is focused, and Esc gives it. They look like the app on every platform.
    */
-  async confirmDanger(text: string, dangerLabel: string): Promise<boolean> {
-    const r = await message(text, {
-      title: "view-anything",
-      kind: "warning",
-      buttons: { yes: "저장 안 함", no: dangerLabel, cancel: "취소" },
-    });
-    return r === dangerLabel;
+  async confirm(text: string, okLabel = "계속", kind: DialogKind = "warning"): Promise<boolean> {
+    return await ask({ message: text, kind, buttons: [{ label: okLabel, value: "ok", variant: "primary" }, { label: "취소", value: "cancel" }], defaultValue: "cancel", cancelValue: "cancel" }) === "ok";
   },
-  /** Non-destructive information (nothing changed, nothing lost). */
-  async notice(text: string): Promise<void> {
-    await message(text, { title: "view-anything", kind: "info" });
+  /** Losing unsaved work: one red button named for what happens (버리기, 닫기, 다시 읽기…). */
+  async confirmDiscard(text: string, discardLabel = "버리기"): Promise<boolean> {
+    return await ask({ message: text, kind: "warning", buttons: [{ label: discardLabel, value: "discard", variant: "danger" }, { label: "취소", value: "cancel" }], defaultValue: "cancel", cancelValue: "cancel" }) === "discard";
   },
+  /** A destructive action: only `dangerLabel` returns true; `safeLabel` and Esc decline. */
+  async confirmDanger(text: string, dangerLabel: string, safeLabel = "취소"): Promise<boolean> {
+    return await ask({ message: text, kind: "warning", buttons: [{ label: dangerLabel, value: "danger", variant: "danger" }, { label: safeLabel, value: "safe" }], defaultValue: "safe", cancelValue: "safe" }) === "danger";
+  },
+  /** Information the user must see (nothing lost); "warning" for a conflict that kept their edits. */
+  async notice(text: string, kind: DialogKind = "info"): Promise<void> {
+    await ask({ message: text, kind, buttons: [{ label: "확인", value: "ok", variant: "primary" }], defaultValue: "ok", cancelValue: "ok" });
+  },
+  /** A failed user action. */
   async alert(text: string): Promise<void> {
-    await message(text, { title: "view-anything", kind: "error" });
+    await ask({ message: text, kind: "error", buttons: [{ label: "확인", value: "ok", variant: "primary" }], defaultValue: "ok", cancelValue: "ok" });
+  },
+  /** Restore a minimized window and focus it; best effort (a question still shows if this fails). */
+  async bringToFront(): Promise<void> {
+    try {
+      const w = getCurrentWindow();
+      if (await w.isMinimized()) await w.unminimize();
+      await w.setFocus();
+    } catch {
+      // Not allowed or not available: the dialog still opens in the window.
+    }
   },
   /** `allowClose` resolving false keeps the window open. */
   async onCloseRequested(allowClose: () => Promise<boolean>): Promise<void> {
+    let asking = false;
     await getCurrentWindow().onCloseRequested(async (e) => {
+      // A second Alt+F4 or close click while the question is open must not stack another one.
+      if (asking) { e.preventDefault(); return; }
+      asking = true;
       let ok: boolean;
       try {
         ok = await allowClose();
       } catch {
         // A throwing handler would leave the window impossible to close; fall back to the webview.
-        ok = window.confirm("저장하지 않은 변경이 있을 수 있습니다. 창을 닫을까요?");
+        ok = window.confirm("저장하지 않은 변경 내용을 버리고 닫을까요?");
+      } finally {
+        asking = false;
       }
       if (!ok) e.preventDefault();
     });

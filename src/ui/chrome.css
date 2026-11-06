@@ -9,8 +9,6 @@
 /* File-menu commands from menuButton: the shortcut is generated text, so the button text stays the label. */
 .va3d-menu-item[data-shortcut]::after { content:attr(data-shortcut); margin-left:auto; padding-left:16px; color:var(--muted); font-size:var(--font-size-small); }
 .va-viewer .pdf-outline { border-color:var(--border); }
-.va-settings, .pdf-password { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:24px; max-width:calc(100vw - 64px); font-size:var(--font-size-ui); }
-.va-settings::backdrop, .pdf-password::backdrop { background:var(--backdrop, rgb(0 0 0 / 0.3)); }
 @media(max-width:600px) { .va-viewer-toolbar { padding-inline:6px; } }
 .empty .va-btn { margin-top:4px; }
 /* 최근 파일: the file-menu section and the empty window list. */

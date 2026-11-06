@@ -79,7 +79,8 @@ export async function startUpdater(): Promise<void> {
         void platform.notice("다른 창이 응답하지 않아 업데이트 설치를 미뤘습니다. 창을 확인한 뒤 다시 시도하세요.").catch(() => {});
         return false;
       }
-      await current.setFocus();
+      // A minimized owner would hide the question while every window stays locked.
+      await platform.bringToFront();
       if (!await confirmRestart(prepared.dirty)) return false;
       const after = await context();
       if (after.owner !== current.label || [...after.windows].sort().join() !== [...before.windows].sort().join()) return false;

@@ -1,6 +1,7 @@
 import { AUTO_KEY, RELEASES, REPOSITORY, statusLabel, type UpdateStatus } from "./model";
 import "./update.css";
 import { textButton } from "../ui/icons";
+import { showDialog } from "../ui/dialog";
 
 export function updateBadge(version: string, request: (action: "check" | "install") => void, open: (url: string) => void) {
   const root = document.createElement("aside");
@@ -64,27 +65,19 @@ export function updateBadge(version: string, request: (action: "check" | "instal
   };
 }
 
-/** Safe default on both platforms, independent of native dialog button ordering. */
-export function confirmRestart(dirty: boolean): Promise<boolean> {
-  return new Promise((resolve) => {
-    const dialog = document.createElement("dialog");
-    dialog.className = "va-update-dialog";
-    const heading = document.createElement("h2");
-    heading.textContent = "업데이트 설치";
-    const text = document.createElement("p");
-    text.textContent = "지금 재시작하여 업데이트를 설치할까요?";
-    const warning = document.createElement("p");
-    warning.textContent = dirty ? "저장하지 않은 변경과 진행 중인 작업은 사라집니다. 저장하려면 취소하세요." : "";
-    const cancel = textButton("취소");
-    cancel.autofocus = true;
-    const restart = textButton("재시작", dirty ? "danger" : "primary");
-    const finish = (ok: boolean) => { dialog.close(); dialog.remove(); resolve(ok); };
-    cancel.onclick = () => finish(false);
-    restart.onclick = () => finish(true);
-    dialog.oncancel = (e) => { e.preventDefault(); finish(false); };
-    dialog.append(heading, text, warning, cancel, restart);
-    document.body.append(dialog);
-    dialog.showModal();
-    cancel.focus();
-  });
+/**
+ * The restart question: 취소 is focused and Esc declines; with unsaved work 재시작 turns red.
+ * The desktop update test finds it by .va-update-dialog, these labels and the warning text.
+ */
+export async function confirmRestart(dirty: boolean): Promise<boolean> {
+  return await showDialog({
+    title: "업데이트 설치",
+    message: "지금 재시작하여 업데이트를 설치할까요?",
+    detail: dirty ? "저장하지 않은 변경과 진행 중인 작업은 사라집니다. 저장하려면 취소하세요." : undefined,
+    kind: dirty ? "warning" : "info",
+    buttons: [{ label: "재시작", value: "restart", variant: dirty ? "danger" : "primary" }, { label: "취소", value: "cancel" }],
+    defaultValue: "cancel",
+    cancelValue: "cancel",
+    className: "va-update-dialog",
+  }) === "restart";
 }

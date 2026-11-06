@@ -5,6 +5,7 @@ import { platform } from '../platform';
 import type { Viewer } from '../registry';
 import { documentBar } from '../ui/chrome';
 import { iconButton, textButton } from '../ui/icons';
+import '../ui/dialog.css';
 import { matchRanges } from '../ui/match';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -21,7 +22,7 @@ const viewer: Viewer = {
     let passwordDialog: HTMLDialogElement | null = null, passwordCancelled = false;
     loading.onPassword = (submit: (password: string) => void, reason: number) => {
       (passwordDialog as HTMLDialogElement | null)?.remove();
-      const dialog = document.createElement('dialog'); dialog.className = 'pdf-password'; passwordDialog = dialog;
+      const dialog = document.createElement('dialog'); dialog.className = 'va-dialog pdf-password'; passwordDialog = dialog;
       const form = document.createElement('form'); form.method = 'dialog';
       const label = document.createElement('label'); label.textContent = reason === PasswordResponses.INCORRECT_PASSWORD ? '암호가 틀렸습니다. 다시 입력하세요.' : 'PDF 암호를 입력하세요.';
       const input = document.createElement('input'); input.type = 'password'; input.autocomplete = 'off'; input.setAttribute('aria-label', 'PDF 암호'); label.append(input);
@@ -29,7 +30,11 @@ const viewer: Viewer = {
       const abort = () => { passwordCancelled = true; input.value = ''; dialog.remove(); passwordDialog = null; void loading.destroy().catch(() => {}); };
       cancel.onclick = abort; dialog.addEventListener('cancel', e => { e.preventDefault(); abort(); });
       form.onsubmit = e => { e.preventDefault(); const password = input.value; input.value = ''; dialog.remove(); passwordDialog = null; submit(password); };
-      form.append(label, confirm, cancel); dialog.append(form); el.replaceChildren(dialog); dialog.showModal(); input.focus();
+      const body = document.createElement('div'); body.className = 'va-dialog-body';
+      const title = document.createElement('h2'); title.className = 'va-dialog-title'; title.id = 'va-pdf-password-title'; title.textContent = '암호로 보호된 PDF';
+      dialog.setAttribute('aria-labelledby', title.id);
+      const footer = document.createElement('div'); footer.className = 'va-dialog-footer'; footer.append(confirm, cancel);
+      body.append(title, label); form.append(body, footer); dialog.append(form); el.replaceChildren(dialog); dialog.showModal(); input.focus();
     };
     let doc: PDFDocumentProxy;
     try { doc = await loading.promise; }

@@ -63,3 +63,17 @@ test("the text group toggles syntax highlighting and its reset turns it back on"
   expect(box.checked).toBe(true);box.checked=false;box.dispatchEvent(new Event("change"));expect(preferences().textHighlight).toBe(false);
   field("텍스트").querySelector("button")!.click();expect(preferences().textHighlight).toBe(true);
 });
+
+test("settings use the shared dialog surface: title in the body, 닫기 in the footer", () => {
+  openSettings();
+  const d = document.querySelector<HTMLDialogElement>("dialog.va-dialog.va-settings")!;
+  expect(d).not.toBeNull();
+  expect(d.querySelector(".va-dialog-body .va-dialog-title")!.textContent).toBe("설정");
+  expect(d.querySelector(".va-dialog-body fieldset")).not.toBeNull();
+  expect([...d.querySelectorAll(".va-dialog-footer button")].map((b) => [b.textContent, b.className])).toEqual([["닫기", "va-btn"]]);
+});
+
+test("the first control takes the focus when settings open, not the scrolling body", () => {
+  openSettings();
+  expect(document.querySelector<HTMLSelectElement>('select[aria-label="테마"]')!.autofocus).toBe(true);
+});

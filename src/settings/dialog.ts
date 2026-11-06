@@ -1,3 +1,4 @@
+import "../ui/dialog.css";
 import "./settings.css";
 import { preferences, applyPreferences, DEFAULTS, FONTS, type FontPreset, type MdWidth, type Preferences } from "./preferences";
 import { textSettings, settingsContext } from "./document";
@@ -8,13 +9,14 @@ let dialog: HTMLDialogElement | null = null;
 export function openSettings(): void {
   if (dialog?.isConnected) { if (!dialog.open) dialog.showModal(); return; }
   const previous = document.activeElement as HTMLElement | null;
-  const d = document.createElement("dialog"); dialog = d; d.className = "va-settings";
+  const d = document.createElement("dialog"); dialog = d; d.className = "va-dialog va-settings";
   d.setAttribute("aria-labelledby", "va-settings-title");
-  const title = document.createElement("h2"); title.id = "va-settings-title"; title.textContent = "설정"; d.append(title);
+  const title = document.createElement("h2"); title.id = "va-settings-title"; title.className = "va-dialog-title"; title.textContent = "설정";
+  const body = document.createElement("div"); body.className = "va-dialog-body"; body.append(title); d.append(body);
   const status = document.createElement("p"); status.setAttribute("role", "status");
   const group = (name: string) => {
     const field = document.createElement("fieldset"), legend = document.createElement("legend");
-    legend.textContent = name; field.append(legend); d.append(field); return field;
+    legend.textContent = name; field.append(legend); body.append(field); return field;
   };
   const label = (field: HTMLElement, text: string, control: HTMLElement) => {
     control.setAttribute("aria-label", text);
@@ -30,6 +32,8 @@ export function openSettings(): void {
   };
   const general = group("일반"), theme = select([["system", "시스템 설정"], ["light", "라이트"], ["dark", "다크"]]);
   label(general, "테마", theme);
+  // Without this Chromium focuses the scrollable body first and rings it.
+  theme.autofocus = true;
   const syncTheme = () => { theme.value = document.documentElement.dataset.theme ?? "system"; };
   theme.onchange = () => applyTheme(theme.value as ThemeMode); syncTheme();
   const syncers: (() => void)[] = [];
@@ -77,7 +81,8 @@ export function openSettings(): void {
     };
   }
   const close = textButton("닫기"); close.onclick = () => d.close();
-  d.append(status, close); document.body.append(d);
+  const footer = document.createElement("div"); footer.className = "va-dialog-footer"; footer.append(close);
+  body.append(status); d.append(footer); document.body.append(d);
   const sync = () => { for (const fn of syncers) fn(); };
   const onStorage = (e: StorageEvent) => { if (e.key === "va.theme" || e.key === null) syncTheme(); };
   const onContext = () => d.close();

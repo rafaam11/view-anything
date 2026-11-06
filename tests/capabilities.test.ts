@@ -16,3 +16,11 @@ test("opener open-path denies every executable extension the link classifier blo
   const denied = new Set((entry.deny ?? []).map((d: { path: string }) => d.path));
   for (const ext of EXECUTABLE_EXTENSIONS) expect(denied.has(denyGlob(ext)), ext).toBe(true);
 });
+
+test("the dialog plugin only opens the native file pickers; windows may be restored", () => {
+  const names = cap.permissions.filter((p: unknown) => typeof p === "string");
+  expect(names).toContain("dialog:allow-open");
+  expect(names).toContain("dialog:allow-save");
+  expect(names).toContain("core:window:allow-unminimize");
+  expect(names.filter((n: string) => n.startsWith("dialog:"))).toEqual(["dialog:allow-open", "dialog:allow-save"]);
+});

@@ -79,3 +79,14 @@ test('zoom stays within 25% and 300% and the page input clamps to the document',
   page.value = '0'; page.dispatchEvent(new Event('change'));
   await vi.waitFor(() => expect(page.value).toBe('1'));
 });
+test('the password prompt is the shared dialog with 열기 as the main button', async () => {
+  mocks.mode = 'challenge'; const root = document.createElement('div'); document.body.append(root);
+  const opening = viewer.mount(root, 'locked.pdf');
+  await vi.waitFor(() => expect(root.querySelector('input[type=password]')).not.toBeNull());
+  const d = root.querySelector('dialog.va-dialog.pdf-password')!;
+  expect(d.querySelector('.va-dialog-title')!.textContent).toBe('암호로 보호된 PDF');
+  expect(d.getAttribute('aria-labelledby')).toBe(d.querySelector('.va-dialog-title')!.id);
+  expect([...d.querySelectorAll('.va-dialog-footer button')].map(b => [b.textContent, b.className, (b as HTMLButtonElement).type])).toEqual([['열기', 'va-btn va-btn-primary', 'submit'], ['취소', 'va-btn', 'button']]);
+  find(root, '취소').click();
+  await expect(opening).rejects.toThrow('취소');
+});

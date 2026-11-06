@@ -1,7 +1,9 @@
-.va-settings { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:24px; width:min(460px, calc(100vw - 80px)); max-height:calc(100vh - 80px); overflow:auto; box-sizing:border-box; font-size:var(--font-size-ui); }
-.va-settings fieldset { border:1px solid var(--border); margin:12px 0; min-width:0; }
+/* The surface, body and footer come from ui/dialog.css. */
+.va-settings { width:min(460px, calc(100vw - 32px)); }
+.va-settings fieldset { border:1px solid var(--border); border-radius:var(--radius); margin:12px 0; padding:4px 12px 12px; min-width:0; }
 .va-settings label { display:flex; justify-content:space-between; align-items:center; gap:16px; margin:12px 0; }
 .va-settings input { width:70px; }
 .va-settings input[type=checkbox] { width:auto; }
-.va-settings button { margin-right:8px; }
+.va-settings fieldset .va-btn { margin-top:4px; }
+.va-settings [role=status]:empty { display:none; }
 .va-settings-preview { line-height:1.7; overflow-wrap:anywhere; }

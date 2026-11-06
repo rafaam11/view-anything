@@ -5,6 +5,7 @@
 // The 3D stylesheet is only loaded in 3D windows, so the 3D view is a separate page state.
 import "../ui/tokens.css";
 import "../ui/base.css";
+import "../ui/dialog.css";
 import "../styles.css";
 import "../ui/chrome.css";
 import "../titlebar.css";
@@ -160,10 +161,14 @@ if (scene === "dialog-discard") void showDialog({ message: "저장하지 않은 
 if (scene === "dialog-error") void showDialog({ message: "파일을 저장할 수 없습니다.", detail: "C:/Users/me/Documents/아주 긴 폴더 이름/그리고 더 긴 하위 폴더/report-final-v3.md: 액세스가 거부되었습니다. (os error 5)", kind: "error", buttons: [{ label: "확인", value: "ok", variant: "primary" }], defaultValue: "ok", cancelValue: "ok" });
 if (scene === "restart" || scene === "restart-dirty") void confirmRestart(scene === "restart-dirty");
 if (scene === "pdf-password") {
-  const dialog = document.createElement("dialog"); dialog.className = "pdf-password";
+  // Same structure as src/pdf/viewer.ts.
+  const dialog = document.createElement("dialog"); dialog.className = "va-dialog pdf-password";
   const form = document.createElement("form");
-  const label = document.createElement("label"); label.textContent = "PDF 암호를 입력하세요. "; label.append(input("password"));
+  const body = document.createElement("div"); body.className = "va-dialog-body";
+  const title = document.createElement("h2"); title.className = "va-dialog-title"; title.textContent = "암호로 보호된 PDF";
+  const label = document.createElement("label"); label.textContent = "PDF 암호를 입력하세요."; label.append(input("password"));
+  const footer = document.createElement("div"); footer.className = "va-dialog-footer";
   const open = button("열기", { variant: "primary" }); open.type = "submit";
-  const cancel = button("취소"); cancel.type = "button";
-  form.append(label, open, cancel); dialog.append(form); document.body.append(dialog); dialog.showModal();
+  footer.append(open, button("취소"));
+  body.append(title, label); form.append(body, footer); dialog.append(form); document.body.append(dialog); dialog.showModal();
 }

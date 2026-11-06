@@ -13,5 +13,6 @@
 .pdf-page .textLayer mark { color: transparent; background: #ffdc4d88; }
 .pdf-page .textLayer mark.selected { background: #ff9333bb; }
 .pdf-page .textLayer ::selection { background: #4278e966; }
-.pdf-password form { display: flex; flex-wrap: wrap; gap: .75rem; }
-.pdf-password label { flex-basis: 100%; display: grid; gap: .5rem; }
+/* The form only groups the fields with the submit button; body and footer lay out as in every dialog. */
+.pdf-password form { display: contents; }
+.pdf-password label { display: grid; gap: .5rem; }

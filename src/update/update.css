@@ -6,7 +6,4 @@
 .va-update-menu { position: absolute; bottom: 100%; right: 0; min-width: 220px; padding: 4px; background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 .va-update-menu > :not(button) { display: block; padding: 6px 12px; }
 .va-update-menu button { width: 100%; justify-content: flex-start; }
-.va-update-dialog { color: var(--fg); background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-dialog); padding: 24px; max-width: 420px; font-size: var(--font-size-ui); }
-.va-update-dialog::backdrop { background: var(--backdrop, rgb(0 0 0 / 0.3)); }
-.va-update-dialog button { margin: 8px 8px 0 0; }
 body:has(.va-update) .va3d-status { padding-right: 140px; }

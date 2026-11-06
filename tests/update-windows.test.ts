@@ -13,6 +13,7 @@ const mock = vi.hoisted(() => ({
   render: vi.fn(),
   relaunch: vi.fn(async () => {}),
   notice: vi.fn(async () => {}),
+  front: vi.fn(async () => {}),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: async (command: string, args: any) => {
   if (command === "update_context") {
@@ -33,7 +34,7 @@ vi.mock("@tauri-apps/api/event", () => ({
     }
   },
 }));
-vi.mock("../src/platform", () => ({ platform: { openExternal: async () => {}, notice: mock.notice } }));
+vi.mock("../src/platform", () => ({ platform: { openExternal: async () => {}, notice: mock.notice, bringToFront: mock.front } }));
 vi.mock("../src/update/badge", () => ({ updateBadge: () => mock.render, confirmRestart: mock.confirm }));
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: mock.check }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: mock.relaunch }));
@@ -55,6 +56,9 @@ test("all windows acknowledge before install; other window dirtiness reaches con
   await startAndDownload();
   await mock.handlers.get("va-update-request")!({ payload: "install" });
   expect(mock.confirm).toHaveBeenCalledWith(true);
+  // A minimized owner window is restored before it asks, or every window would stay locked.
+  expect(mock.front).toHaveBeenCalledOnce();
+  expect(mock.front.mock.invocationCallOrder[0]).toBeLessThan(mock.confirm.mock.invocationCallOrder[0]);
   expect(mock.install).toHaveBeenCalledOnce();
   expect(JSON.parse(localStorage.getItem("va.update.attempt")!)).toEqual({ from: "0.2.0", to: "0.3.0" });
   expect(document.getElementById("app")!.hasAttribute("inert")).toBe(false);
