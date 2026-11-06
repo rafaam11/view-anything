@@ -120,7 +120,7 @@ export function initializeDialogInput(): () => void {
       e.preventDefault();
       const buttons = [...top.querySelectorAll<HTMLButtonElement>(".va-dialog-footer button")];
       const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      const next = buttons[Math.min(buttons.length - 1, Math.max(0, (at < 0 ? 0 : at) + (e.key === "ArrowLeft" ? -1 : 1)))];
+      const next = buttons[Math.min(buttons.length - 1, Math.max(0, Math.max(0, at) + (e.key === "ArrowLeft" ? -1 : 1)))];
       next?.focus();
     }
   };
