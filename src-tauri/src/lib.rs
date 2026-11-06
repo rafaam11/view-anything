@@ -304,6 +304,15 @@ fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     };
     let result = (|| {
         let mut f = f;
+        // The replacement keeps the target's permissions (the Unix executable bit); a read-only
+        // target is refused as it is rather than silently made writable.
+        if let Ok(meta) = std::fs::metadata(path) {
+            let perm = meta.permissions();
+            if perm.readonly() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "읽기 전용 파일입니다"));
+            }
+            f.set_permissions(perm)?;
+        }
         f.write_all(data)?;
         f.sync_all()?;
         drop(f);
@@ -541,6 +550,38 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"newer");
         let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(entries, vec![std::ffi::OsString::from("a b.md")]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn write_atomic_refuses_read_only_targets_and_keeps_them() {
+        let dir = std::env::temp_dir().join(format!("va-readonly-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("ro.md");
+        std::fs::write(&target, b"keep").unwrap();
+        let mut perm = std::fs::metadata(&target).unwrap().permissions();
+        perm.set_readonly(true);
+        std::fs::set_permissions(&target, perm.clone()).unwrap();
+        let err = write_atomic(&target, b"new").unwrap_err();
+        assert!(err.to_string().contains("읽기 전용"), "{err}");
+        assert_eq!(std::fs::read(&target).unwrap(), b"keep");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        perm.set_readonly(false);
+        std::fs::set_permissions(&target, perm).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_keeps_the_executable_bit() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("va-mode-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("run.sh");
+        std::fs::write(&target, b"#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        write_atomic(&target, b"#!/bin/sh\necho hi\n").unwrap();
+        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o755);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
