@@ -63,3 +63,12 @@ test("container rules only place buttons; their look comes from the shared layer
   }
   expect(offenders).toEqual([]);
 });
+
+test("full-window editors keep their plain edge when focused (no field underline)", () => {
+  const editors: [string, RegExp][] = [["src/text/viewer.css", /\.text-root \.text-source$/], ["src/data/data.css", /^\.data-source$/]];
+  for (const [file, selector] of editors) {
+    const rule = rules(readFileSync(file, "utf8")).find((r) => r.selectors.some((s) => selector.test(s)));
+    expect(rule, file).toBeDefined();
+    expect(rule!.body, file).toMatch(/box-shadow\s*:\s*none/);
+  }
+});
