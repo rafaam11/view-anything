@@ -11,6 +11,8 @@ import { isThreeD } from "./three/formats";
 import { initializePreferences } from "./settings/preferences";
 import { configureSettings } from "./settings/document";
 import { initializeUpdateInput, updateInputLocked } from "./update/guard";
+import { addRecent, removeRecent } from "./recent";
+import { OPEN_PATH_EVENT, recentList, type OpenPathDetail } from "./ui/recent-menu";
 
 const app = document.getElementById("app")!;
 initializeUpdateInput();
@@ -50,6 +52,7 @@ async function show() {
     message("파일을 끌어다 놓거나 Ctrl+O");
     const text = document.createElement("button"); text.textContent = "텍스트로 열기… (Ctrl+Shift+O)";
     text.onclick = () => { void pickAndOpen(false, true); }; app.querySelector(".empty")!.append(text);
+    app.querySelector(".empty")!.append(recentList());
     return;
   }
   // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
@@ -70,6 +73,7 @@ async function show() {
     const v = await load();
     await v.mount(app, file);
     viewer = v;
+    addRecent(file);
   } catch (e) {
     message("파일을 열 수 없습니다", String(e));
     if (!textMode) textFallback(file);
@@ -156,6 +160,20 @@ async function appendPaths(paths: string[]) {
   await ready;
   openWindows(viewer?.accept?.(paths, { newWindow: false }) ?? paths);
 }
+
+/** 최근 파일 (empty window or a file menu): a file that is gone leaves the list with a notice. */
+window.addEventListener(OPEN_PATH_EVENT, (e) => {
+  const path = (e as CustomEvent<OpenPathDetail>).detail?.path;
+  if (!path || updateInputLocked()) return;
+  void (async () => {
+    if (!(await platform.pathExists(path).catch(() => false))) {
+      removeRecent(path);
+      await platform.alert("파일을 찾을 수 없어 최근 목록에서 뺍니다:\n" + path).catch(() => {});
+      return;
+    }
+    await openPaths([path], false);
+  })().catch((err) => platform.alert(String(err)).catch(() => {}));
+});
 
 window.addEventListener(OPEN_EVENT, (e) => {
   const detail = (e as CustomEvent<OpenEventDetail>).detail;

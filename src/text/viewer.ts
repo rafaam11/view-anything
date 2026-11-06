@@ -6,6 +6,7 @@ import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { decodeHint, decodeText, encodeText, normalize, lineEndings, type TextMeta } from "./codec";
 import { Menubar } from "../three/core/menubar";
+import { recentMenuBlock } from "../ui/recent-menu";
 import { registerTextSettings } from "../settings/document";
 import { preferences } from "../settings/preferences";
 import { revealSelection } from "./selection";
@@ -108,6 +109,8 @@ const viewer: Viewer = {
       { label: "파일", accessKey: "f", items: [
         { label: "열기…", shortcut: "Ctrl+O", run: () => window.dispatchEvent(new CustomEvent("va:open")) },
         { label: "텍스트로 열기…", shortcut: "Ctrl+Shift+O", run: () => window.dispatchEvent(new CustomEvent("va:open", { detail: { text: true } })) },
+        { separator: true },
+        recentMenuBlock(() => menus.close()),
         { separator: true },
         { label: "저장", shortcut: "Ctrl+S", run: run(async () => doSave()), disabled: () => !editing || busy || !meta },
         { label: "다른 이름으로 저장", run: run(doCopy), disabled: () => !editing || busy || !meta },

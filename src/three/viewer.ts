@@ -20,6 +20,7 @@ import { loadGltfFile, loadMeshFile } from "./load";
 import { workerRunner } from "./geometry-worker";
 import type { CloudController } from "./cloud/controller";
 import { pointCount } from "./core/info";
+import { recentMenuBlock } from "../ui/recent-menu";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -210,6 +211,8 @@ export class ThreeViewer {
           { label: "열기…", shortcut: "Ctrl+O", run: () => open(false) },
           { label: "장면에 추가…", run: () => open(true) },
           { label: "HTML로 내보내기…", shortcut: "Ctrl+Shift+E", run: () => void this.exportHtml() },
+          { separator: true },
+          recentMenuBlock(() => this.menubar.close()),
           { separator: true },
           {
             label: "업데이트 확인",

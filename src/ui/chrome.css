@@ -22,3 +22,11 @@
 .va-settings::backdrop, .pdf-password::backdrop { background:#0006; }
 @media(max-width:600px) { .va-viewer-toolbar { padding-inline:6px; } }
 .empty button { color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:6px 12px; font:13px system-ui,sans-serif; cursor:pointer; }
+/* 최근 파일: the file-menu section and the empty window list. */
+.va-recent { display:grid; gap:0; min-width:0; }
+.va-recent .va3d-menu-item { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+.va-recent .va-recent-clear { color:var(--muted); }
+.va-recent-none { margin:4px 10px; color:var(--muted); font-size:12px; }
+.empty .va-recent { margin-top:1rem; width:min(360px, 80vw); }
+.empty .va-recent .va3d-menu-item { display:block; width:100%; padding:6px 10px; border:0; border-radius:4px; color:var(--fg); background:transparent; font:inherit; cursor:pointer; }
+.empty .va-recent .va3d-menu-item:hover, .empty .va-recent .va3d-menu-item:focus-visible { background:var(--border); }

@@ -17,6 +17,7 @@ const platform = {
   modifierShift: vi.fn(async (): Promise<boolean | null> => false),
   pickFiles: vi.fn(async (): Promise<string[]> => []),
   alert: vi.fn(async () => {}),
+  pathExists: vi.fn(async (_p: string) => true),
   setWindowTitle: vi.fn(async () => {}),
   setFullscreen: vi.fn(async (_on: boolean) => {}),
 };
@@ -234,4 +235,45 @@ test("global shortcuts do not reach later window listeners", async () => {
   f11();
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true }));
   expect(later).not.toHaveBeenCalled();
+});
+
+test("an empty window lists recent files and opens one through the drop routing", async () => {
+  localStorage.setItem("va.recent.v1", JSON.stringify([MD2, A]));
+  await start(null);
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>(".va-recent button")];
+  expect(buttons.map((b) => b.textContent)).toEqual(["y.md", "a.step", "목록 지우기"]);
+  expect(buttons[0].title).toBe(MD2);
+  buttons[1].click();
+  await settle();
+  expect(fileParam()).toBe(A); // a 3D file mounts in place in an empty window
+  expect(threeViewer.mount).toHaveBeenCalledTimes(1);
+});
+
+test("a recent file that is gone is reported and dropped from the list", async () => {
+  localStorage.setItem("va.recent.v1", JSON.stringify([MD2]));
+  platform.pathExists.mockResolvedValueOnce(false);
+  await start(null);
+  document.querySelector<HTMLButtonElement>(".va-recent button")!.click();
+  await settle();
+  expect(platform.alert).toHaveBeenCalledWith(expect.stringContaining(MD2));
+  expect(JSON.parse(localStorage.getItem("va.recent.v1")!)).toEqual([]);
+  expect(document.querySelector(".va-recent")!.textContent).toContain("최근 파일 없음");
+});
+
+test("a mounted file is recorded as recent; a failed one is not", async () => {
+  localStorage.clear();
+  await start(MD);
+  expect(JSON.parse(localStorage.getItem("va.recent.v1")!)).toEqual([MD]);
+  localStorage.clear();
+  mdViewer.mount.mockRejectedValueOnce(new Error("broken"));
+  await start(MD2);
+  expect(localStorage.getItem("va.recent.v1")).toBeNull();
+});
+
+test("a recent file picked from a menu in a file window follows the drop rules", async () => {
+  await start(MD);
+  window.dispatchEvent(new CustomEvent("va:open-path", { detail: { path: MD2 } }));
+  await settle();
+  expect(opened()).toEqual([MD2]);
+  expect(fileParam()).toBe(MD);
 });
