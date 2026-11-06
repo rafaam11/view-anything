@@ -101,7 +101,7 @@ export async function exportHtml(input: ExportInput): Promise<string | null> {
     const size = prepared.byteLength(packed.byteLength);
     if (exceedsSizeWarning(size)) {
       input.progress(null);
-      const ok = await platform.confirm(`내보낸 HTML이 ${formatMegabytes(size)}입니다 (50 MB 초과). 큰 파일은 브라우저에서 열 때 오래 걸릴 수 있습니다. 그래도 저장할까요?`);
+      const ok = await platform.confirm(`내보낸 HTML이 ${formatMegabytes(size)}입니다 (50 MB 초과). 큰 파일은 브라우저에서 열 때 오래 걸릴 수 있습니다. 그래도 저장할까요?`, "저장");
       if (!ok) return null;
     }
     input.progress("HTML 만드는 중");

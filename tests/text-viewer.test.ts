@@ -5,7 +5,7 @@ let disk = new Uint8Array(), close: () => Promise<boolean>;
 const { platform } = vi.hoisted(() => ({ platform: {
   fileSize: vi.fn(async () => disk.length), readFileRaw: vi.fn(async () => disk.slice().buffer),
   writeFileChecked: vi.fn(async (_path: string, _expected: Uint8Array, bytes: Uint8Array) => { disk = bytes.slice(); return true; }),
-  setWindowTitle: vi.fn(async () => {}), confirmDiscard: vi.fn(async () => false),
+  setWindowTitle: vi.fn(async () => {}), confirmDiscard: vi.fn(async () => false), notice: vi.fn(async () => {}),
   onCloseRequested: vi.fn(async (fn: () => Promise<boolean>) => { close = fn; }),
   saveDialog: vi.fn(async () => "copy.txt"), writeFileNew: vi.fn(async () => {}),
 } }));
@@ -35,6 +35,14 @@ test("display options preserve source bytes, selection, read mode and unsaved ed
   expect(source().wrap).toBe("soft");expect(source().value).toBe("mine\n");expect(await close()).toBe(false);
   button("저장").click();await settle();expect(new TextDecoder().decode(disk)).toBe("mine\r\n");
 });
+test("each discard prompt names what happens: close, reload", async () => {
+  button("편집").click(); await settle(); edit("changed\n");
+  expect(await close()).toBe(false);
+  expect(platform.confirmDiscard).toHaveBeenLastCalledWith("저장하지 않은 변경 내용을 버리고 닫을까요?", "닫기");
+  button("다시 읽기").click(); await settle();
+  expect(platform.confirmDiscard).toHaveBeenLastCalledWith("저장하지 않은 변경 내용을 버리고 파일을 다시 읽을까요?", "다시 읽기");
+  expect(source().value).toBe("changed\n");
+});
 test("read mode is immutable and cancelling a dirty close keeps edits", async () => {
   expect(source().readOnly).toBe(true);
   expect(document.querySelector("select")).toBeNull();
@@ -53,7 +61,7 @@ test("external write is not replaced and recovery copy retains edits", async () 
   button("편집").click(); await settle(); edit("mine\n"); disk = new TextEncoder().encode("external");
   button("저장").click(); await settle();
   expect(platform.writeFileChecked).not.toHaveBeenCalled();
-  expect(status()).toContain("외부"); expect(source().value).toBe("mine\n");
+  expect(platform.notice).toHaveBeenCalledWith(expect.stringContaining("외부에서 바뀌었거나"), "warning"); expect(source().value).toBe("mine\n");
   button("다른 이름으로 저장").click(); await settle();
   expect(platform.writeFileNew).toHaveBeenCalledWith("copy.txt", new TextEncoder().encode("mine\r\n"));
   expect(await close()).toBe(false);

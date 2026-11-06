@@ -15,16 +15,14 @@ import type { Editor } from "./editor";
 import { documentBar } from "../ui/chrome";
 import { menuButton, textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
-import { COPY_SAVED, SAVED } from "../ui/strings";
+import { CONFLICT_READ_MODE, COPY_SAVED, DISCARD, DISCARD_CLOSE, SAVED, errorMessage } from "../ui/strings";
 import { applyPreferences, DEFAULTS, preferences } from "../settings/preferences";
 import { addCodeCopyButtons, imagesReady } from "./decorate";
 import { watchFile } from "./file-watch";
 import { createFind } from "./find";
 import { createWheelStepper, sizeShortcut, stepMdSize } from "./font-size";
 
-const LEAVE_MESSAGE = "저장하지 않은 변경이 있습니다. 버리고 나갈까요?";
-const REWRITE_MESSAGE = "원문 보존 불가 — 전체 재작성으로 저장할까요?";
-const CONFLICT_MESSAGE = "파일이 변경되었거나 읽을 수 없습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 읽기 모드에서 다시 여세요.";
+const REWRITE_MESSAGE = "원문 서식을 그대로 지킬 수 없어 문서 전체를 다시 써서 저장해야 합니다. 저장할까요?";
 /** Same cap as the text viewer: the file is read whole into the webview and rendered at once. */
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -57,7 +55,7 @@ function openInThisWindow(absPath: string, hash: string) {
 /** A missing target only gets a notice: the window must never end up on a dead error page. */
 async function ensureExists(path: string): Promise<boolean> {
   if (await platform.pathExists(path)) return true;
-  await platform.notice("링크 대상을 찾을 수 없습니다:\n" + path);
+  await platform.alert("링크 대상을 찾을 수 없습니다:\n" + path);
   return false;
 }
 
@@ -77,7 +75,7 @@ async function followLink(href: string, baseDir: string, confirmLeave: () => Pro
       if (await ensureExists(link.path)) await platform.openWithDefaultApp(link.path);
       break;
     case "blocked":
-      await platform.notice("보안을 위해 실행 파일 링크는 열지 않습니다:\n" + link.path);
+      await platform.notice("보안을 위해 실행 파일 링크는 열지 않습니다:\n" + link.path, "warning");
       break;
     case "ignore":
       break;
@@ -90,7 +88,7 @@ function handleLinkClick(e: MouseEvent, baseDir: string, confirmLeave: () => Pro
   const href = a.getAttribute("href");
   if (!href) return;
   e.preventDefault();
-  followLink(href, baseDir, confirmLeave).catch((err) => platform.alert(String(err)).catch(() => {}));
+  followLink(href, baseDir, confirmLeave).catch((err) => platform.alert(errorMessage(err)).catch(() => {}));
 }
 
 /** Webview accelerators that leave or reload the page. */
@@ -189,12 +187,12 @@ return {
     el.replaceChildren(root);
 
     /** One mode switch, save or reload at a time; user actions arriving meanwhile are queued. */
-    const tasks = createRunner((e) => platform.alert(String(e)));
+    const tasks = createRunner((e) => platform.alert(errorMessage(e)));
 
     const decorate = (target: ParentNode) => addCodeCopyButtons(
       target,
       (text) => platform.copyText(text),
-      (e) => { void platform.alert(String(e)).catch(() => {}); },
+      (e) => { void platform.alert(errorMessage(e)).catch(() => {}); },
     );
     let disposeToc = () => {};
     /** Needs the article in the document: the toc looks its headings up by id. */
@@ -290,10 +288,10 @@ return {
     /** The user agreed to drop unsaved edits; the page may unload without asking again. */
     let discardApproved = false;
     registerUpdateGuard(refreshDirty, (value) => { discardApproved = value; });
-    const confirmLeave = async () => {
+    const confirmLeave = async (text = DISCARD, label = "버리기") => {
       refreshDirty();
       if (!shouldConfirmLeave({ mode, dirty })) return true;
-      discardApproved = await platform.confirmDiscard(LEAVE_MESSAGE);
+      discardApproved = await platform.confirmDiscard(text, label);
       return discardApproved;
     };
 
@@ -371,13 +369,13 @@ return {
       }
       const onDisk = await readDisk();
       if (!onDisk || !bytesEqual(known, onDisk)) {
-        await platform.alert(CONFLICT_MESSAGE);
+        await platform.notice(CONFLICT_READ_MODE, "warning");
         tasks.dropQueuedSave();
         return;
       }
       const bytes = encodeText(plan.text, meta);
       if (!await platform.writeFileChecked(path, known, bytes)) {
-        await platform.alert(CONFLICT_MESSAGE);
+        await platform.notice(CONFLICT_READ_MODE, "warning");
         tasks.dropQueuedSave();
         return;
       }
@@ -496,7 +494,7 @@ return {
       if (!discardApproved && shouldConfirmLeave({ mode, dirty })) e.preventDefault();
     });
 
-    platform.onCloseRequested(confirmLeave).catch((e) => console.error("close guard not installed:", e));
+    platform.onCloseRequested(() => confirmLeave(DISCARD_CLOSE, "닫기")).catch((e) => console.error("close guard not installed:", e));
 
     const onLink = (e: MouseEvent) => handleLinkClick(e, baseDir, confirmLeave);
     article.addEventListener("click", onLink);

@@ -14,7 +14,7 @@ import { highlightHtml, languageFor, LIVE_HIGHLIGHT_CHARS, withinHighlightLimit 
 import "../ui/chrome.css";
 import { textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
-import { COPY_SAVED, SAVED } from "../ui/strings";
+import { CONFLICT_RELOAD, COPY_SAVED, DISCARD, DISCARD_CLOSE, DISCARD_RELOAD, SAVED, errorMessage } from "../ui/strings";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const viewer: Viewer = {
@@ -35,7 +35,7 @@ const viewer: Viewer = {
       b.onclick = () => { void run().catch(report); }; bar.append(b); return b;
     };
     const status = document.createElement("p"); status.setAttribute("role", "status");
-    const report = (e: unknown) => { status.textContent = String(e); };
+    const report = (e: unknown) => { status.textContent = errorMessage(e); };
     const editor = document.createElement("textarea"); editor.className = "text-source";
     editor.spellcheck = false; editor.readOnly = true; editor.setAttribute("aria-label", "텍스트 내용");
     // Syntax colours: a <pre> under the textarea shows the same text, highlighted; the textarea
@@ -100,7 +100,7 @@ const viewer: Viewer = {
       if (busy || approved) return; busy = true; refresh();
       try { await run(); } finally { busy = false; refresh(); }
     };
-    const discard = async () => !dirty() || await platform.confirmDiscard("저장하지 않은 변경을 버릴까요?");
+    const discard = async (text = DISCARD, label = "버리기") => !dirty() || await platform.confirmDiscard(text, label);
     const edit = button("편집", async () => exclusive(async () => {
       if (!meta || lineEndings(meta.text).mixed || !await discard()) return;
       doc.reset(await read()); editing = !editing; edit.textContent = editing ? "읽기" : "편집";
@@ -112,10 +112,10 @@ const viewer: Viewer = {
       if (await saveCopy(path, bytes)) toast(COPY_SAVED);
     });
     const reload = async () => exclusive(async () => {
-      if (!await discard()) return; doc.reset(await read()); await render();
+      if (!await discard(DISCARD_RELOAD, "다시 읽기")) return; doc.reset(await read()); await render();
     });
     registerTextSettings({ encoding: () => cp949 ? "cp949" : "utf", changeEncoding: async value => exclusive(async () => {
-      if (!await discard()) return;
+      if (!await discard(DISCARD_RELOAD, "다시 읽기")) return;
       doc.reset(await read()); cp949 = value === "cp949"; editing = false; edit.textContent = "편집"; await render();
     }) });
     const searchBar = document.createElement("div"); searchBar.className = "text-search va-search"; searchBar.hidden = true;
@@ -164,7 +164,7 @@ const viewer: Viewer = {
       if (!editing || !meta || !dirty()) return;
       doc.edit(await encodeText(meta, editor.value));
       const result = await doc.save();
-      if (result === "conflict") { status.textContent = "파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽으세요."; }
+      if (result === "conflict") { status.textContent = ""; await platform.notice(CONFLICT_RELOAD, "warning"); }
       else { meta = await decodeText(doc.bytes, cp949); status.textContent = ""; toast(SAVED); void paint(); }
     });
     editor.oninput = () => {
@@ -184,7 +184,7 @@ const viewer: Viewer = {
     window.addEventListener("focus", () => { if (!dirty() && !busy) void exclusive(async () => { if (await doc.reload()) await render(); }).catch(report); });
     window.addEventListener("beforeunload", e => { if (!approved && (dirty() || busy)) e.preventDefault(); });
     registerUpdateGuard(() => dirty() || busy, value => { approved = value; });
-    await platform.onCloseRequested(async () => !busy && (approved || await discard()));
+    await platform.onCloseRequested(async () => !busy && (approved || await discard(DISCARD_CLOSE, "닫기")));
     await render();
   },
 };

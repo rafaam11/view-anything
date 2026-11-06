@@ -5,6 +5,7 @@ import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { THREE_D_EXTENSIONS } from "./three/formats";
 import { TEXT_EXTENSIONS } from "./text/formats";
 import { showDialog, type DialogKind } from "./ui/dialog";
+import { DISCARD_CLOSE } from "./ui/strings";
 
 /** Shows an in-app message with the window raised first (a minimized owner would hide it). */
 async function ask<T extends string>(o: Parameters<typeof showDialog<T>>[0]): Promise<T> {
@@ -151,7 +152,7 @@ export const platform = {
         ok = await allowClose();
       } catch {
         // A throwing handler would leave the window impossible to close; fall back to the webview.
-        ok = window.confirm("저장하지 않은 변경 내용을 버리고 닫을까요?");
+        ok = window.confirm(DISCARD_CLOSE);
       } finally {
         asking = false;
       }

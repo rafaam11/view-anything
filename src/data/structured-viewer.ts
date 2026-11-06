@@ -11,7 +11,7 @@ import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
 import { menuButton, textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
-import { COPY_SAVED, SAVED } from "../ui/strings";
+import { CONFLICT_RELOAD, COPY_SAVED, DISCARD, DISCARD_CLOSE, DISCARD_RELOAD, SAVED, errorMessage } from "../ui/strings";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_NODES = 20_000;
@@ -75,7 +75,7 @@ const viewer: Viewer = {
       catch (error) {
         // Stay open, in read mode, with nothing to save: JSON/YAML have no encoding option here, the
         // text viewer has one, so the hint points there.
-        const reason = error instanceof TextDecodeError ? error.message : String(error);
+        const reason = error instanceof TextDecodeError ? error.message : errorMessage(error);
         editing = false; toggle.textContent = "편집"; toggle.disabled = true; save.hidden = copy.hidden = true;
         editor.value = ""; editor.hidden = true; body.hidden = false; body.replaceChildren();
         status.textContent = `${reason} 텍스트로 열기(Ctrl+Shift+O)로 연 뒤 설정에서 CP949를 선택할 수 있습니다.`;
@@ -83,14 +83,14 @@ const viewer: Viewer = {
       }
       toggle.disabled = false; editor.value = meta.text;
       try { body.replaceChildren(tree(parse(meta.text, yaml))); status.textContent = ""; }
-      catch (error) { body.replaceChildren(); status.textContent = "구문 오류: " + String(error); }
+      catch (error) { body.replaceChildren(); status.textContent = "구문 오류: " + errorMessage(error); }
       refresh();
     };
-    const report = (error: unknown) => { void platform.alert(String(error)).catch(() => {}); };
-    const confirmLeave = async () => approved || !dirty() || await platform.confirmDiscard("저장하지 않은 변경을 버릴까요?");
+    const report = (error: unknown) => { void platform.alert(errorMessage(error)).catch(() => {}); };
+    const confirmLeave = async (text = DISCARD, label = "버리기") => approved || !dirty() || await platform.confirmDiscard(text, label);
     editor.addEventListener("input", () => {
       try { doc.edit(encodeDataText({ ...meta, text: restoreLineEndings(meta.text, editor.value) })); invalid = false; status.textContent = ""; }
-      catch (error) { invalid = true; status.textContent = String(error); }
+      catch (error) { invalid = true; status.textContent = errorMessage(error); }
       refresh();
     });
     toggle.onclick = () => { void (async () => {
@@ -105,11 +105,11 @@ const viewer: Viewer = {
     })().catch(report); };
     const doSave = async () => {
       if (!editing || invalid || busy) return;
-      try { parse(editor.value, yaml); } catch (error) { status.textContent = "구문 오류: " + String(error); return; }
+      try { parse(editor.value, yaml); } catch (error) { status.textContent = "구문 오류: " + errorMessage(error); return; }
       busy = true; save.disabled = true;
       try {
         const result = await doc.save();
-        if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
+        if (result === "conflict") { reload.hidden = false; await platform.notice(CONFLICT_RELOAD, "warning"); }
         else if (result === "saved") { status.textContent = ""; toast(SAVED); }
         refresh();
       } catch (error) { reload.hidden = false; throw error; }
@@ -124,7 +124,7 @@ const viewer: Viewer = {
     reload.onclick = () => { void (async () => {
       if (!editing || busy) return; busy = true;
       try {
-        if (dirty() && !await platform.confirmDiscard("편집 내용을 버리고 파일을 다시 읽을까요?")) return;
+        if (dirty() && !await platform.confirmDiscard(DISCARD_RELOAD, "다시 읽기")) return;
         doc.reset(await read()); render(); reload.hidden = true;
       } finally { busy = false; }
     })().catch(report); };
@@ -136,7 +136,7 @@ const viewer: Viewer = {
     window.addEventListener("focus", () => { if (!editing && !busy) void doc.reload().then(changed => { if (changed) render(); }).catch(report); });
     window.addEventListener("beforeunload", e => { if (!approved && dirty()) e.preventDefault(); });
     registerUpdateGuard(dirty, value => { approved = value; });
-    await platform.onCloseRequested(confirmLeave); render();
+    await platform.onCloseRequested(() => confirmLeave(DISCARD_CLOSE, "닫기")); render();
   },
 };
 export default viewer;

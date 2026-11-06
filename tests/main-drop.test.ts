@@ -109,7 +109,7 @@ test("a failed F11 keeps the page in step with the window and reports it", async
   f11();
   await settle();
   expect(document.documentElement.dataset.fullscreen).toBeUndefined();
-  expect(platform.alert).toHaveBeenCalledWith("Error: denied");
+  expect(platform.alert).toHaveBeenCalledWith("denied");
 });
 
 test("md window: every dropped file opens a new window (v0.1), shift or not", async () => {
@@ -224,7 +224,7 @@ test("a failed text open is reported instead of rejected silently", async () => 
   platform.openWindow.mockRejectedValueOnce(new Error("boom"));
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "O", ctrlKey: true, shiftKey: true }));
   await settle();
-  expect(platform.alert).toHaveBeenCalledWith("Error: boom");
+  expect(platform.alert).toHaveBeenCalledWith("boom");
 });
 
 test("global shortcuts do not reach later window listeners", async () => {

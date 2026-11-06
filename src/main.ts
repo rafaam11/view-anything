@@ -17,6 +17,7 @@ import { initializeDialogInput } from "./ui/dialog";
 import { addRecent, removeRecent } from "./recent";
 import { OPEN_PATH_EVENT, recentList, type OpenPathDetail } from "./ui/recent-menu";
 import { textButton } from "./ui/icons";
+import { errorMessage } from "./ui/strings";
 
 const app = document.getElementById("app")!;
 initializeUpdateInput();
@@ -80,7 +81,7 @@ async function show() {
     viewer = v;
     addRecent(file);
   } catch (e) {
-    message("파일을 열 수 없습니다", String(e));
+    message("파일을 열 수 없습니다", errorMessage(e));
     if (!textMode) textFallback(file);
   }
 }
@@ -90,7 +91,7 @@ let ready = show();
 void ready.then(() => import("./update/main")).then((m) => m.startUpdater()).catch((e) => console.warn("updater initialization failed", e));
 
 function openWindows(paths: string[]) {
-  for (const p of paths) void platform.openWindow(p).catch((e) => platform.alert(String(e)).catch(() => {}));
+  for (const p of paths) void platform.openWindow(p).catch((e) => platform.alert(errorMessage(e)).catch(() => {}));
 }
 
 async function openPaths(paths: string[], shift: boolean) {
@@ -147,17 +148,17 @@ async function pickAndOpen(append = false, text = false) {
   try {
     paths = await platform.pickFiles({ only3d: append, text });
   } catch (e) {
-    await platform.alert(String(e)).catch(() => {});
+    await platform.alert(errorMessage(e)).catch(() => {});
     return;
   } finally {
     picking = false; // the dialog is closed; routing below must not block the next Ctrl+O
   }
   if (text) {
-    for (const p of paths) await platform.openWindow(p, true).catch((e) => platform.alert(String(e)).catch(() => {}));
+    for (const p of paths) await platform.openWindow(p, true).catch((e) => platform.alert(errorMessage(e)).catch(() => {}));
     return;
   }
   const run = append && kind === "3d" ? appendPaths(paths) : openPaths(paths, false);
-  await run.catch((e) => platform.alert(String(e)).catch(() => {}));
+  await run.catch((e) => platform.alert(errorMessage(e)).catch(() => {}));
 }
 
 /** Every picked 3D file goes into this window's scene (no Shift, no routing); anything else opens a window. */
@@ -185,7 +186,7 @@ window.addEventListener(OPEN_PATH_EVENT, (e) => {
     await openPaths([path], false);
     await ready;
   })()
-    .catch((err) => platform.alert(String(err)).catch(() => {}))
+    .catch((err) => platform.alert(errorMessage(err)).catch(() => {}))
     .finally(() => { openingRecent = false; });
 });
 
@@ -205,7 +206,7 @@ window.addEventListener(
     // its titlebar must stay escapable from whatever it shows next.
     if (e.key === "F11") {
       e.preventDefault(); e.stopImmediatePropagation();
-      if (!e.repeat && !document.querySelector("dialog[open]")) void toggleFullscreen().catch((err) => platform.alert(String(err)).catch(() => {}));
+      if (!e.repeat && !document.querySelector("dialog[open]")) void toggleFullscreen().catch((err) => platform.alert(errorMessage(err)).catch(() => {}));
       return;
     }
     if (e.ctrlKey && e.key === ",") {
@@ -233,6 +234,6 @@ getCurrentWebview()
     const paths = ev.payload.paths;
     void shiftState()
       .then((shift) => openPaths(paths, shift))
-      .catch((e) => platform.alert(String(e)).catch(() => {}));
+      .catch((e) => platform.alert(errorMessage(e)).catch(() => {}));
   })
   .catch(() => {});

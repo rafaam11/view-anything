@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { expect, test, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ disk: new Uint8Array(), copy: new Uint8Array(), close: async () => true, alerts: [] as string[] }));
+const state = vi.hoisted(() => ({ disk: new Uint8Array(), copy: new Uint8Array(), close: async () => true, alerts: [] as string[], notices: [] as [string, string | undefined][], discards: [] as [string, string | undefined][] }));
 /** A tiny two-way CP949 table standing in for the Rust codec: ASCII passes through, four syllables are known. */
 const cp = vi.hoisted(() => {
   const chars: Record<string, number[]> = { "이": [0xc0, 0xcc], "름": [0xb8, 0xa7], "값": [0xb0, 0xaa], "가": [0xb0, 0xa1], "나": [0xb3, 0xaa] };
@@ -31,8 +31,9 @@ vi.mock("../src/platform", () => ({ platform: {
   saveDialog: async () => "copy.csv", writeFileNew: async (_path: string, bytes: Uint8Array) => { state.copy = bytes.slice(); },
   setWindowTitle: async () => {},
   onCloseRequested: async (fn: () => Promise<boolean>) => { state.close = fn; },
-  confirmDiscard: async () => false,
+  confirmDiscard: async (text: string, label?: string) => { state.discards.push([text, label]); return false; },
   alert: async (message: string) => { state.alerts.push(message); },
+  notice: async (message: string, kind?: string) => { state.notices.push([message, kind]); },
 } }));
 vi.mock("../src/update/guard", () => ({ registerUpdateGuard: () => {} }));
 import viewer from "../src/data/csv-viewer";
@@ -43,7 +44,7 @@ const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으�
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
 
 test("CSV edits preserve untouched bytes and external conflicts retain local changes", async () => {
-  state.disk = encode('\ufeff"name",value\r\nalpha,1\n'); state.alerts = [];
+  state.disk = encode('\ufeff"name",value\r\nalpha,1\n'); state.alerts = []; state.notices = []; state.discards = [];
   const root = document.createElement("div");
   await viewer.mount(root, "test.csv");
   const buttons = controls(root);
@@ -59,12 +60,14 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
   buttons[1].click(); await settle();
   expect(state.disk).toEqual(encode("external\n"));
   expect(edited.value).toBe("local");
-  expect(state.alerts).toHaveLength(1);
+  expect(state.alerts).toEqual([]);
+  expect(state.notices).toEqual([["파일이 외부에서 바뀌었거나 삭제되어 저장하지 않았습니다. 편집 내용은 그대로 있습니다. 다른 이름으로 저장하거나 다시 읽으세요.", "warning"]]);
   buttons[2].click(); await settle();
   expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("복사본을 저장했습니다. 이 창에서는 원본을 계속 편집합니다.");
   expect(state.copy).toEqual(encode('\ufeff"name",value\r\nlocal,1\n'));
   expect(state.disk).toEqual(encode("external\n"));
   expect(await state.close()).toBe(false);
+  expect(state.discards.at(-1)).toEqual(["저장하지 않은 변경 내용을 버리고 닫을까요?", "닫기"]);
 });
 
 test("edits survive page navigation and save together", async () => {

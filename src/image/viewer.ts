@@ -6,6 +6,7 @@ import { equalBytes } from "../data/document";
 import { documentBar } from "../ui/chrome";
 import { iconButton, menuButton, textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
+import { DISCARD, DISCARD_CLOSE, errorMessage } from "../ui/strings";
 import { isFullscreen, toggleFullscreen } from "../fullscreen";
 import { dragRect, fitRect, hitTest, toImagePoint, type CropDrag, type Handle, type Point, type Rect } from "./crop";
 import { ImageHistory, transformImage, type ImageState } from "./history";
@@ -67,7 +68,7 @@ const viewer: Viewer = {
       { label:"목록 새로고침", shortcut:"F5", run:() => { void refreshSources(true); }, disabled:() => busy },
     ] });
     root.append(bar, coords, area, thumbs, footer); el.replaceChildren(root);
-    const report = (e: unknown) => { void platform.alert(String(e)).catch(() => {}); };
+    const report = (e: unknown) => { void platform.alert(errorMessage(e)).catch(() => {}); };
     const copyPath = () => { void platform.copyText(path).then(() => { toast("파일 경로를 복사했습니다"); }).catch(report); };
     // The number inputs are the single source of the crop rectangle; drags write into them.
     let cropDrag: { kind:CropDrag; start:Point; rect:Rect; x:number; y:number; moved:boolean } | null = null;
@@ -126,8 +127,8 @@ const viewer: Viewer = {
       fitted = false; scale = Math.max(.01, Math.min(16, value)); applyScale();
       const after = target.getBoundingClientRect(); area.scrollLeft += after.left + u*after.width - x; area.scrollTop += after.top + v*after.height - y;
     };
-    const confirmLeave = async () => !busy && (approved || !dirty || await platform.confirmDiscard("저장하지 않은 이미지 편집을 버릴까요?"));
-    const discard = async () => approved || !dirty || await platform.confirmDiscard("저장하지 않은 이미지 편집을 버릴까요?");
+    const confirmLeave = async () => !busy && (approved || !dirty || await platform.confirmDiscard(DISCARD_CLOSE, "닫기"));
+    const discard = async () => approved || !dirty || await platform.confirmDiscard(DISCARD);
     const load = async (target: string) => {
       if (await platform.fileSize(target) > MAX_BYTES) throw new Error("이미지가 100 MiB를 초과합니다.");
       const bytes = await platform.readFileRaw(target);

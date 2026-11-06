@@ -4,6 +4,7 @@ import { preferences, applyPreferences, DEFAULTS, FONTS, type FontPreset, type M
 import { textSettings, settingsContext } from "./document";
 import { applyTheme, type ThemeMode } from "../theme";
 import { textButton } from "../ui/icons";
+import { errorMessage } from "../ui/strings";
 
 let dialog: HTMLDialogElement | null = null;
 export function openSettings(): void {
@@ -76,7 +77,7 @@ export function openSettings(): void {
     encoding.onchange = () => {
       encoding.disabled = true;
       void documentOptions.changeEncoding(encoding.value === "cp949" ? "cp949" : "utf")
-        .catch(e => { status.textContent = String(e); })
+        .catch(e => { status.textContent = errorMessage(e); })
         .finally(() => { encoding.value = documentOptions.encoding(); encoding.disabled = false; });
     };
   }

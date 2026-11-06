@@ -10,7 +10,7 @@ import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
 import { menuButton, textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
-import { COPY_SAVED, SAVED } from "../ui/strings";
+import { CONFLICT_RELOAD, COPY_SAVED, DISCARD, DISCARD_CLOSE, DISCARD_RELOAD, SAVED, errorMessage } from "../ui/strings";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 /** A 10 MiB, 1,000,000-cell file parses in about 0.1-0.2 s; the page shows 100 rows × 10 columns at a time. */
@@ -99,7 +99,7 @@ const viewer: Viewer = {
       try { parsed = parseCsv(decoded.text, ",", MAX_CELLS); }
       catch (e) {
         if (!mounted) throw e; // the first render fails the mount, so the app offers "텍스트로 열기"
-        unreadable(String(e)); return;
+        unreadable(errorMessage(e)); return;
       }
       const note = cp949 ? "CP949로 읽음" : "";
       if (decodeFailed || !status.textContent || status.textContent === "CP949로 읽음") status.textContent = note;
@@ -111,10 +111,10 @@ const viewer: Viewer = {
     next.onclick = () => { if ((page + 1) * PAGE_ROWS < rows.length) { page++; showPage(); } };
     previousColumns.onclick = () => { if (columnPage > 0) { columnPage--; showPage(); } };
     nextColumns.onclick = () => { if ((columnPage + 1) * PAGE_COLUMNS < columnCount) { columnPage++; showPage(); } };
-    const report = (error: unknown) => { void platform.alert(String(error)).catch(() => {}); };
-    const confirmLeave = async () => {
+    const report = (error: unknown) => { void platform.alert(errorMessage(error)).catch(() => {}); };
+    const confirmLeave = async (text = DISCARD, label = "버리기") => {
       if (approved || !dirty()) return true;
-      return platform.confirmDiscard("저장하지 않은 CSV 변경을 버릴까요?");
+      return platform.confirmDiscard(text, label);
     };
     edit.onclick = () => { void (async () => {
       if (busy) return;
@@ -134,7 +134,7 @@ const viewer: Viewer = {
         const revision = editRevision;
         doc.edit(await editBytes());
         const result = await doc.save();
-        if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
+        if (result === "conflict") { reload.hidden = false; await platform.notice(CONFLICT_RELOAD, "warning"); }
         else if (result === "saved" || result === "unchanged") {
           status.textContent = ""; toast(SAVED);
           if (editRevision === revision) await render();
@@ -153,7 +153,7 @@ const viewer: Viewer = {
     reload.onclick = () => { void (async () => {
       if (busy) return; busy = true; // also offered in read mode after a file became unreadable
       try {
-        if (dirty() && !await platform.confirmDiscard("편집 내용을 버리고 파일을 다시 읽을까요?")) return;
+        if (dirty() && !await platform.confirmDiscard(DISCARD_RELOAD, "다시 읽기")) return;
         reload.hidden = true; doc.reset(await read()); await render();
       } finally { busy = false; }
     })().catch(report); };
@@ -174,12 +174,12 @@ const viewer: Viewer = {
       encoding: () => cp949 ? "cp949" : "utf",
       changeEncoding: async (value) => {
         if (busy) return;
-        if (editing && dirty() && !await confirmLeave()) return;
+        if (editing && dirty() && !await confirmLeave(DISCARD_RELOAD, "다시 읽기")) return;
         busy = true;
         try { cp949 = value === "cp949"; doc.reset(await read()); await render(); } finally { busy = false; }
       },
     });
-    await platform.onCloseRequested(confirmLeave);
+    await platform.onCloseRequested(() => confirmLeave(DISCARD_CLOSE, "닫기"));
     await render();
     mounted = true;
   },
