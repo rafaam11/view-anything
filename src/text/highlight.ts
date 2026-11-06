@@ -34,6 +34,11 @@ const BY_EXTENSION: Record<string, string> = {
 };
 /** Beyond this the overlay would make typing and scrolling heavy; the text stays plain. */
 export const HIGHLIGHT_LIMIT = { chars: 1_000_000, lines: 20_000 };
+/**
+ * While editing, the colours come back after every pause; a full repaint of a file near the view
+ * limit takes most of a second on the UI thread, so bigger edits stay plain until saved.
+ */
+export const LIVE_HIGHLIGHT_CHARS = 200_000;
 
 /** The highlight.js language for a file, or null for plain text (txt, log, unknown). */
 export function languageFor(path: string): string | null {

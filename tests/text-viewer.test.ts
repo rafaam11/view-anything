@@ -112,3 +112,25 @@ test("the layer scrolls and wraps with the source", async () => {
   applyPreferences({ textWrap: false }, false);
   expect(stack.getAttribute("data-wrap")).toBe("off");
 });
+test("typing keeps the mirrored box, so scrollbars and wrapping do not jump", async () => {
+  disk = new TextEncoder().encode("x = 1\n"); document.body.replaceChildren(); await viewer.mount(document.body, "code.py");
+  const stack = document.querySelector<HTMLElement>(".text-stack")!;
+  await vi.waitFor(() => expect(stack.getAttribute("data-highlight")).toBe("on"));
+  expect(stack.getAttribute("data-mirror")).toBe("on");
+  button("편집").click(); await settle();
+  edit("y = 2\n");
+  expect(stack.getAttribute("data-highlight")).not.toBe("on");
+  expect(stack.getAttribute("data-mirror")).toBe("on");
+  document.body.replaceChildren(); disk = new TextEncoder().encode("plain\n"); await viewer.mount(document.body, "notes.txt");
+  expect(document.querySelector(".text-stack")!.getAttribute("data-mirror")).not.toBe("on");
+});
+test("large edits stay plain while typing and get colours again after saving", async () => {
+  disk = new TextEncoder().encode("x = 1\n"); document.body.replaceChildren(); await viewer.mount(document.body, "code.py");
+  const stack = document.querySelector<HTMLElement>(".text-stack")!;
+  button("편집").click(); await settle();
+  edit(`s = "${"a".repeat(210_000)}"\n`); // over the live limit, few tokens (happy-dom parses spans slowly)
+  await new Promise((r) => setTimeout(r, 400));
+  expect(stack.getAttribute("data-highlight")).not.toBe("on");
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }));
+  await vi.waitFor(() => expect(stack.getAttribute("data-highlight")).toBe("on"), { timeout: 5000 });
+});

@@ -10,12 +10,16 @@
 /* Syntax colours: the <pre> under the textarea mirrors its box (font, padding, wrapping, scrollbars). */
 .text-root .text-stack { flex:1; position:relative; display:flex; min-height:120px; background:var(--bg); }
 .text-root .text-stack .text-source { position:relative; z-index:1; background:transparent; }
-.text-root .text-highlight { position:absolute; inset:0; margin:0; padding:12px 16px; box-sizing:border-box; overflow:scroll; scrollbar-color:transparent transparent; pointer-events:none; visibility:hidden; color:var(--fg); font-family:var(--va-text-font, "Cascadia Mono", Consolas, monospace); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; white-space:pre-wrap; overflow-wrap:break-word; }
+.text-root .text-highlight { position:absolute; inset:0; margin:0; padding:12px 16px; box-sizing:border-box; overflow:hidden; scrollbar-color:transparent transparent; pointer-events:none; visibility:hidden; color:var(--fg); font-family:var(--va-text-font, "Cascadia Mono", Consolas, monospace); font-size:var(--va-text-size, 14px); line-height:1.6; tab-size:4; white-space:pre-wrap; overflow-wrap:break-word; }
 .text-root .text-stack[data-wrap=off] .text-highlight { white-space:pre; overflow-wrap:normal; }
+/* Same scrollbars on both boxes whether or not colours are showing at the moment, so typing never changes the wrap width. */
+.text-root .text-stack[data-mirror=on] .text-source, .text-root .text-stack[data-mirror=on] .text-highlight { overflow-y:scroll; overflow-x:hidden; }
+.text-root .text-stack[data-mirror=on][data-wrap=off] .text-source, .text-root .text-stack[data-mirror=on][data-wrap=off] .text-highlight { overflow-x:scroll; }
 .text-root .text-stack[data-highlight=on] .text-highlight { visibility:visible; }
-.text-root .text-stack[data-highlight=on] .text-source { overflow:scroll; color:transparent; caret-color:var(--fg); }
+.text-root .text-stack[data-highlight=on] .text-source { color:transparent; caret-color:var(--fg); }
+/* Colour only: italic or bold glyphs have other widths in proportional fonts and would drift from the textarea. */
 .text-highlight .hljs-keyword, .text-highlight .hljs-built_in, .text-highlight .hljs-literal, .text-highlight .hljs-selector-tag { color:var(--hl-keyword); }
 .text-highlight .hljs-string, .text-highlight .hljs-regexp, .text-highlight .hljs-attr, .text-highlight .hljs-attribute { color:var(--hl-string); }
-.text-highlight .hljs-comment, .text-highlight .hljs-quote { color:var(--hl-comment); font-style:italic; }
+.text-highlight .hljs-comment, .text-highlight .hljs-quote { color:var(--hl-comment); }
 .text-highlight .hljs-number, .text-highlight .hljs-meta, .text-highlight .hljs-symbol { color:var(--hl-number); }
 .text-highlight .hljs-title, .text-highlight .hljs-section, .text-highlight .hljs-type, .text-highlight .hljs-name, .text-highlight .hljs-tag { color:var(--hl-title); }

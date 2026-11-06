@@ -10,7 +10,7 @@ import { recentMenuBlock } from "../ui/recent-menu";
 import { registerTextSettings } from "../settings/document";
 import { preferences } from "../settings/preferences";
 import { revealSelection } from "./selection";
-import { highlightHtml, languageFor, withinHighlightLimit } from "./highlight";
+import { highlightHtml, languageFor, LIVE_HIGHLIGHT_CHARS, withinHighlightLimit } from "./highlight";
 import "../ui/chrome.css";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -43,11 +43,17 @@ const viewer: Viewer = {
     const language = languageFor(path);
     let paintSequence = 0, paintTimer: ReturnType<typeof setTimeout> | undefined;
     const plain = () => { stack.removeAttribute("data-highlight"); layer.replaceChildren(); };
+    // The mirrored box (scrollbars, padding) depends only on whether this file can be coloured, so
+    // it stays put while colours blink off during typing.
+    const mirror = () => { if (language && preferences().textHighlight) stack.dataset.mirror = "on"; else stack.removeAttribute("data-mirror"); };
     const syncScroll = () => { layer.scrollTop = editor.scrollTop; layer.scrollLeft = editor.scrollLeft; };
-    const paint = async () => {
+    /** `live`: a repaint after a typing pause, skipped for big edits until the next save. */
+    const paint = async (live = false) => {
       clearTimeout(paintTimer);
       const sequence = ++paintSequence, text = editor.value;
+      mirror();
       if (!language || !meta || !preferences().textHighlight) { plain(); return; }
+      if (live && text.length > LIVE_HIGHLIGHT_CHARS) { plain(); return; }
       if (!withinHighlightLimit(text)) {
         plain();
         if (!status.textContent) status.textContent = "구문 강조는 1 MiB·2만 줄까지 적용합니다";
@@ -156,13 +162,13 @@ const viewer: Viewer = {
       doc.edit(await encodeText(meta, editor.value));
       const result = await doc.save();
       if (result === "conflict") { status.textContent = "파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽으세요."; }
-      else { meta = await decodeText(doc.bytes, cp949); status.textContent = "저장됨"; }
+      else { meta = await decodeText(doc.bytes, cp949); status.textContent = "저장됨"; void paint(); }
     });
     editor.oninput = () => {
       cancelSearch(); status.textContent = ""; refresh();
       // Plain glyphs while typing, colours again after a short pause: the layer never lags behind the caret.
-      if (stack.dataset.highlight) { ++paintSequence; plain(); }
-      clearTimeout(paintTimer); paintTimer = setTimeout(() => { void paint(); }, 150);
+      ++paintSequence; if (stack.dataset.highlight) plain();
+      clearTimeout(paintTimer); paintTimer = setTimeout(() => { void paint(true); }, 150);
     };
     window.addEventListener("keydown", e => {
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); if (!e.repeat) void doSave().catch(report); }
