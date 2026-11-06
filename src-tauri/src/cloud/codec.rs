@@ -264,8 +264,11 @@ pub fn read_budget<R: BufRead>(
         let mut h = std::collections::HashMap::<String, Vec<String>>::new();
         loop {
             let l = line(&mut r, &mut header)?;
-            if l.starts_with('#') {
-                comments.push(l);
+            if let Some(text) = l.strip_prefix('#') {
+                // The format banner is written anew on save; keeping it would add one per save.
+                if !text.trim_start().to_ascii_lowercase().starts_with(".pcd") {
+                    comments.push(l);
+                }
                 continue;
             }
             let mut words = l.split_whitespace();
@@ -912,6 +915,18 @@ mod tests {
         assert!(
             matches!(read_budget(std::io::Cursor::new(header),"pcd",16,MAX_POINTS,&mut|_,_|Ok(())),Err(e) if e.contains("메모리"))
         );
+    }
+    #[test]
+    fn pcd_header_comments_do_not_grow_across_saves() {
+        let pcd = b"# .PCD v0.7 - Point Cloud Data file format\n# made by test\nVERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\nWIDTH 1\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 1\nDATA ascii\n1 2 3\n";
+        let once = parse(pcd, "pcd");
+        let mut out = vec![];
+        write(&once, &[0], &mut out, &mut |_, _| Ok(())).unwrap();
+        let twice = parse(&out, "pcd");
+        let mut again = vec![];
+        write(&twice, &[0], &mut again, &mut |_, _| Ok(())).unwrap();
+        assert_eq!(out, again);
+        assert_eq!(twice.comments, vec!["# made by test".to_string()]);
     }
     #[test]
     fn point_limit_is_checked_before_the_body_is_read() {
