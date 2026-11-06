@@ -40,7 +40,7 @@ import viewer from "../src/data/csv-viewer";
 import { textSettings } from "../src/settings/document";
 
 const encode = (s: string) => new TextEncoder().encode(s);
-const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으로 저장…", "다시 읽기", "이전 페이지", "다음 페이지", "이전 열", "다음 열"].map(label => [...root.querySelectorAll("button")].find(b => b.textContent === label)!);
+const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으로 저장…", "다시 읽기", "이전 페이지", "다음 페이지", "이전 열", "다음 열"].map(label => [...root.querySelectorAll("button")].find(b => (b.getAttribute("aria-label") ?? b.textContent) === label)!);
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
 
 test("CSV edits preserve untouched bytes and external conflicts retain local changes", async () => {
@@ -92,7 +92,11 @@ test("very wide CSV rows are paged by column and keep changes across pages", asy
   const buttons = controls(root); buttons[0].click(); await settle();
   expect(root.querySelectorAll("textarea")).toHaveLength(10);
   const first = root.querySelectorAll("textarea")[0]; first.value = "changed"; first.dispatchEvent(new Event("input"));
+  // Paging uses the shared icon buttons; the counts sit between them.
+  expect(buttons.slice(4).map((b) => b.className)).toEqual(Array(4).fill("va-icon-button"));
+  expect(root.querySelector(".data-pages")!.textContent).toBe("1 / 1·열1 / 3");
   buttons[7].click();
+  expect(root.querySelector(".data-pages")!.textContent).toBe("1 / 1·열2 / 3");
   expect(root.querySelectorAll("textarea")).toHaveLength(10);
   expect(root.querySelectorAll("textarea")[0].value).toBe("v10");
   buttons[1].click(); await settle();

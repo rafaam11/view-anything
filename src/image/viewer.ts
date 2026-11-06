@@ -34,7 +34,7 @@ const viewer: Viewer = {
     const prev = iconButton("이전 이미지", "previous", "ArrowLeft"), next = iconButton("다음 이미지", "next", "ArrowRight");
     const zoomOut = iconButton("축소", "minus"), zoomIn = iconButton("확대", "plus"), fit = iconButton("화면에 맞춤", "fit", "Ctrl+0");
     const rotate = iconButton("오른쪽으로 회전", "rotate"), rotateLeft = iconButton("왼쪽으로 회전", "rotate-left"), flip = iconButton("좌우 반전", "flip"), flipVertical = iconButton("상하 반전", "flip-vertical"), cropToggle = iconButton("자르기", "crop");
-    const copy = iconButton("이미지 복사", "copy", "Ctrl+C"), toggle = iconButton("이미지 편집", "edit"), save = menuButton("PNG로 저장…", "Ctrl+S"), crop = textButton("자르기 적용");
+    const copy = iconButton("이미지 복사", "copy", "Ctrl+C"), toggle = iconButton("이미지 편집", "edit"), save = menuButton("PNG로 저장…", "Ctrl+S"), crop = textButton("자르기 적용", "primary");
     const undo = iconButton("실행 취소", "undo", "Ctrl+Z"), redo = iconButton("다시 실행", "redo", "Ctrl+Y");
     const zoomLabel = document.createElement("span"); zoomLabel.className = "image-zoom";
     const coords = document.createElement("div"); coords.className = "image-coords va-search"; coords.hidden = true;
@@ -43,7 +43,7 @@ const viewer: Viewer = {
       const input = document.createElement("input"); input.type = "number"; input.min = "0"; input.value = "0";
       wrap.append(input); coords.append(wrap); return input;
     });
-    const cancelCrop = iconButton("자르기 취소", "close"); cancelCrop.onclick = () => setCropping(false); coords.append(crop, cancelCrop);
+    const cancelCrop = textButton("취소"); cancelCrop.onclick = () => setCropping(false); coords.append(crop, cancelCrop);
     const area = document.createElement("div"); area.className = "image-area";
     const image = document.createElement("img"); image.alt = "이미지";
     let canvas = document.createElement("canvas"); canvas.hidden = true;

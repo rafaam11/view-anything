@@ -30,6 +30,13 @@ const inputs = () => [...document.querySelectorAll<HTMLInputElement>(".image-coo
 const values = () => inputs().map(i=>Number(i.value));
 const coordsHidden = () => document.querySelector<HTMLElement>(".image-coords")!.hidden;
 const applyCrop = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent==="자르기 적용")!;
+test("the crop bar applies with the primary button and cancels with a plain one",async()=>{
+  button("이미지 편집").click();await settle();button("자르기").click();
+  const bar=document.querySelector<HTMLElement>(".image-coords")!;
+  expect([...bar.querySelectorAll("button")].map(b=>[b.textContent,b.className])).toEqual([["자르기 적용","va-btn va-btn-primary"],["취소","va-btn"]]);
+  [...bar.querySelectorAll<HTMLButtonElement>("button")][1].click();
+  expect(bar.hidden).toBe(true);
+});
 const pointer = (type:string,clientX:number,clientY:number) => document.querySelector(".image-area")!.dispatchEvent(new MouseEvent(type,{clientX,clientY,button:0,bubbles:true,cancelable:true}));
 /** Edit mode with the crop open; the 2000×1000 image shows at 1000×500 from the viewport origin. */
 const openCrop = async () => {

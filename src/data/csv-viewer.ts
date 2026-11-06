@@ -8,7 +8,7 @@ import { registerTextSettings } from "../settings/document";
 import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
-import { menuButton, textButton } from "../ui/icons";
+import { iconButton, menuButton, textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
 import { CONFLICT_RELOAD, COPY_SAVED, DISCARD, DISCARD_CLOSE, DISCARD_RELOAD, SAVED, errorMessage } from "../ui/strings";
 
@@ -35,12 +35,15 @@ const viewer: Viewer = {
     documentBar(bar, { toggle: edit, files: [save, copy, reload] });
     const body = document.createElement("div"); body.className = "data-table-wrap";
     const pages = document.createElement("nav"); pages.className = "data-pages"; pages.setAttribute("aria-label", "CSV 페이지");
-    const previous = textButton("이전 페이지", "ghost");
-    const next = textButton("다음 페이지", "ghost");
+    const previous = iconButton("이전 페이지", "previous");
+    const next = iconButton("다음 페이지", "next");
     const pageLabel = document.createElement("span");
-    const previousColumns = textButton("이전 열", "ghost");
-    const nextColumns = textButton("다음 열", "ghost");
-    const columnLabel = document.createElement("span"); pages.append(previous, pageLabel, next, previousColumns, columnLabel, nextColumns);
+    const previousColumns = iconButton("이전 열", "previous");
+    const nextColumns = iconButton("다음 열", "next");
+    const columnLabel = document.createElement("span");
+    const separator = document.createElement("span"); separator.className = "data-pages-sep"; separator.textContent = "·"; separator.setAttribute("aria-hidden", "true");
+    const columnsName = document.createElement("span"); columnsName.textContent = "열";
+    pages.append(previous, pageLabel, next, separator, columnsName, previousColumns, columnLabel, nextColumns);
     status.className = "va-status"; root.append(bar, status, pages, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false, cp949 = false, decodeFailed = false;
     let source = "", meta: TextMeta | null = null, changes = new Map<CsvCell, string>();
@@ -75,10 +78,10 @@ const viewer: Viewer = {
       }
       body.replaceChildren(table); refresh();
       const count = Math.max(1, Math.ceil(rows.length / PAGE_ROWS));
-      pageLabel.textContent = ` ${page + 1} / ${count} `;
+      pageLabel.textContent = `${page + 1} / ${count}`;
       previous.disabled = page === 0; next.disabled = page + 1 >= count;
       const columns = Math.max(1, Math.ceil(columnCount / PAGE_COLUMNS));
-      columnLabel.textContent = ` 열 ${columnPage + 1} / ${columns} `;
+      columnLabel.textContent = `${columnPage + 1} / ${columns}`;
       previousColumns.disabled = columnPage === 0; nextColumns.disabled = columnPage + 1 >= columns;
       pages.hidden = count === 1 && columns === 1;
     };
