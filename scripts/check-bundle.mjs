@@ -1,10 +1,10 @@
 // Usage: node scripts/check-bundle.mjs   (after `npm run build`)
-// Exits 1 if three.js or occt is statically reachable from the entry chunk or the md viewer
-// chunk, i.e. if opening a Markdown file would download the 3D stack, and if the exported-HTML
-// runtime (build/runtime/va-runtime.js) is missing or references Tauri.
-// Reads the Vite 8 (rolldown) manifest at dist/.vite/manifest.json. The manifest lists chunks,
-// not the modules inlined into them, so each reached chunk's code is also scanned for markers
-// that survive minification.
+// Exits 1 if three.js or occt is statically reachable from the entry chunk, the md viewer or the
+// other lazy viewers (PDF, image, text, CSV, JSON/YAML), if the entry or md viewer chunk is over
+// its size budget, and if the exported-HTML runtime (build/runtime/va-runtime.js) is missing or
+// references Tauri. Reads the Vite 8 (rolldown) manifest at dist/.vite/manifest.json. The manifest
+// lists chunks, not the modules inlined into them, so each reached chunk's code is also scanned for
+// markers that survive minification.
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,17 +13,26 @@ const MD_VIEWER = "src/md/viewer.ts";
 const FORBIDDEN = /three|occt|pdfjs|plugin-updater|plugin-process/i;
 // `window.__THREE__ = REVISION` (three.core.js) and emscripten's default wasm file name.
 const CODE_MARKERS = /__THREE__|occt-import-js\.wasm|pdfjsLib|pdfjsWorker|plugin:updater\||plugin:process\|/;
+/** The other lazy viewers may load PDF.js or the updater (the PDF viewer must), but never the 3D stack. */
+const OTHER_VIEWERS = ["src/pdf/viewer.ts", "src/image/viewer.ts", "src/text/viewer.ts", "src/data/csv-viewer.ts", "src/data/structured-viewer.ts"];
+const FORBIDDEN_3D = /three|occt/i;
+const CODE_MARKERS_3D = /__THREE__|occt-import-js\.wasm/;
+/**
+ * Size budgets of the chunks that decide startup, in KiB (v0.14.0: entry 37, md viewer 707).
+ * The entry chunk is the one every double-click pays for; the md viewer is the most opened.
+ */
+const BUDGET_KIB = { entry: 60, [MD_VIEWER]: 800 };
 
 function label(key, chunk) {
   return `${key} (${chunk?.file ?? "?"})`;
 }
 
-function isForbidden(key, chunk) {
-  return [key, chunk.src, chunk.file, ...(chunk.assets ?? [])].some((s) => typeof s === "string" && FORBIDDEN.test(s));
+function isForbidden(key, chunk, forbidden = FORBIDDEN) {
+  return [key, chunk.src, chunk.file, ...(chunk.assets ?? [])].some((s) => typeof s === "string" && forbidden.test(s));
 }
 
 /** Static-import closure from `start`; returns problems for every forbidden chunk reached. */
-function walk(manifest, start, root, readChunk) {
+function walk(manifest, start, root, readChunk, forbidden = FORBIDDEN, markers = CODE_MARKERS) {
   const problems = [];
   const seen = new Set();
   const stack = [[start, [start]]];
@@ -36,11 +45,11 @@ function walk(manifest, start, root, readChunk) {
       problems.push(`${root}: import ${key} is missing from the manifest`);
       continue;
     }
-    if (isForbidden(key, chunk)) {
+    if (isForbidden(key, chunk, forbidden)) {
       problems.push(`${root} statically reaches ${label(key, chunk)} via ${path.join(" -> ")}`);
     } else if (readChunk && typeof chunk.file === "string" && /\.m?js$/.test(chunk.file)) {
       const code = readChunk(chunk.file);
-      const hit = code === null ? null : CODE_MARKERS.exec(code);
+      const hit = code === null ? null : markers.exec(code);
       if (code === null) problems.push(`${root}: chunk file ${chunk.file} is missing`);
       else if (hit) problems.push(`${root} statically reaches ${label(key, chunk)} which inlines three/occt code (${hit[0]}) via ${path.join(" -> ")}`);
     }
@@ -60,7 +69,31 @@ export function checkManifest(manifest, readChunk) {
   const md = Object.keys(manifest).find((k) => k === MD_VIEWER || manifest[k]?.src === MD_VIEWER);
   if (!md) problems.push(`md viewer chunk (${MD_VIEWER}) not found in the manifest`);
   for (const root of [...entries, ...(md ? [md] : [])]) problems.push(...walk(manifest, root, root, readChunk));
+  for (const viewer of OTHER_VIEWERS) {
+    const key = Object.keys(manifest).find((k) => k === viewer || manifest[k]?.src === viewer);
+    if (key) problems.push(...walk(manifest, key, key, readChunk, FORBIDDEN_3D, CODE_MARKERS_3D));
+  }
+  if (readChunk) {
+    const budgets = [...entries.map((k) => [k, BUDGET_KIB.entry]), ...(md ? [[md, BUDGET_KIB[MD_VIEWER]]] : [])];
+    for (const [key, limit] of budgets) {
+      const file = manifest[key]?.file;
+      const code = typeof file === "string" ? readChunk(file) : null;
+      const kib = code === null ? 0 : Math.ceil(Buffer.byteLength(code) / 1024);
+      if (kib > limit) problems.push(`${key} chunk ${file} is ${kib} KiB, over the ${limit} KiB budget`);
+    }
+  }
   return problems;
+}
+
+/** Sizes of the budgeted chunks, for the success line. */
+export function budgetReport(manifest, readChunk) {
+  const parts = [];
+  for (const [key, chunk] of Object.entries(manifest)) {
+    if (!chunk?.isEntry && key !== MD_VIEWER && chunk?.src !== MD_VIEWER) continue;
+    const code = typeof chunk.file === "string" ? readChunk(chunk.file) : null;
+    if (code !== null) parts.push(`${chunk.isEntry ? "entry" : "md"} ${Math.ceil(Buffer.byteLength(code) / 1024)} KiB`);
+  }
+  return parts.join(", ");
 }
 
 // The exported-HTML runtime (build/runtime/va-runtime.js) runs from file:// in any browser.
@@ -86,7 +119,8 @@ function main() {
     const p = join(dist, f);
     return existsSync(p) ? readFileSync(p, "utf8") : null;
   };
-  const problems = checkManifest(JSON.parse(readFileSync(file, "utf8")), readChunk);
+  const manifest = JSON.parse(readFileSync(file, "utf8"));
+  const problems = checkManifest(manifest, readChunk);
   const runtime = join(root, "build", "runtime", "va-runtime.js");
   if (existsSync(runtime)) problems.push(...checkRuntime(readFileSync(runtime, "utf8")));
   else problems.push(`${runtime} not found; run \`npm run build\` (it builds the exported-HTML runtime first)`);
@@ -94,7 +128,7 @@ function main() {
     for (const p of problems) console.error(p);
     process.exit(1);
   }
-  console.log("bundle OK: entry and md viewer chunks do not statically import three/occt; the html runtime has no Tauri");
+  console.log(`bundle OK: no viewer chunk statically imports three/occt, entry and md stay within budget (${budgetReport(manifest, readChunk)}); the html runtime has no Tauri`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

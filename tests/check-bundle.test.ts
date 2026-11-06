@@ -108,6 +108,30 @@ test("a reached chunk file that is missing is reported", () => {
   expect(checkManifest(manifest(), () => null).join("\n")).toMatch(/missing/);
 });
 
+test("fails when the entry chunk is over its size budget", () => {
+  const big = "x".repeat(61 * 1024);
+  const problems = checkManifest(manifest(), (f: string) => (f === "assets/index-AAA.js" ? big : "export{}"));
+  expect(problems).toEqual([expect.stringContaining("over the 60 KiB budget")]);
+});
+
+test("fails when the md viewer chunk is over its size budget", () => {
+  const big = "x".repeat(801 * 1024);
+  const problems = checkManifest(manifest(), (f: string) => (f === "assets/viewer-CCC.js" ? big : "export{}"));
+  expect(problems).toEqual([expect.stringContaining("over the 800 KiB budget")]);
+});
+
+test("other viewers may reach pdfjs but not three", () => {
+  const m = manifest({
+    "src/pdf/viewer.ts": { file: "assets/pdf-III.js", src: "src/pdf/viewer.ts", isDynamicEntry: true, imports: ["_pdfjs-JJJ.js"] },
+    "_pdfjs-JJJ.js": { file: "assets/pdfjs-JJJ.js", name: "pdfjs" },
+    "src/image/viewer.ts": { file: "assets/image-KKK.js", src: "src/image/viewer.ts", isDynamicEntry: true, imports: ["_three.module-FFF.js"] },
+  });
+  const problems = checkManifest(m, () => "export{}");
+  expect(problems.some((p: string) => p.includes("src/image/viewer.ts") && p.includes("three"))).toBe(true);
+  expect(problems.some((p: string) => p.includes("src/pdf/viewer.ts"))).toBe(false);
+});
+
+
 const dirs: string[] = [];
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
