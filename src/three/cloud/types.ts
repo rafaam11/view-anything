@@ -28,3 +28,24 @@ export function decodeChunk(buffer: ArrayBuffer) {
   }
   return { positions, colors, pick, selected };
 }
+
+/**
+ * Decides when an upload loop gives the browser a frame. Waiting one frame per 25,000-point chunk
+ * cost 400 frames (at least 6.7 s) for ten million points; yielding by elapsed time keeps the UI
+ * responsive without that floor.
+ */
+export function createUploadPacer(now: () => number = () => performance.now(), budgetMs = 12): { shouldYield(): boolean; reset(): void } {
+  let since = now();
+  return {
+    shouldYield: () => now() - since >= budgetMs,
+    reset: () => { since = now(); },
+  };
+}
+
+/** One yield: the next animation frame, or a timer while the window is hidden (frames stop then). */
+export function nextFrame(hidden: () => boolean = () => document.hidden): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (hidden()) setTimeout(resolve, 0);
+    else requestAnimationFrame(() => resolve());
+  });
+}

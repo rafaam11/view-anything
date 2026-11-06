@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Box3, BufferAttribute, BufferGeometry, Group, Points, PointsMaterial, Vector3 } from "three";
 import { disposeObject, type BuiltFile } from "../core/build-objects";
-import { CLOUD_CHUNK, decodeChunk, type Action, type CloudDisplay, type CloudMeta } from "./types";
+import { CLOUD_CHUNK, createUploadPacer, decodeChunk, nextFrame, type Action, type CloudDisplay, type CloudMeta } from "./types";
 
 export class CloudClient {
   job: string | null = null;
@@ -53,6 +53,7 @@ export async function buildCloud(meta: CloudMeta, fileId: string, display: Cloud
     shader.fragmentShader = "varying float vSelected;\n" + shader.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\nif (vSelected > 0.5) diffuseColor.rgb = vec3(1.0, 0.65, 0.05);");
   };
   group.userData.vaCloud = true;
+  const pacer = createUploadPacer();
   try {
     for (let start = 0; start < meta.count; start += CLOUD_CHUNK) {
       signal?.throwIfAborted();
@@ -69,8 +70,8 @@ export async function buildCloud(meta: CloudMeta, fileId: string, display: Cloud
         const points = new Points(geometry, material); points.userData.vaPointSize = size;
         group.add(points); built.renderables.push(points);
       }
-      // Native IPC completion yields; force a frame between uploads/array decoding as well.
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      // Give the browser a frame once the time budget is used, not after every chunk.
+      if (pacer.shouldYield()) { await nextFrame(); pacer.reset(); }
     }
     signal?.throwIfAborted();
     if (!built.renderables.length) { material.dispose(); group.userData.vaEmptyBounds = new Box3(new Vector3(), new Vector3()); }

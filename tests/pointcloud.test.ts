@@ -1,5 +1,6 @@
-import { expect, test } from "vitest";
-import { decodeChunk, editedPath } from "../src/three/cloud/types";
+// @vitest-environment happy-dom
+import { expect, test, vi } from "vitest";
+import { createUploadPacer, decodeChunk, editedPath, nextFrame } from "../src/three/cloud/types";
 import { BufferAttribute, BufferGeometry, Group, Points, PointsMaterial } from "three";
 import { buildExportScene } from "../src/three/export/scene";
 
@@ -32,4 +33,24 @@ test("HTML points preserve point size but never leak picking/selection data", ()
   expect(Object.keys(p.geometry.attributes)).toEqual(["position"]);
   expect(p.geometry.getAttribute("position")).toBe(geometry.getAttribute("position"));
   out.dispose(); expect(geometry.getAttribute("vaPick")).toBeDefined();
+});
+
+test("the upload pacer yields only after its time budget", () => {
+  let t = 0;
+  const pacer = createUploadPacer(() => t, 12);
+  t = 5; expect(pacer.shouldYield()).toBe(false);
+  t = 12; expect(pacer.shouldYield()).toBe(true);
+  pacer.reset(); t = 20; expect(pacer.shouldYield()).toBe(false);
+});
+
+test("pacer yields through a timer while the document is hidden", async () => {
+  const raf = vi.fn(); vi.stubGlobal("requestAnimationFrame", raf);
+  try { await nextFrame(() => true); expect(raf).not.toHaveBeenCalled(); }
+  finally { vi.unstubAllGlobals(); }
+});
+
+test("a visible document yields to the next animation frame", async () => {
+  const raf = vi.fn((cb: FrameRequestCallback) => { cb(0); return 1; }); vi.stubGlobal("requestAnimationFrame", raf);
+  try { await nextFrame(() => false); expect(raf).toHaveBeenCalledTimes(1); }
+  finally { vi.unstubAllGlobals(); }
 });
