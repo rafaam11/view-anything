@@ -80,6 +80,7 @@ pub struct Meta {
     warning: Option<String>,
     has_rgb: bool,
     has_intensity: bool,
+    has_classification: bool,
 }
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -156,6 +157,7 @@ fn meta(id: &str, s: &Session) -> Meta {
             .iter()
             .any(|f| matches!(f.name.as_str(), "rgb" | "rgba" | "red" | "r")),
         has_intensity: s.cloud.fields.iter().any(|f| f.name == "intensity"),
+        has_classification: s.cloud.fields.iter().any(|f| f.name == "classification"),
     }
 }
 impl Clouds {
@@ -803,6 +805,55 @@ pub struct Display {
     pub height: [f64; 4],
     pub range: [f64; 2],
 }
+/// ASPRS LAS classification colours for codes 0-18; anything else is light grey. The legend in
+/// `src/three/cloud/classes.ts` lists the same values (a test compares the two).
+pub fn classification_color(code: u8) -> [u8; 3] {
+    match code {
+        0 => [128, 128, 128],
+        1 => [180, 180, 180],
+        2 => [139, 90, 43],
+        3 => [152, 251, 152],
+        4 => [60, 179, 113],
+        5 => [34, 139, 34],
+        6 => [205, 92, 92],
+        7 => [255, 0, 255],
+        8 => [255, 215, 0],
+        9 => [30, 144, 255],
+        10 => [160, 82, 45],
+        11 => [105, 105, 105],
+        12 => [255, 255, 0],
+        13 => [255, 160, 122],
+        14 => [255, 69, 0],
+        15 => [138, 43, 226],
+        16 => [255, 105, 180],
+        17 => [210, 105, 30],
+        18 => [255, 0, 0],
+        _ => [200, 200, 200],
+    }
+}
+/// The display colour of one source point; a mode whose field is missing falls back to the solid colour.
+fn point_color(c: &Cloud, id: u32, p: [f64; 3], display: &Display) -> [u8; 3] {
+    match display.mode.as_str() {
+        "rgb" => c.rgb(id).unwrap_or(display.color),
+        "classification" => c
+            .value(id, "classification")
+            .map(|v| classification_color(v.clamp(0., 255.) as u8))
+            .unwrap_or(display.color),
+        "height" | "intensity" => {
+            let v = if display.mode == "height" {
+                (0..3).map(|a| p[a] * display.height[a]).sum::<f64>() + display.height[3]
+            } else {
+                c.value(id, "intensity").unwrap_or(f64::NAN)
+            };
+            if v.is_finite() {
+                gradient((v - display.range[0]) / (display.range[1] - display.range[0]).max(f64::EPSILON))
+            } else {
+                [128, 128, 128]
+            }
+        }
+        _ => display.color,
+    }
+}
 fn gradient(t: f64) -> [u8; 3] {
     let t = t.clamp(0., 1.);
     [
@@ -851,26 +902,7 @@ pub async fn cloud_chunk(
                 }
                 out.extend(v.to_le_bytes());
             }
-            let rgb = match display.mode.as_str() {
-                "rgb" => c.rgb(id).unwrap_or(display.color),
-                "height" | "intensity" => {
-                    let v = if display.mode == "height" {
-                        (0..3).map(|a| p[a] * display.height[a]).sum::<f64>() + display.height[3]
-                    } else {
-                        c.value(id, "intensity").unwrap_or(f64::NAN)
-                    };
-                    if v.is_finite() {
-                        gradient(
-                            (v - display.range[0])
-                                / (display.range[1] - display.range[0]).max(f64::EPSILON),
-                        )
-                    } else {
-                        [128, 128, 128]
-                    }
-                }
-                _ => display.color,
-            };
-            out.extend(rgb);
+            out.extend(point_color(&c, id, p, &display));
             out.push(u8::from(selection.binary_search(&id).is_ok()));
             out.extend(id.to_le_bytes());
         }
@@ -896,6 +928,34 @@ pub async fn cloud_point(
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// One point at the origin, with a classification field when `class` is given.
+    fn classified(class: Option<u8>) -> Cloud {
+        let pcd = match class {
+            Some(c) => format!(
+                "VERSION .7\nFIELDS x y z classification\nSIZE 4 4 4 1\nTYPE F F F U\nCOUNT 1 1 1 1\nWIDTH 1\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 1\nDATA ascii\n0 0 0 {c}\n"
+            ),
+            None => "VERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\nWIDTH 1\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 1\nDATA ascii\n0 0 0\n".into(),
+        };
+        match codec::read(std::io::Cursor::new(pcd.into_bytes()), "pcd", &mut |_, _| Ok(())).unwrap() {
+            Parsed::Cloud(c) => c,
+            Parsed::Mesh => unreachable!(),
+        }
+    }
+    fn classification_display() -> Display {
+        Display { mode: "classification".into(), color: [1, 2, 3], height: [0.; 4], range: [0., 1.] }
+    }
+    #[test]
+    fn classification_mode_colors_by_palette() {
+        assert_eq!(classification_color(2), [139, 90, 43]);
+        assert_eq!(classification_color(200), [200, 200, 200]);
+        let c = classified(Some(6));
+        assert_eq!(point_color(&c, 0, c.positions[0], &classification_display()), [205, 92, 92]);
+    }
+    #[test]
+    fn classification_mode_falls_back_to_solid_without_the_field() {
+        let c = classified(None);
+        assert_eq!(point_color(&c, 0, c.positions[0], &classification_display()), [1, 2, 3]);
+    }
     #[test]
     fn registration_uses_scene_transform_and_rejects_projective_matrices() {
         let s = session();

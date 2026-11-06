@@ -18,3 +18,7 @@
 .va-cloud small { display:block; }
 .va-cloud-polygon { position:absolute; inset:0; width:100%; height:100%; z-index:6; cursor:crosshair; background:#ffa00008; }
 .va-cloud-polygon polyline { stroke:#ffad24; stroke-width:2; fill:#ffad2430; }
+.va-cloud-legend { list-style:none; margin:4px 0; padding:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:2px 6px; }
+.va-cloud-legend[hidden] { display:none; }
+.va-cloud-legend li { display:flex; align-items:center; gap:5px; min-width:0; overflow-wrap:anywhere; }
+.va-cloud-legend span { flex:0 0 auto; width:12px; height:12px; border-radius:2px; border:1px solid var(--border); }

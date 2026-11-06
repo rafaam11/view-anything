@@ -2,7 +2,7 @@ export interface CloudMeta {
   id: string; revision: number; count: number; originalCount: number; invalid: number; selected: number;
   origin: [number, number, number]; bounds: [number, number, number, number, number, number];
   dirty: boolean; preview: boolean; canUndo: boolean; canRedo: boolean; editable: boolean;
-  warning: string | null; hasRgb: boolean; hasIntensity: boolean;
+  warning: string | null; hasRgb: boolean; hasIntensity: boolean; hasClassification: boolean;
 }
 export type Region = { type: "box"; min: number[]; max: number[] } | { type: "polygon"; vertices: number[][] };
 export type Operation = { type: "voxel"; size: number } | { type: "sor"; k: number; sigma: number }
@@ -11,7 +11,7 @@ export type Operation = { type: "voxel"; size: number } | { type: "sor"; k: numb
 export type Action = { type: "open"; path: string } | { type: "filter"; operation: Operation }
   | { type: "crop"; keep: boolean } | { type: "apply" | "discardPreview" | "undo" | "redo" | "clearSelection" }
   | { type: "save"; path: string; overwrite: boolean; matrix?: number[] };
-export interface CloudDisplay { mode: "rgb" | "solid" | "height" | "intensity"; color: [number, number, number]; height: number[]; range: [number, number] }
+export interface CloudDisplay { mode: "rgb" | "solid" | "height" | "intensity" | "classification"; color: [number, number, number]; height: number[]; range: [number, number] }
 export const CLOUD_CHUNK = 25_000;
 export function editedPath(path: string): string { return path.replace(/\.(pcd|ply|las|laz)$/i, "_edited.$1"); }
 

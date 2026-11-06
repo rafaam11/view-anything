@@ -10,6 +10,7 @@ import { disposeObject, type BuiltFile } from "../core/build-objects";
 import { CloudClient, buildCloud } from "./client";
 import { editedPath, type Action, type CloudDisplay, type CloudMeta, type Operation, type Region } from "./types";
 import { pickCloud } from "./pick";
+import { CLASSES } from "./classes";
 
 type History = { kind: "filter" } | { kind: "alignment"; before: Matrix4; after: Matrix4 };
 interface Entry { meta: CloudMeta; path: string; display: CloudDisplay; size: number; alignment: Matrix4; savedAlignment: Matrix4; undo: History[]; redo: History[]; stale?: boolean }
@@ -30,6 +31,7 @@ export class CloudController {
   private readonly summary = el("p");
   private readonly choice = el("select");
   private readonly color = el("select");
+  private readonly legend = el("ul");
   private readonly size = el("input");
   private readonly rangeMin = el("input");
   private readonly rangeMax = el("input");
@@ -72,8 +74,12 @@ export class CloudController {
     this.status.setAttribute("role", "status");
     const cancel = this.button("작업 취소", () => this.cancel()); cancel.dataset.cancel = "true"; this.body.before(cancel);
     this.retry = this.button("화면 다시 표시", () => void this.retryDisplay()); this.retry.hidden = true; this.body.before(this.retry);
-    for (const [value, text] of [["rgb", "원본 RGB"], ["solid", "단색"], ["height", "높이"], ["intensity", "Intensity"]]) { const o = el("option", text); o.value = value; this.color.append(o); }
+    for (const [value, text] of [["rgb", "원본 RGB"], ["solid", "단색"], ["height", "높이"], ["intensity", "Intensity"], ["classification", "분류"]]) { const o = el("option", text); o.value = value; this.color.append(o); }
     this.label("색상", this.color); this.color.onchange = () => void this.changeDisplay();
+    // Class names and colours come from the app's own table; file-derived text never reaches this list.
+    this.legend.className = "va-cloud-legend"; this.legend.hidden = true; this.legend.setAttribute("aria-label", "분류 범례");
+    for (const c of CLASSES) { const item = el("li"), chip = el("span"); chip.style.background = `rgb(${c.rgb.join(",")})`; item.append(chip, `${c.code} ${c.name}`); this.legend.append(item); }
+    this.body.append(this.legend);
     this.size.type = "range"; this.size.min = "1"; this.size.max = "10"; this.size.value = "2"; this.label("점 크기 (px)", this.size);
     this.size.oninput = () => { const e = this.entry(); if (!e || !this.selected) return; e.size = Number(this.size.value); this.host.built(this.selected)?.group.traverse((o) => { const material = (o as Mesh).material as PointsMaterial; if (material?.isPointsMaterial) { material.size = e.size; o.userData.vaPointSize = e.size; } }); this.host.stage.requestRender(); };
     for (const input of [this.rangeMin, this.rangeMax]) { input.type = "number"; input.step = "any"; }
@@ -176,7 +182,8 @@ export class CloudController {
     const e = this.entry(); if (!e) return;
     this.registrationButton.disabled ||= !e.meta.editable || e.meta.preview;
     this.color.value = e.display.mode; this.size.value = String(e.size); this.rangeMin.value = String(e.display.range[0]); this.rangeMax.value = String(e.display.range[1]);
-    for (const o of this.color.options) o.disabled = (o.value === "rgb" && !e.meta.hasRgb) || (o.value === "intensity" && !e.meta.hasIntensity);
+    for (const o of this.color.options) o.disabled = (o.value === "rgb" && !e.meta.hasRgb) || (o.value === "intensity" && !e.meta.hasIntensity) || (o.value === "classification" && !e.meta.hasClassification);
+    this.legend.hidden = e.display.mode !== "classification";
     this.summary.textContent = `${(e.meta.count - e.meta.invalid).toLocaleString()}점 · 선택 ${e.meta.selected.toLocaleString()} · ${e.meta.preview || this.registrationPreview ? "미리보기" : e.meta.dirty || !e.alignment.equals(e.savedAlignment) ? "미저장 작업본" : "저장됨"}`;
     this.editBody.disabled = !e.meta.editable || !!this.registrationPreview; this.undoButton.disabled = !e.undo.length || e.meta.preview; this.redoButton.disabled = !e.redo.length || e.meta.preview;
     this.applyButton.disabled = this.rejectButton.disabled = !e.meta.preview; this.saveButton.disabled = e.meta.preview;

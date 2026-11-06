@@ -13,7 +13,7 @@ vi.mock("../src/platform", () => ({ platform: {
 } }));
 import { CloudController } from "../src/three/cloud/controller";
 import { updateDirty, approveUpdateUnload } from "../src/update/guard";
-const meta: CloudMeta = { id: "c0", revision: 0, count: 2, originalCount: 2, invalid: 0, selected: 0, origin: [0,0,0], bounds: [0,0,0,1,1,1], dirty: false, preview: false, canUndo: false, canRedo: false, editable: true, warning: null, hasRgb: true, hasIntensity: true };
+const meta: CloudMeta = { id: "c0", revision: 0, count: 2, originalCount: 2, invalid: 0, selected: 0, origin: [0,0,0], bounds: [0,0,0,1,1,1], dirty: false, preview: false, canUndo: false, canRedo: false, editable: true, warning: null, hasRgb: true, hasIntensity: true, hasClassification: false };
 function host(): CloudHost { return {
   stage: { canvas: document.createElement("canvas"), controls: { enabled: true }, camera: new PerspectiveCamera(), displayToWorld: new Matrix4(), requestRender: vi.fn(), onCameraChange: vi.fn() } as unknown as CloudHost["stage"],
   tools: { clipper: { planes: [] } } as unknown as CloudHost["tools"],
@@ -113,4 +113,21 @@ test("frame changes recompute height mapping from the source-to-world transform"
   c.entries.get("f1")!.display.mode = "height";
   await c.framesChanged("f1"); expect(c.entries.get("f1")!.display.height).toEqual([0, 3, 0, 0]);
   expect(c.entries.get("f1")!.display.range).toEqual([0, 3]); expect(h.replace).toHaveBeenCalledTimes(1);
+});
+
+test("the classification colour mode follows the field and shows a legend", async () => {
+  const { c } = await setup();
+  const option = [...c.root.querySelectorAll<HTMLOptionElement>("option")].find((o) => o.value === "classification")!;
+  expect(option.disabled).toBe(true);
+  mocks.request.mockResolvedValueOnce({ ...meta, id: "c1", hasClassification: true });
+  await c.open("f2", "b.las", new AbortController().signal);
+  expect(option.disabled).toBe(false);
+  const legend = c.root.querySelector<HTMLElement>(".va-cloud-legend")!;
+  expect(legend.hidden).toBe(true);
+  const color = option.parentElement as HTMLSelectElement;
+  color.value = "classification"; color.dispatchEvent(new Event("change"));
+  await vi.waitFor(() => expect(mocks.build).toHaveBeenLastCalledWith(expect.anything(), "f2", expect.objectContaining({ mode: "classification" }), expect.anything(), expect.anything()));
+  await vi.waitFor(() => expect(legend.hidden).toBe(false));
+  expect(legend.querySelectorAll("li")).toHaveLength(19);
+  expect(legend.querySelector("li")!.textContent).toBe("0 미분류");
 });
