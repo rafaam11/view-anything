@@ -119,8 +119,11 @@ if (!view3d) {
   const bar = document.createElement("header"); bar.className = "text-bar va-viewer-toolbar";
   bar.append(button("편집")); text.append(bar);
   const empty = document.createElement("div"); empty.className = "empty";
-  const p = document.createElement("p"); p.textContent = "파일을 끌어다 놓거나 Ctrl+O";
-  empty.append(p, button("텍스트로 열기… (Ctrl+Shift+O)"));
+  // Same structure as main.ts.
+  const p = document.createElement("p"); p.className = "empty-title"; p.textContent = "파일을 끌어다 놓거나 여세요";
+  const acts = document.createElement("div"); acts.className = "empty-actions";
+  acts.append(button("열기…", { variant: "primary" }), button("텍스트로 열기…"));
+  empty.append(p, acts);
   section("텍스트 뷰어 도구줄 · 빈 창", text, empty);
 }
 

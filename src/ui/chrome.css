@@ -14,13 +14,14 @@
 .va-viewer .va-viewer-toolbar .va3d-menu-item { justify-content:flex-start; }
 .va-viewer .pdf-outline { border-color:var(--border); }
 @media(max-width:600px) { .va-viewer-toolbar { padding-inline:6px; } }
-.empty .va-btn { margin-top:4px; }
 /* 최근 파일: the file-menu section and the empty window list. */
 .va-recent { display:grid; gap:0; min-width:0; }
 .va-recent .va3d-menu-item { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+/* In the file menu too: a flex row cannot cut its text with an ellipsis, and long names must not widen the menu. */
+.va3d-menubar .va-recent .va3d-menu-item { display:block; max-width:360px; }
 .va-recent .va-recent-clear { color:var(--muted); }
 .va-recent-none { margin:4px 10px; color:var(--muted); font-size:var(--font-size-small); }
-.empty .va-recent { margin-top:1rem; width:min(360px, 80vw); }
+.empty .va-recent { margin-top:16px; width:min(360px, 80vw); text-align:left; }
 .empty .va-recent .va3d-menu-item { display:block; width:100%; padding:6px 10px; border:0; border-radius:var(--radius-sm); color:var(--fg); background:transparent; font:inherit; font-size:var(--font-size-ui); }
 .empty .va-recent .va3d-menu-item:hover { background:var(--fill-subtle-hover); }
 .empty .va-recent .va3d-menu-item:active { background:var(--fill-subtle-active); }

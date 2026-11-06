@@ -212,7 +212,13 @@ test("a viewer that fails to mount offers opening the file as text", async () =>
   mdViewer.mount.mockRejectedValueOnce(new Error("CSV 셀이 100,000개를 초과합니다."));
   await start(MD);
   expect(document.body.textContent).toContain("초과");
-  const button = [...document.querySelectorAll("button")].find((b) => b.textContent === "텍스트로 열기")!;
+  // An error screen: announced, titled, with the reason as text.
+  const screen = document.querySelector<HTMLElement>(".empty")!;
+  expect(screen.getAttribute("role")).toBe("alert");
+  expect(screen.querySelector(".empty-title")!.textContent).toBe("파일을 열 수 없습니다");
+  expect(screen.querySelector(".hint")!.textContent).toBe("CSV 셀이 100,000개를 초과합니다.");
+  const button = [...document.querySelectorAll("button")].find((b) => b.textContent === "이 파일을 텍스트로 열기")!;
+  expect(button.className).toBe("va-btn");
   button.click();
   expect(new URLSearchParams(location.search).get("text")).toBe("1");
   expect(fileParam()).toBe(MD);
@@ -235,6 +241,23 @@ test("global shortcuts do not reach later window listeners", async () => {
   f11();
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "T", ctrlKey: true, shiftKey: true }));
   expect(later).not.toHaveBeenCalled();
+});
+
+test("an empty window says what to do and offers both ways to open", async () => {
+  await start(null);
+  const screen = document.querySelector<HTMLElement>(".empty")!;
+  expect(screen.getAttribute("role")).toBeNull();
+  expect(screen.querySelector(".empty-title")!.textContent).toBe("파일을 끌어다 놓거나 여세요");
+  const actions = [...screen.querySelectorAll<HTMLButtonElement>(".empty-actions button")];
+  expect(actions.map((b) => [b.textContent, b.className, b.getAttribute("aria-keyshortcuts")])).toEqual([["열기…", "va-btn va-btn-primary", "Ctrl+O"], ["텍스트로 열기…", "va-btn", "Ctrl+Shift+O"]]);
+  platform.pickFiles.mockResolvedValueOnce([]);
+  actions[0].click();
+  await settle();
+  expect(platform.pickFiles).toHaveBeenLastCalledWith({ only3d: false, text: false });
+  platform.pickFiles.mockResolvedValueOnce([]);
+  actions[1].click();
+  await settle();
+  expect(platform.pickFiles).toHaveBeenLastCalledWith({ only3d: false, text: true });
 });
 
 test("an empty window lists recent files and opens one through the drop routing", async () => {

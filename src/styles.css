@@ -13,14 +13,22 @@ body {
   overflow: auto;
   scroll-padding-top: 48px; /* Markdown toolbar + breathing room for anchor links. */
 }
+/* Empty window and the could-not-open screens (main.ts). */
 .empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   height: 100%;
+  box-sizing: border-box;
+  padding: 0 2rem;
   color: var(--muted);
-  font-size: 1.1rem;
+  font-size: var(--font-size-ui);
+  text-align: center;
 }
-.empty .hint { font-size: 0.85rem; word-break: break-all; padding: 0 2rem; }
+.empty p { margin: 0; }
+.empty .empty-title { color: var(--fg); font-size: var(--font-size-title); font-weight: 600; }
+.empty .hint { max-width: 640px; word-break: break-all; }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
 pre { white-space: pre-wrap; padding: 1rem; margin: 0; }

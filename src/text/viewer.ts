@@ -59,7 +59,7 @@ const viewer: Viewer = {
       if (live && text.length > LIVE_HIGHLIGHT_CHARS) { plain(); return; }
       if (!withinHighlightLimit(text)) {
         plain();
-        if (!status.textContent) status.textContent = "구문 강조는 1 MiB·2만 줄까지 적용합니다";
+        if (!status.textContent) status.textContent = "구문 강조는 100만 자·2만 줄까지 적용합니다";
         return;
       }
       try {

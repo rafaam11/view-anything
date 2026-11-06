@@ -36,10 +36,13 @@ function kindOf(path: string): WindowKind {
   return isThreeD(path) ? "3d" : "md";
 }
 
-function message(title: string, hint?: string) {
+/** A whole-window message; `alert` announces it (a file that failed to open). */
+function message(title: string, hint?: string, alert = false): HTMLElement {
   const box = document.createElement("div");
   box.className = "empty";
+  if (alert) box.setAttribute("role", "alert");
   const h = document.createElement("p");
+  h.className = "empty-title";
   h.textContent = title;
   box.append(h);
   if (hint) {
@@ -49,16 +52,25 @@ function message(title: string, hint?: string) {
     box.append(s);
   }
   app.replaceChildren(box);
+  return box;
+}
+
+function actions(...buttons: HTMLButtonElement[]): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "empty-actions";
+  row.append(...buttons);
+  return row;
 }
 
 async function show() {
   const textMode = new URLSearchParams(location.search).get("text") === "1";
   configureSettings(file, textMode);
   if (!file) {
-    message("파일을 끌어다 놓거나 Ctrl+O");
-    const text = textButton("텍스트로 열기… (Ctrl+Shift+O)");
-    text.onclick = () => { void pickAndOpen(false, true); }; app.querySelector(".empty")!.append(text);
-    app.querySelector(".empty")!.append(recentList());
+    const open = textButton("열기…", "primary", { shortcut: "Ctrl+O" });
+    open.onclick = () => { void pickAndOpen(); };
+    const text = textButton("텍스트로 열기…", "secondary", { shortcut: "Ctrl+Shift+O" });
+    text.onclick = () => { void pickAndOpen(false, true); };
+    message("파일을 끌어다 놓거나 여세요").append(actions(open, text), recentList());
     return;
   }
   // The OS title follows the file even when it cannot be shown (the viewer keeps it updated after).
@@ -66,9 +78,9 @@ async function show() {
   const load = textMode ? () => import("./text/viewer").then(m => m.default) : resolveViewer(file);
   /** Any file can still be looked at as text; the unsupported and the failed screens both offer it. */
   const textFallback = (path: string) => {
-    const text = textButton("텍스트로 열기");
+    const text = textButton("이 파일을 텍스트로 열기");
     text.onclick = () => { location.search = "?file=" + encodeURIComponent(path) + "&text=1"; };
-    app.querySelector(".empty")!.append(text);
+    app.querySelector(".empty")!.append(actions(text));
   };
   if (!load) {
     message("지원하지 않는 형식", file);
@@ -81,7 +93,7 @@ async function show() {
     viewer = v;
     addRecent(file);
   } catch (e) {
-    message("파일을 열 수 없습니다", errorMessage(e));
+    message("파일을 열 수 없습니다", errorMessage(e), true);
     if (!textMode) textFallback(file);
   }
 }
