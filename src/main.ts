@@ -161,10 +161,16 @@ async function appendPaths(paths: string[]) {
   openWindows(viewer?.accept?.(paths, { newWindow: false }) ?? paths);
 }
 
-/** 최근 파일 (empty window or a file menu): a file that is gone leaves the list with a notice. */
+/**
+ * 최근 파일 (empty window or a file menu): a file that is gone leaves the list with a notice.
+ * One pick at a time, until this window has mounted what it took: a double click in an empty
+ * window would otherwise mount a 3D file and then append the same file to it.
+ */
+let openingRecent = false;
 window.addEventListener(OPEN_PATH_EVENT, (e) => {
   const path = (e as CustomEvent<OpenPathDetail>).detail?.path;
-  if (!path || updateInputLocked()) return;
+  if (!path || updateInputLocked() || openingRecent) return;
+  openingRecent = true;
   void (async () => {
     if (!(await platform.pathExists(path).catch(() => false))) {
       removeRecent(path);
@@ -172,7 +178,10 @@ window.addEventListener(OPEN_PATH_EVENT, (e) => {
       return;
     }
     await openPaths([path], false);
-  })().catch((err) => platform.alert(String(err)).catch(() => {}));
+    await ready;
+  })()
+    .catch((err) => platform.alert(String(err)).catch(() => {}))
+    .finally(() => { openingRecent = false; });
 });
 
 window.addEventListener(OPEN_EVENT, (e) => {

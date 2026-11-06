@@ -277,3 +277,14 @@ test("a recent file picked from a menu in a file window follows the drop rules",
   expect(opened()).toEqual([MD2]);
   expect(fileParam()).toBe(MD);
 });
+
+test("a double click on a recent 3D file in an empty window loads it once", async () => {
+  localStorage.setItem("va.recent.v1", JSON.stringify([A]));
+  await start(null);
+  const first = document.querySelector<HTMLButtonElement>(".va-recent button")!;
+  first.click();
+  first.click();
+  await settle();
+  expect(threeViewer.mount).toHaveBeenCalledTimes(1);
+  expect(threeViewer.accept).not.toHaveBeenCalled();
+});
