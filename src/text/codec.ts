@@ -14,15 +14,27 @@ export function validateText(text: string): void {
   if (/[\x00-\x08\x0b\x0e-\x1a\x1c-\x1f\x7f]/.test(text)) throw new TextDecodeError("바이너리 또는 지원하지 않는 텍스트입니다.", "binary");
 }
 
-function decodeUtf(bytes: Uint8Array): DataText {
+/** UTF-8/UTF-16 decode whose failure is a `TextDecodeError`, for viewers without a CP949 option. */
+export function decodeUtfText(bytes: Uint8Array): DataText {
   try { return decodeDataText(bytes); }
   catch { throw new TextDecodeError("UTF-8/UTF-16으로 읽을 수 없습니다.", "encoding"); }
 }
 
 export async function decodeText(bytes: Uint8Array, cp949: boolean): Promise<TextMeta> {
-  const meta: TextMeta = cp949 ? { text: await platform.decodeCp949(bytes), encoding: "cp949", bom: false } : decodeUtf(bytes);
+  const meta: TextMeta = cp949 ? { text: await platform.decodeCp949(bytes), encoding: "cp949", bom: false } : decodeUtfText(bytes);
   validateText(meta.text);
   return meta;
+}
+
+/** Encode text whose line endings are already final (CSV splices keep the original ones). */
+export async function encodeRaw(meta: TextMeta, text: string): Promise<Uint8Array> {
+  return meta.encoding === "cp949" ? platform.encodeCp949(text) : encodeDataText({ ...meta, text });
+}
+
+/** What to tell the reader: the CP949 setting solves `encoding` failures, nothing solves `binary`. */
+export function decodeHint(e: unknown): string {
+  if (!(e instanceof TextDecodeError)) return String(e);
+  return e.kind === "encoding" ? `${e.message} 설정(Ctrl+,) > 문자 인코딩에서 CP949를 선택하세요.` : e.message;
 }
 
 export function lineEndings(text: string): { mixed: boolean; ending: string } {

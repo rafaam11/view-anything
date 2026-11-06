@@ -3,7 +3,8 @@ import { parse as parseYaml } from "yaml";
 import { platform } from "../platform";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
-import { decodeDataText, encodeDataText } from "./text";
+import { encodeDataText, type DataText } from "./text";
+import { decodeHint, decodeUtfText } from "../text/codec";
 import { FileDocument } from "./document";
 import { restoreLineEndings } from "./line-endings";
 import { saveCopy } from "./save-copy";
@@ -49,7 +50,7 @@ const viewer: Viewer = {
     const read = async () => new Uint8Array(await platform.readFileRaw(path));
     const doc = new FileDocument({ read, write: (bytes, expected) => platform.writeFileChecked(path, expected, bytes) }, await read());
     const yaml = /\.ya?ml$/i.test(path), name = path.split(/[\\/]/).pop() ?? path;
-    let meta = decodeDataText(doc.bytes), editing = false, invalid = false, approved = false, busy = false;
+    let meta: DataText = { text: "", encoding: "utf8", bom: false }, editing = false, invalid = false, approved = false, busy = false;
     const root = document.createElement("div"); root.className = "data-root va-viewer";
     const bar = document.createElement("header"); bar.className = "data-bar";
     const title = document.createElement("strong"); title.textContent = name;
@@ -66,7 +67,15 @@ const viewer: Viewer = {
     const dirty = () => doc.dirty || invalid;
     const refresh = () => { title.textContent = (dirty() ? "● " : "") + name; void platform.setWindowTitle(title.textContent).catch(() => {}); };
     const render = () => {
-      meta = decodeDataText(doc.bytes); editor.value = meta.text; invalid = false;
+      invalid = false;
+      try { meta = decodeUtfText(doc.bytes); }
+      catch (error) {
+        // Stay open and read-only: the hint names the way to look inside (JSON/YAML have no CP949 option).
+        editor.value = ""; body.replaceChildren(); toggle.disabled = true;
+        status.textContent = `${decodeHint(error)} 텍스트로 열기(Ctrl+Shift+O)로 내용을 확인할 수 있습니다.`;
+        refresh(); return;
+      }
+      toggle.disabled = false; editor.value = meta.text;
       try { body.replaceChildren(tree(parse(meta.text, yaml))); status.textContent = ""; }
       catch (error) { body.replaceChildren(); status.textContent = "구문 오류: " + String(error); }
       refresh();

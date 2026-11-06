@@ -3,7 +3,8 @@ import { platform } from "../platform";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
 import { parseCsv, updateCsv, type CsvCell, type CsvRows } from "./csv";
-import { decodeDataText, encodeDataText } from "./text";
+import { decodeHint, decodeText, encodeRaw, type TextMeta } from "../text/codec";
+import { registerTextSettings } from "../settings/document";
 import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
@@ -37,15 +38,18 @@ const viewer: Viewer = {
     const nextColumns = document.createElement("button"); nextColumns.textContent = "다음 열";
     const columnLabel = document.createElement("span"); pages.append(previous, pageLabel, next, previousColumns, columnLabel, nextColumns);
     status.className = "va-status"; root.append(bar, status, pages, body); el.replaceChildren(root);
-    let editing = false, approved = false, busy = false, invalid = false;
-    let source = "", meta = decodeDataText(doc.bytes), changes = new Map<CsvCell, string>();
+    let editing = false, approved = false, busy = false, invalid = false, cp949 = false, decodeFailed = false;
+    let source = "", meta: TextMeta | null = null, changes = new Map<CsvCell, string>();
     let rows: CsvRows = [], page = 0, columnPage = 0, columnCount = 0, editRevision = 0;
     const dirty = () => doc.dirty || changes.size > 0 || invalid;
     const refresh = () => {
       title.textContent = (dirty() ? "● " : "") + name;
       void platform.setWindowTitle(title.textContent).catch(() => {});
     };
-    const editBytes = () => encodeDataText({ ...meta, text: updateCsv(source, ",", [...changes].map(([cell, value]) => ({ cell, value }))) });
+    const editBytes = async () => {
+      if (!meta) throw new Error("읽을 수 없는 파일은 저장할 수 없습니다.");
+      return encodeRaw(meta, updateCsv(source, ",", [...changes].map(([cell, value]) => ({ cell, value }))));
+    };
     const showPage = () => {
       const table = document.createElement("table"); table.className = "data-table";
       for (const row of rows.slice(page * PAGE_ROWS, (page + 1) * PAGE_ROWS)) {
@@ -74,9 +78,18 @@ const viewer: Viewer = {
       previousColumns.disabled = columnPage === 0; nextColumns.disabled = columnPage + 1 >= columns;
       pages.hidden = count === 1 && columns === 1;
     };
-    const render = () => {
-      meta = decodeDataText(doc.bytes); source = meta.text; changes = new Map(); invalid = false;
-      rows = parseCsv(source, ",", MAX_CELLS); page = columnPage = 0;
+    /** Decode with the chosen encoding; a file that cannot be read stays open, read-only, with a hint. */
+    const render = async () => {
+      changes = new Map(); invalid = false; page = columnPage = 0;
+      try { meta = await decodeText(doc.bytes, cp949); }
+      catch (e) {
+        meta = null; source = ""; rows = []; columnCount = 0; decodeFailed = true;
+        body.replaceChildren(); pages.hidden = true; edit.disabled = true; status.textContent = decodeHint(e); refresh();
+        return;
+      }
+      if (decodeFailed || !status.textContent) status.textContent = cp949 ? "CP949로 읽음" : "";
+      decodeFailed = false; edit.disabled = false;
+      source = meta.text; rows = parseCsv(source, ",", MAX_CELLS);
       columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0); showPage();
     };
     previous.onclick = () => { if (page > 0) { page--; showPage(); } };
@@ -96,7 +109,7 @@ const viewer: Viewer = {
         if (editing && dirty()) { doc.reset(await read()); }
         else if (!editing) await doc.reload();
         editing = !editing; edit.textContent = editing ? "읽기" : "편집"; save.hidden = copy.hidden = !editing; reload.hidden = true;
-        render();
+        await render();
       } finally { busy = false; }
     })().catch(report); };
     const doSave = async () => {
@@ -104,13 +117,13 @@ const viewer: Viewer = {
       busy = true; save.disabled = true;
       try {
         const revision = editRevision;
-        doc.edit(editBytes());
+        doc.edit(await editBytes());
         const result = await doc.save();
         if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
         else if (result === "saved" || result === "unchanged") {
           status.textContent = "저장됨";
-          if (editRevision === revision) render();
-          else doc.edit(editBytes());
+          if (editRevision === revision) await render();
+          else doc.edit(await editBytes());
         }
         refresh();
       } catch (error) { reload.hidden = false; throw error; }
@@ -119,14 +132,14 @@ const viewer: Viewer = {
     save.onclick = () => { void doSave().catch(report); };
     copy.onclick = () => { void (async () => {
       if (!editing || busy || invalid) return; busy = true;
-      try { if (await saveCopy(path, editBytes())) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
+      try { if (await saveCopy(path, await editBytes())) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
       finally { busy = false; }
     })().catch(report); };
     reload.onclick = () => { void (async () => {
       if (!editing || busy) return; busy = true;
       try {
         if (dirty() && !await platform.confirmDiscard("편집 내용을 버리고 파일을 다시 읽을까요?")) return;
-        doc.reset(await read()); render(); reload.hidden = true;
+        doc.reset(await read()); await render(); reload.hidden = true;
       } finally { busy = false; }
     })().catch(report); };
     window.addEventListener("keydown", e => {
@@ -139,11 +152,20 @@ const viewer: Viewer = {
       const mouse = e as MouseEvent;
       if (editing && (mouse.button === 3 || mouse.button === 4)) mouse.preventDefault();
     }, true);
-    window.addEventListener("focus", () => { if (!editing && !busy) void doc.reload().then(changed => { if (changed) render(); }).catch(report); });
+    window.addEventListener("focus", () => { if (!editing && !busy) void doc.reload().then(async changed => { if (changed) await render(); }).catch(report); });
     window.addEventListener("beforeunload", e => { if (!approved && dirty()) e.preventDefault(); });
     registerUpdateGuard(dirty, value => { approved = value; });
+    registerTextSettings({
+      encoding: () => cp949 ? "cp949" : "utf",
+      changeEncoding: async (value) => {
+        if (busy) return;
+        if (editing && dirty() && !await confirmLeave()) return;
+        busy = true;
+        try { cp949 = value === "cp949"; doc.reset(await read()); await render(); } finally { busy = false; }
+      },
+    });
     await platform.onCloseRequested(confirmLeave);
-    render();
+    await render();
   },
 };
 export default viewer;

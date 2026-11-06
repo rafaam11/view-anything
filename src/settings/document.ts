@@ -15,6 +15,7 @@ export function configureSettings(path: string | null, explicitText = false): vo
   context = !path ? "empty" : explicitText || TEXT_EXTENSIONS.includes(ext) ? "text" : ["md", "markdown"].includes(ext) ? "markdown" : "other";
   text = null; window.dispatchEvent(new Event("va:settings-context"));
 }
+/** Any viewer with a per-file encoding choice (text, CSV) registers here; the display groups still follow the context. */
 export function registerTextSettings(settings: TextSettings): void {
-  text = settings; context = "text"; window.dispatchEvent(new Event("va:settings-context"));
+  text = settings; window.dispatchEvent(new Event("va:settings-context"));
 }

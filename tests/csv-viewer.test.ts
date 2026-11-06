@@ -2,9 +2,31 @@
 import { expect, test, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ disk: new Uint8Array(), copy: new Uint8Array(), close: async () => true, alerts: [] as string[] }));
+/** A tiny two-way CP949 table standing in for the Rust codec: ASCII passes through, four syllables are known. */
+const cp = vi.hoisted(() => {
+  const chars: Record<string, number[]> = { "이": [0xc0, 0xcc], "름": [0xb8, 0xa7], "값": [0xb0, 0xaa], "가": [0xb0, 0xa1], "나": [0xb3, 0xaa] };
+  const encode = (text: string) => Uint8Array.from([...text].flatMap((ch) => {
+    if (ch.charCodeAt(0) < 0x80) return [ch.charCodeAt(0)];
+    if (!chars[ch]) throw new Error("CP949로 저장할 수 없는 문자");
+    return chars[ch];
+  }));
+  const decode = (bytes: Uint8Array) => {
+    let out = "";
+    for (let i = 0; i < bytes.length;) {
+      if (bytes[i] < 0x80) { out += String.fromCharCode(bytes[i++]); continue; }
+      const ch = Object.keys(chars).find((k) => chars[k][0] === bytes[i] && chars[k][1] === bytes[i + 1]);
+      if (!ch) throw new Error("CP949 디코드 실패");
+      out += ch; i += 2;
+    }
+    return out;
+  };
+  return { encode, decode };
+});
 vi.mock("../src/platform", () => ({ platform: {
   fileSize: async () => state.disk.length,
   readFileRaw: async () => state.disk.slice().buffer,
+  decodeCp949: async (bytes: Uint8Array) => cp.decode(bytes),
+  encodeCp949: async (text: string) => cp.encode(text),
   writeFileChecked: async (_path: string, expected: Uint8Array, bytes: Uint8Array) => { if (String(state.disk) !== String(expected)) return false; state.disk = bytes.slice(); return true; },
   saveDialog: async () => "copy.csv", writeFileNew: async (_path: string, bytes: Uint8Array) => { state.copy = bytes.slice(); },
   setWindowTitle: async () => {},
@@ -14,6 +36,7 @@ vi.mock("../src/platform", () => ({ platform: {
 } }));
 vi.mock("../src/update/guard", () => ({ registerUpdateGuard: () => {} }));
 import viewer from "../src/data/csv-viewer";
+import { textSettings } from "../src/settings/document";
 
 const encode = (s: string) => new TextEncoder().encode(s);
 const controls = (root: HTMLElement) => ["편집", "저장", "다른 이름으로 저장", "다시 읽기", "이전 페이지", "다음 페이지", "이전 열", "다음 열"].map(label => [...root.querySelectorAll("button")].find(b => b.textContent === label)!);
@@ -68,4 +91,21 @@ test("very wide CSV rows are paged by column and keep changes across pages", asy
   expect(root.querySelectorAll("textarea")[0].value).toBe("v10");
   buttons[1].click(); await settle();
   expect(new TextDecoder().decode(state.disk).startsWith("changed,v1,")).toBe(true);
+});
+
+test("a CP949 CSV asks for the encoding setting, then opens and saves losslessly", async () => {
+  state.disk = cp.encode("이름,값\r\n가,1\n"); state.alerts = [];
+  const root = document.createElement("div");
+  await viewer.mount(root, "excel.csv");
+  expect(root.querySelector('[role="status"]')!.textContent).toContain("CP949");
+  expect(root.querySelector("table")).toBeNull();
+  expect(controls(root)[0].disabled).toBe(true);
+  await textSettings()!.changeEncoding("cp949"); await settle();
+  expect(root.querySelector("table")!.textContent).toContain("이름");
+  expect(controls(root)[0].disabled).toBe(false);
+  controls(root)[0].click(); await settle();
+  const cell = root.querySelectorAll("textarea")[2]; cell.value = "나"; cell.dispatchEvent(new Event("input"));
+  controls(root)[1].click(); await settle();
+  expect(state.disk).toEqual(cp.encode("이름,값\r\n나,1\n"));
+  expect(state.alerts).toEqual([]);
 });

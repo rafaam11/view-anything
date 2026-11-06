@@ -62,7 +62,7 @@ export function openSettings(): void {
   if (context === "markdown" || context === "empty") display("markdown");
   if (context === "text" || context === "empty") display("text");
   const documentOptions = textSettings();
-  if (documentOptions && context === "text") {
+  if (documentOptions) {
     const field = group("현재 파일"), encoding = select([["utf", "UTF 자동"], ["cp949", "한국어 CP949"]]);
     encoding.value = documentOptions.encoding(); label(field, "문자 인코딩", encoding);
     encoding.onchange = () => {

@@ -4,7 +4,7 @@ import { FileDocument } from "../data/document";
 import { saveCopy } from "../data/save-copy";
 import { registerUpdateGuard } from "../update/guard";
 import type { Viewer } from "../registry";
-import { decodeText, encodeText, normalize, lineEndings, TextDecodeError, type TextMeta } from "./codec";
+import { decodeHint, decodeText, encodeText, normalize, lineEndings, type TextMeta } from "./codec";
 import { Menubar } from "../three/core/menubar";
 import { registerTextSettings } from "../settings/document";
 import { preferences } from "../settings/preferences";
@@ -52,7 +52,7 @@ const viewer: Viewer = {
         const { mixed } = lineEndings(meta.text);
         if (mixed) { editing = false; edit.textContent = "편집"; }
         status.textContent = mixed ? "혼합 줄바꿈 · 읽기 전용" : "";
-      } catch (e) { editing = false; edit.textContent = "편집"; report(e instanceof TextDecodeError && e.kind === "encoding" ? `${e.message} 설정(Ctrl+,)의 문자 인코딩에서 CP949를 선택할 수 있습니다.` : String(e)); }
+      } catch (e) { editing = false; edit.textContent = "편집"; report(decodeHint(e)); }
       refresh();
     };
     const exclusive = async (run: () => Promise<void>) => {

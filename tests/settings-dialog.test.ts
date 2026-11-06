@@ -53,3 +53,7 @@ test("encoding cancellation/error restores the file selection and never persists
   configureSettings("model.stl");expect(document.querySelector("dialog[open]")).toBeNull();expect(textSettings()).toBeNull();
   openSettings();expect(legends()).toEqual(["일반"]);
 });
+test("a data viewer that registers an encoding gets the file group without text display options",()=>{
+  configureSettings("table.csv");registerTextSettings({encoding:()=>"utf",changeEncoding:async()=>{}});openSettings();
+  expect(legends()).toEqual(["일반","현재 파일"]);
+});

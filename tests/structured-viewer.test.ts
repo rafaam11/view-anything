@@ -36,3 +36,11 @@ test("YAML comments remain in the source when edited", async () => {
   input.value = "# comment\r\na: 2\r\n"; input.dispatchEvent(new Event("input")); buttons[1].click(); await settle();
   expect(state.disk).toEqual(encode("# comment\r\na: 2\r\n"));
 });
+
+test("undecodable JSON shows a hint instead of a raw error", async () => {
+  state.disk = new Uint8Array([0xc7, 0xd1]);
+  const root = document.createElement("div"); await viewer.mount(root, "broken.json");
+  expect(root.querySelector('[role="status"]')!.textContent).toContain("읽을 수 없습니다");
+  expect(root.textContent).not.toContain("TypeError");
+  expect(controls(root)[0].disabled).toBe(true);
+});
