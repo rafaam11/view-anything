@@ -60,8 +60,9 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - `render(true)`는 새 DOM을 화면 밖에서 완성(Mermaid, 이미지 최대 1.5초)한 뒤 교체하고, 준비 중 사용자가 옮긴 위치로 스크롤을 복원한다. 최초 표시와 읽기 복귀는 시작 속도를 위해 바로 그린다.
 
 ## 이미지·데이터
+- 최근 파일은 `src/recent.ts`(localStorage `va.recent.v1`, 20개)와 `src/ui/recent-menu.ts`가 빈 창과 파일 메뉴에 표시하고, 열기는 `va:open-path` 이벤트로 main.ts의 드롭 라우팅을 탄다.
 - 공통 뷰어 메뉴·도구줄은 `src/ui/chrome.ts`/`chrome.css`, 아이콘은 `src/ui/icons.ts`를 쓴다. 앱과 HTML의 메뉴는 `src/ui/menu.css`를 공유하며 Tauri를 참조하지 않는다. 파일명은 제목줄에만 표시하고 저장은 파일 메뉴, 검색·자르기·썸네일은 요청 시 표시한다.
-- `src/text/`는 10 MiB까지 일반 텍스트·코드를 읽고 안전 편집한다. UTF 원문/BOM/줄바꿈을 보존하며 혼합 줄바꿈은 읽기 전용이다. CP949는 명시적으로 선택하고 Rust `text_codec.rs`의 무손실 변환을 쓴다. `Ctrl+Shift+O`는 확장자와 무관한 명시적 텍스트 열기다.
+- `src/text/`는 10 MiB까지 일반 텍스트·코드를 읽고 안전 편집한다. UTF 원문/BOM/줄바꿈을 보존하며 혼합 줄바꿈은 읽기 전용이다. CP949는 명시적으로 선택하고 Rust `text_codec.rs`의 무손실 변환을 쓴다. `Ctrl+Shift+O`와 명령줄 `--text`는 확장자와 무관한 명시적 텍스트 열기다. 코드 확장자는 `highlight.ts`가 highlight.js core·언어를 지연 import해 textarea 뒤 `<pre>`에 칠한다. 두 상자의 글꼴·여백·스크롤바는 같아야 하므로 토큰 색 규칙에 글꼴 속성(기울임·굵게)을 넣지 않는다(`tests/text-highlight-css.test.ts`).
 - `src/settings/`는 제목줄 설정 버튼과 `Ctrl+,`로 연다. `va.preferences.v1`에 Markdown·텍스트 각각의 글꼴 프리셋·크기와 Markdown 본문 폭, 텍스트 자동 줄바꿈을 저장하고 열린 창에도 동기화한다. 현재 뷰어에 맞는 항목만 제공하며 빈 창은 두 표시 그룹을 제공한다. 본문 CSS 변수와 textarea의 soft/off 줄바꿈으로 읽기·편집에 적용하며 원문과 편집 이력은 바꾸지 않는다. 문자 인코딩은 현재 파일에만 적용하고 표시 설정의 초기화와 분리한다.
 - `src/image/`는 원본을 보호하고 편집 결과를 별도 PNG로 저장한다. GIF/SVG 편집은 정적 결과다. 아이콘 도구줄, Ctrl+휠 포인터 기준 확대, 드래그 팬, Ctrl+0 맞춤, Ctrl+C 원본 해상도 이미지 복사, Ctrl+Shift+C 파일 경로 복사를 지원한다. 클립보드 이미지는 raw PNG IPC를 사용하고 Rust 백그라운드에서 디코딩·쓰기하며, 텍스트는 Rust `copy_text`로 쓴다. 클립보드 읽기 권한은 부여하지 않는다. 자르기·회전·반전은 편집 모드에서만 가능하다. 드래그 자르기의 좌표 계산은 DOM 없는 `crop.ts`에 두고, 영역의 원본은 숫자 입력칸이다. 상태줄 정보는 `info.ts`가 만들며 편집 중에는 원본 파일 용량을 표시하지 않는다. 체커보드는 CSS 배경이라 저장·복사 결과에 들어가지 않고, 400% 이상의 픽셀 표시는 SVG에 적용하지 않는다.
 - `src/data/`는 JSON/YAML 원문, CSV 수정 셀, UTF-8/UTF-16과 줄바꿈을 보존한다. 저장 직전 바이트 확인과 네이티브 조건부 원자 교체를 쓰며, 외부 프로세스와의 검증·교체 사이 경쟁은 완전히 제거할 수 없다.
