@@ -145,51 +145,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-.va3d-menu-wrap { position: relative; }
-.va3d-menu-title {
-  font: inherit;
-  color: var(--fg);
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  padding: 2px 9px;
-  cursor: default;
-}
-.va3d-menu-title:hover, .va3d-menu-title.open { background: var(--border); }
-.va3d-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: -2px;
-  min-width: 220px;
-  display: grid;
-  padding: 4px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: var(--shadow-popover);
-}
-.va3d-menu-item {
-  display: grid;
-  grid-template-columns: 1.2em 1fr auto;
-  gap: 6px;
-  align-items: center;
-  font: inherit;
-  text-align: left;
-  color: var(--fg);
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  padding: 3px 8px 3px 4px;
-  cursor: default;
-  white-space: nowrap;
-}
-.va3d-menu-item:hover, .va3d-menu-item:focus-visible { background: var(--border); outline: none; }
-.va3d-menu-item[aria-disabled="true"] { color: var(--muted); }
-.va3d-menu-item[aria-disabled="true"]:hover { background: transparent; }
-.va3d-menu-mark { text-align: center; }
-.va3d-menu-key { color: var(--muted); font-size: 0.75rem; padding-left: 16px; }
-.va3d-menu-sep { height: 1px; margin: 4px 2px; background: var(--border); }
-.va3d-menu-block { padding: 2px 6px 4px; width: 250px; }
+/* The menus themselves are styled by ui/menu.css (inlined into exported pages too). */
 
 /* Display mode and section controls (inside the 보기 menu). */
 .va3d-view-controls { display: grid; gap: 6px; }

@@ -5,6 +5,8 @@
 // No Tauri, no network: everything it needs is in the page.
 import tokensCss from "../../ui/tokens.css?inline";
 import baseCss from "../../ui/base.css?inline";
+// The IIFE build drops plain CSS imports (menubar.ts imports this one): inline it here.
+import menuCss from "../../ui/menu.css?inline";
 import threeCss from "../core/three.css?inline";
 import { BufferAttribute, type BufferGeometry, type Mesh, type Object3D, type Points, type PointsMaterial } from "three";
 import { renderableSizes } from "../core/build-objects";
@@ -15,6 +17,8 @@ import { ScenePanel } from "../core/panel";
 import { ViewTools } from "../core/view-tools";
 import { workerRunner } from "../geometry-worker";
 import { Menubar } from "../core/menubar";
+import { Banner } from "../core/banner";
+import { errorMessage } from "../../ui/strings";
 import { downloadBlob } from "../core/snapshot";
 import { buildToolbar, focusCanvas, navigationSelect, viewMenuItems } from "../core/view-menu";
 import { keyAction, type KeyAction } from "../core/keys";
@@ -99,6 +103,7 @@ class ExportedViewer {
     private readonly state: ExportState,
   ) {
     const toolbar = buildToolbar((a) => this.run(a));
+    const banner = new Banner();
     stage.controls.setMode(state.navigation ?? "arcball");
     toolbar.append(navigationSelect(stage.controls));
     const frame = el("span", "va3d-frame-label");
@@ -116,13 +121,7 @@ class ExportedViewer {
       displayUnit: () => state.unit,
       displayFrame: () => state.display,
       selected: (id) => this.panel.setSelected(id),
-      notice: (message, kind) => {
-        const warning = root.querySelector<HTMLElement>(".va-runtime-warning") ?? el("div", "va-banner va3d-banner va-runtime-warning");
-        warning.dataset.kind = kind ?? "info";
-        warning.setAttribute("role", "status");
-        warning.textContent = message;
-        root.append(warning);
-      },
+      notice: (message, kind) => banner.show(message, undefined, kind ?? "info"),
     });
     this.menubar = new Menubar([
       {
@@ -136,7 +135,7 @@ class ExportedViewer {
             controls: this.tools.controls,
           }),
           { separator: true },
-          { label: "화면을 PNG로 저장", run: () => void stage.snapshot().then((blob) => downloadBlob(blob, "scene.png")).catch((e) => window.alert(String(e))) },
+          { label: "화면을 PNG로 저장", run: () => void stage.snapshot().then((blob) => downloadBlob(blob, "scene.png")).catch((e) => banner.show(`PNG로 저장하지 못했습니다: ${errorMessage(e)}`)) },
         ],
       },
     ], { focusAfter: () => focusCanvas(stage.canvas) });
@@ -145,7 +144,7 @@ class ExportedViewer {
     status.append(this.tools.dims, this.tools.cursor);
     const bottom = el("div", "va3d-bottom");
     bottom.append(status);
-    root.append(this.menubar.root, this.panel.root, toolbar, bottom);
+    root.append(this.menubar.root, this.panel.root, toolbar, banner.root, bottom);
     // Lives as long as the exported page: no dispose path.
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !e.defaultPrevented) {
@@ -229,7 +228,7 @@ async function main(): Promise<void> {
   // The tokens' system theme follows the OS light/dark setting, as exported pages always have.
   document.documentElement.dataset.theme = "system";
   const style = document.createElement("style");
-  style.textContent = tokensCss + baseCss + BASE_CSS + threeCss;
+  style.textContent = tokensCss + baseCss + menuCss + BASE_CSS + threeCss;
   document.head.append(style);
   const host = document.getElementById("va-app") ?? document.body;
   let state: ExportState;

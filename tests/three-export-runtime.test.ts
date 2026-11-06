@@ -52,3 +52,33 @@ test.skipIf(!existsSync(BUNDLE))("the built runtime bundle has no Tauri markers"
   // An IIFE: no ES module syntax left (it runs from an inline classic <script>).
   expect(code).not.toMatch(/^\s*import\s|\bimport\.meta\b|^export\s/m);
 });
+
+test("every stylesheet the runtime's modules import is inlined into the page", () => {
+  // The IIFE build drops plain CSS imports, so main.ts must inline each one with ?inline.
+  const { files } = importGraph(ENTRY);
+  const plain = new Set<string>();
+  for (const f of files) {
+    if (!f.endsWith(".ts")) continue;
+    for (const m of readFileSync(f, "utf8").matchAll(/^import\s+["']([^"']+\.css)["'];/gm)) plain.add(resolve(dirname(f), m[1]));
+  }
+  const main = readFileSync(ENTRY, "utf8");
+  const inlined = new Set([...main.matchAll(/from\s+["']([^"']+\.css)\?inline["']/g)].map((m) => resolve(dirname(ENTRY), m[1])));
+  expect(plain.size).toBeGreaterThan(0);
+  expect([...plain].filter((p) => !inlined.has(p)).map((p) => p.slice(ROOT.length + 1))).toEqual([]);
+  // Tokens first, then the shared control layer, so every later rule can use and override them.
+  const order = ["tokens.css", "base.css", "menu.css", "three.css"].map((name) => main.indexOf(`/${name}?inline`));
+  expect(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1]))).toBe(true);
+});
+
+test("the exported page shows notes and failures in the shared banner, never window.alert", () => {
+  const main = readFileSync(ENTRY, "utf8");
+  expect(main).toMatch(/from "\.\.\/core\/banner"/);
+  expect(main).not.toMatch(/window\.alert|\balert\(/);
+  expect(main).not.toContain("va-runtime-warning");
+});
+
+test("menu looks live in menu.css only; three.css just places the 3D menubar", () => {
+  const css = readFileSync(join(ROOT, "src", "three", "core", "three.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const selectors = [...css.matchAll(/([^{}]+)\{/g)].flatMap((m) => m[1].split(",").map((s) => s.trim()));
+  expect(selectors.filter((s) => /\.va3d-menu-(title|item|wrap|key|sep|mark|block)\b|\.va3d-menu\b(?!bar)/.test(s))).toEqual([]);
+});
