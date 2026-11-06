@@ -4,7 +4,7 @@ import { initializeUpdateInput, lockUpdateInput, updateInputLocked } from "../sr
 let stop: () => void = () => {};
 afterEach(()=>{stop();document.body.replaceChildren();});
 test("update barrier blocks later window shortcuts and settings actions, then restores input",()=>{
-  document.body.innerHTML='<main id="app"><button>save</button></main><dialog class="va-settings"></dialog><dialog class="va-update-dialog"><button>cancel</button></dialog>';
+  document.body.innerHTML='<main id="app"><button>save</button></main><dialog class="va-settings"></dialog><dialog class="va-dialog va-message va-update-dialog"><button>cancel</button></dialog>';
   stop=initializeUpdateInput();const save=vi.fn(),cancel=vi.fn();
   window.addEventListener("keydown",save,true);
   document.querySelector("#app button")!.addEventListener("click",save);
@@ -24,4 +24,19 @@ test("update barrier blocks later window shortcuts and settings actions, then re
 test("unlocking preserves a pre-existing inert state",()=>{
   document.body.innerHTML='<main id="app" inert></main>';stop=initializeUpdateInput();
   lockUpdateInput(true);lockUpdateInput(true);lockUpdateInput(false);expect(document.querySelector("#app")!.hasAttribute("inert")).toBe(true);
+});
+test("during the update lock any app message dialog can still be answered", () => {
+  document.body.innerHTML = '<main id="app"></main><dialog class="va-dialog va-message" open><button>cancel</button><button>discard</button></dialog>';
+  stop = initializeUpdateInput();
+  const cancel = vi.fn();
+  const first = document.querySelector<HTMLButtonElement>(".va-message button")!;
+  first.addEventListener("click", cancel);
+  lockUpdateInput(true);
+  first.click();
+  expect(cancel).toHaveBeenCalledOnce();
+  for (const key of ["Tab", "Enter", " ", "Escape", "ArrowLeft", "ArrowRight"]) {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    first.dispatchEvent(e);
+    expect(e.defaultPrevented, key).toBe(false);
+  }
 });

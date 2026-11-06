@@ -13,12 +13,14 @@ import { isThreeD } from "./three/formats";
 import { initializePreferences } from "./settings/preferences";
 import { configureSettings } from "./settings/document";
 import { initializeUpdateInput, updateInputLocked } from "./update/guard";
+import { initializeDialogInput } from "./ui/dialog";
 import { addRecent, removeRecent } from "./recent";
 import { OPEN_PATH_EVENT, recentList, type OpenPathDetail } from "./ui/recent-menu";
 import { textButton } from "./ui/icons";
 
 const app = document.getElementById("app")!;
 initializeUpdateInput();
+initializeDialogInput();
 initializeTheme();
 initializePreferences();
 mountTitlebar();

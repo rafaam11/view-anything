@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"]) {
   shots.push({ name: `${theme}-page`, query: `theme=${theme}`, height: 1100 });
   shots.push({ name: `${theme}-3d`, query: `theme=${theme}&view=3d`, height: 520 });
   shots.push({ name: `${theme}-menu`, query: `theme=${theme}&menu=open`, height: 700 });
-  for (const scene of ["restart", "restart-dirty", "settings", "pdf-password"]) {
+  for (const scene of ["restart", "restart-dirty", "settings", "pdf-password", "dialog-discard", "dialog-error"]) {
     shots.push({ name: `${theme}-${scene}`, query: `theme=${theme}&scene=${scene}`, height: 800 });
   }
 }

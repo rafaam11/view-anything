@@ -19,9 +19,10 @@ export function lockUpdateInput(value: boolean): void {
 /** Install before titlebar/viewer shortcuts. Window capture precedes document capture. */
 export function initializeUpdateInput(): () => void {
   const block = (event: Event) => {
-    const dialog = (event.target as Element | null)?.closest?.(".va-update-dialog");
+    // Any app message dialog stays usable: the restart question, and a close confirmation raised meanwhile.
+    const dialog = (event.target as Element | null)?.closest?.(".va-message");
     const key = event as KeyboardEvent;
-    const dialogKey = ["Tab", "Enter", " ", "Escape"].includes(key.key) && !key.ctrlKey && !key.altKey && !key.metaKey;
+    const dialogKey = ["Tab", "Enter", " ", "Escape", "ArrowLeft", "ArrowRight"].includes(key.key) && !key.ctrlKey && !key.altKey && !key.metaKey;
     if (locked && (!dialog || (event.type === "keydown" && !dialogKey))) {
       event.preventDefault(); event.stopImmediatePropagation();
     }
