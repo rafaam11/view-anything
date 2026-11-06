@@ -29,6 +29,12 @@ pub fn parse_launch(args: &[String]) -> Launch {
     launch
 }
 
+/// A relative command-line path joined to the directory the command ran in. The window URL (and
+/// the recent-files list it feeds) must hold an absolute path to mean the same file later.
+pub fn absolute(path: PathBuf, cwd: &std::path::Path) -> PathBuf {
+    if path.is_absolute() { path } else { cwd.join(path) }
+}
+
 fn path_of(arg: &str) -> PathBuf {
     let Some(rest) = arg.strip_prefix("file://") else { return PathBuf::from(arg) };
     let rest = rest.strip_prefix("localhost").unwrap_or(rest);
@@ -77,6 +83,14 @@ mod tests {
         assert!(!l.text);
         let l = parse_launch(&["va".into(), "--text".into()]);
         assert_eq!(l, Launch { path: None, text: true });
+    }
+
+    #[test]
+    fn relative_paths_resolve_against_the_launch_directory() {
+        let cwd = PathBuf::from(if cfg!(windows) { "D:\\work" } else { "/work" });
+        assert_eq!(absolute(PathBuf::from("a b.md"), &cwd), cwd.join("a b.md"));
+        let abs = PathBuf::from(if cfg!(windows) { "C:\\x\\y.md" } else { "/x/y.md" });
+        assert_eq!(absolute(abs.clone(), &cwd), abs);
     }
 
     #[test]
