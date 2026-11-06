@@ -9,7 +9,8 @@ vi.mock("../src/platform", () => ({
   },
 }));
 
-import viewer, { Banner, describeLoadError } from "../src/three/viewer";
+import viewer, { describeLoadError } from "../src/three/viewer";
+import { Banner } from "../src/three/core/banner";
 import { RetryableCadError } from "../src/three/worker/protocol";
 
 test("3D viewer shows a WebGL2 notice when WebGL2 is unavailable", async () => {

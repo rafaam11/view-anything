@@ -11,6 +11,7 @@ import { buildTree, findNode, fixedSourceUnit, removeFile, setVisible, type Scen
 import { FRAME_LABELS, FRAME_PRESETS, FRAME_SHORT_LABELS, UNIT_LABELS, UNITS, type FramePreset, type ObjectFrame, type Unit } from "./core/frames";
 import { ScenePanel } from "./core/panel";
 import { ViewTools } from "./core/view-tools";
+import { Banner } from "./core/banner";
 import { keyAction, type KeyAction } from "./core/keys";
 import { Menubar } from "./core/menubar";
 import { buildToolbar, focusCanvas, navigationSelect, viewMenuItems } from "./core/view-menu";
@@ -21,7 +22,6 @@ import { workerRunner } from "./geometry-worker";
 import type { CloudController } from "./cloud/controller";
 import { pointCount } from "./core/info";
 import { recentMenuBlock } from "../ui/recent-menu";
-import { iconButton, textButton } from "../ui/icons";
 import { toast } from "../ui/toast";
 import { errorMessage } from "../ui/strings";
 
@@ -83,48 +83,6 @@ class Progress {
 
   hide(): void {
     this.root.hidden = true;
-  }
-}
-
-export interface BannerAction {
-  label: string;
-  run: () => void;
-}
-
-/** Longest banner text, in characters (longer messages are cut with "…"). */
-const BANNER_MAX = 300;
-
-export class Banner {
-  readonly root = el("div", "va3d-banner");
-  private readonly text = el("span");
-  private readonly action = textButton("");
-  private onAction: (() => void) | null = null;
-
-  constructor() {
-    const close = iconButton("닫기", "close");
-    close.addEventListener("click", () => (this.root.hidden = true));
-    this.action.classList.add("va3d-banner-action");
-    this.action.addEventListener("click", () => {
-      const run = this.onAction;
-      this.onAction = null;
-      this.root.hidden = true;
-      run?.();
-    });
-    this.root.setAttribute("role", "alert");
-    this.root.append(this.text, close);
-    this.root.hidden = true;
-  }
-
-  /** Show `message`, optionally with one action button (e.g. a retry) that also closes the banner. */
-  show(message: string, action?: BannerAction): void {
-    // Worker and occt errors can be long (stack-like dumps): the banner keeps the start.
-    this.text.textContent = message.length > BANNER_MAX ? message.slice(0, BANNER_MAX) + "…" : message;
-    this.onAction = action?.run ?? null;
-    if (action) {
-      this.action.textContent = action.label;
-      this.text.after(this.action);
-    } else this.action.remove();
-    this.root.hidden = false;
   }
 }
 
@@ -203,7 +161,7 @@ export class ThreeViewer {
       jobRunner: workerRunner(),
       edgeProgress: (done, total) => this.edgeProgress(done, total),
       selected: (id) => { this.panel.setSelected(id); this.clouds?.select(id); },
-      notice: (message) => this.banner.show(message),
+      notice: (message, kind) => this.banner.show(message, undefined, kind ?? "info"),
     });
     this.status.setAttribute("role", "status");
     this.status.append(this.loadStatus, this.tools.dims, this.tools.cursor);
@@ -305,7 +263,7 @@ export class ThreeViewer {
    * does not switch the unit to m, so changing the frame never silently rescales unit-tagged files.
    */
   setDisplay(display: FramePreset, unit: Unit): void {
-    if (this.exporting || this.clouds?.isBusy() || this.clouds?.hasRegistrationPreview()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); return; }
+    if (this.exporting || this.clouds?.isBusy() || this.clouds?.hasRegistrationPreview()) { this.banner.info("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); return; }
     this.display = display;
     this.displayUnit = unit;
     this.stage.setDisplay(display, unit);
@@ -314,7 +272,7 @@ export class ThreeViewer {
 
   /** Set a file's source frame and unit (STEP/IGES keep their fixed mm), then fit all. */
   setFileFrame(fileId: string, frame: ObjectFrame): void {
-    if (this.exporting || this.clouds?.isBusy() || this.clouds?.hasRegistrationPreview()) { this.banner.show("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); const file = this.model.files.find((f) => f.id === fileId); if (file) this.panel.addFile(file); return; }
+    if (this.exporting || this.clouds?.isBusy() || this.clouds?.hasRegistrationPreview()) { this.banner.info("진행 중인 작업이 끝난 뒤 좌표계를 바꾸세요."); const file = this.model.files.find((f) => f.id === fileId); if (file) this.panel.addFile(file); return; }
     const file = this.model.files.find((f) => f.id === fileId);
     const built = this.objects.get(fileId);
     if (!file || !built) return;
@@ -346,9 +304,9 @@ export class ThreeViewer {
 
   async exportHtml(): Promise<void> {
     if (this.exporting) return;
-    if (this.clouds?.isBusy()) { this.banner.show("포인트클라우드 작업이 끝난 뒤 내보내세요."); return; }
+    if (this.clouds?.isBusy()) { this.banner.info("포인트클라우드 작업이 끝난 뒤 내보내세요."); return; }
     if (this.entries.size > 0) {
-      this.banner.show("파일을 불러오는 중에는 내보낼 수 없습니다. 불러오기가 끝난 뒤 다시 시도하세요.");
+      this.banner.info("파일을 불러오는 중에는 내보낼 수 없습니다. 불러오기가 끝난 뒤 다시 시도하세요.");
       return;
     }
     const files = this.model.files.flatMap((file) => {
@@ -356,10 +314,10 @@ export class ThreeViewer {
       return built ? [{ file, built }] : [];
     });
     if (!files.some(({ file }) => file.root.visible)) {
-      this.banner.show("내보낼 표시 중인 모델이 없습니다.");
+      this.banner.info("내보낼 표시 중인 모델이 없습니다.");
       return;
     }
-    if (this.clouds && !this.clouds.lockExport()) { this.banner.show("포인트클라우드 미리보기를 적용·취소하거나 화면을 복구한 뒤 내보내세요."); return; }
+    if (this.clouds && !this.clouds.lockExport()) { this.banner.info("포인트클라우드 미리보기를 적용·취소하거나 화면을 복구한 뒤 내보내세요."); return; }
     this.exporting = true;
     try {
       if (this.clouds?.entries.size) {
@@ -401,7 +359,7 @@ export class ThreeViewer {
    * `coarser`: STEP/IGES "정밀도를 낮춰 다시 시도" retries so far.
    */
   load(path: string, coarser = 0): Promise<string | null> {
-    if (this.exporting) { this.banner.show("HTML 내보내기가 끝난 뒤 파일을 추가하세요."); return Promise.resolve(null); }
+    if (this.exporting) { this.banner.info("HTML 내보내기가 끝난 뒤 파일을 추가하세요."); return Promise.resolve(null); }
     const entry: Entry = { id: `f${this.nextId++}`, path, name: baseName(path), controller: new AbortController() };
     this.entries.set(entry.id, entry);
     this.panel.addLoading(entry.id, entry.name);
@@ -413,7 +371,7 @@ export class ThreeViewer {
 
   /** Remove a file: abort it if still queued or loading, dispose its objects, drop it from the panel. */
   remove(fileId: string): void {
-    if (this.exporting) { this.banner.show("HTML 내보내기가 끝난 뒤 파일을 제거하세요."); return; }
+    if (this.exporting) { this.banner.info("HTML 내보내기가 끝난 뒤 파일을 제거하세요."); return; }
     if (this.clouds?.entries.has(fileId)) {
       void this.clouds.canRemove(fileId).then((ok) => { if (ok && !this.exporting) { this.entries.get(fileId)?.controller.abort(); this.discard(fileId); } });
       return;
@@ -432,7 +390,7 @@ export class ThreeViewer {
   }
 
   setVisible(nodeId: string, visible: boolean): void {
-    if (this.exporting) { this.banner.show("HTML 내보내기가 끝난 뒤 표시를 바꾸세요."); const file = this.model.files.find((f) => f.id === nodeId.split("/")[0]); if (file) this.panel.addFile(file); return; }
+    if (this.exporting) { this.banner.info("HTML 내보내기가 끝난 뒤 표시를 바꾸세요."); const file = this.model.files.find((f) => f.id === nodeId.split("/")[0]); if (file) this.panel.addFile(file); return; }
     if (!setVisible(this.model, nodeId, visible)) return;
     const fileId = nodeId.split("/")[0];
     const o = this.objects.get(fileId)?.nodes.get(nodeId);
@@ -561,7 +519,7 @@ export class ThreeViewer {
       this.clouds = new CloudController({
         stage: this.stage, tools: this.tools,
         file: (id) => this.model.files.find((f) => f.id === id), built: (id) => this.objects.get(id),
-        notice: (text) => this.banner.show(text), unit: () => UNIT_LABELS[this.displayUnit],
+        notice: (text, kind) => this.banner.show(text, undefined, kind ?? "info"), unit: () => UNIT_LABELS[this.displayUnit],
         replace: async (id, built) => {
           const file = this.model.files.find((f) => f.id === id), old = this.objects.get(id);
           if (!file || !old) { disposeObject(built.group); return; }

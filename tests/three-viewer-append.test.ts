@@ -28,7 +28,8 @@ vi.mock("../src/three/export/export-html", () => exported);
 // Geometry jobs run inline (no worker in happy-dom).
 vi.mock("../src/three/geometry-worker", () => ({ workerRunner: () => undefined }));
 
-import { Banner, canRetryCoarser, ThreeViewer } from "../src/three/viewer";
+import { canRetryCoarser, ThreeViewer } from "../src/three/viewer";
+import { Banner } from "../src/three/core/banner";
 import { Group, Matrix4, PerspectiveCamera } from "three";
 import { RetryableCadError, type ParsedFile } from "../src/three/worker/protocol";
 import type { Stage } from "../src/three/core/stage";
@@ -242,6 +243,7 @@ test("a worker crash at the cap shows no retry button", async () => {
   await v.load(P("a.step"));
   const banner = root.querySelector<HTMLElement>(".va3d-banner")!;
   expect(banner.hidden).toBe(false);
+  expect(banner.dataset.kind).toBe("error");
   expect(banner.querySelector(".va3d-banner-action")).toBeNull();
   expect(v.model.files).toEqual([]);
   expect(root.querySelector(".va3d-node")).toBeNull();
@@ -368,6 +370,7 @@ test("export refuses while files load, and with nothing visible; Ctrl+Shift+E ru
   await settle();
   await v.exportHtml();
   expect(root.querySelector(".va3d-banner")!.textContent).toContain("불러오는 중에는 내보낼 수 없습니다");
+  expect(root.querySelector<HTMLElement>(".va3d-banner")!.dataset.kind).toBe("info"); // a refusal, nothing failed
   const spy = vi.spyOn(v, "exportHtml").mockResolvedValue();
   window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyE", key: "E", ctrlKey: true, shiftKey: true }));
   expect(spy).toHaveBeenCalledOnce();

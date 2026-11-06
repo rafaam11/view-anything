@@ -89,20 +89,14 @@
 }
 @keyframes va3d-spin { to { transform: rotate(360deg); } }
 
+/* Look and kinds come from .va-banner (ui/base.css); this only places it. */
 .va3d-banner {
   position: absolute;
   top: 8px;
   left: 8px;
   max-width: min(640px, calc(100% - 490px));
   min-width: 240px;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 8px 10px;
-  color: var(--fg);
-  background: var(--error-bg);
-  border: 1px solid color-mix(in srgb, var(--danger-text) 45%, transparent);
-  border-radius: 6px;
+  box-sizing: border-box;
 }
 .va3d-banner span { flex: 1; word-break: break-word; }
 .va3d-banner .va3d-banner-action { flex: none; }

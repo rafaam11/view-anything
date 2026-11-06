@@ -20,6 +20,7 @@ import { mountTitlebar } from "../titlebar";
 import { updateBadge, confirmRestart } from "../update/badge";
 import { createFind } from "../md/find";
 import { buildToolbar } from "../three/core/view-menu";
+import { Banner } from "../three/core/banner";
 import { initializeDialogInput, showDialog } from "../ui/dialog";
 import { toast } from "../ui/toast";
 
@@ -132,14 +133,14 @@ if (view3d) {
   const scene = document.createElement("div"); scene.className = "va3d";
   const toolbar = buildToolbar(() => {});
   toolbar.append(select("Arcball", "Fly"), select("Z-up RH", "Y-up RH"), select("mm", "m"));
-  const banner = document.createElement("div"); banner.className = "va3d-banner"; banner.setAttribute("role", "alert"); banner.style.top = "48px";
-  const msg = document.createElement("span"); msg.textContent = "PNG로 저장했습니다";
-  const close = iconButton("닫기", "close");
-  banner.append(msg, button("정밀도를 낮춰 다시 시도", { cls: "va3d-banner-action" }), close);
+  // One banner of each kind, as the 3D viewer shows them.
+  const error = new Banner(); error.show("big.step: 파일이 너무 크거나 손상됨", { label: "정밀도를 낮춰 다시 시도", run: () => {} }); error.root.style.top = "48px";
+  const warning = new Banner(); warning.show("삼각형이 500만 개를 넘어 엣지 표시를 껐습니다.", undefined, "warning"); warning.root.style.top = "48px"; warning.root.style.left = "440px";
+  const info = new Banner(); info.info("파일을 불러오는 중에는 내보낼 수 없습니다."); info.root.style.top = "48px"; info.root.style.left = "840px";
   const cloud = document.createElement("div"); cloud.className = "va-cloud";
   cloud.style.position = "absolute"; cloud.style.left = "8px"; cloud.style.top = "120px"; cloud.style.width = "320px";
   cloud.append(row(button("3D 박스"), button("다각형 관통 선택"), button("작업 취소")), row(select("원본 RGB", "분류"), input("number", "0")));
-  scene.append(toolbar, banner, cloud);
+  scene.append(toolbar, error.root, warning.root, info.root, cloud);
   section("3D 도구줄 · 배너 · 점군 패널", scene);
 }
 

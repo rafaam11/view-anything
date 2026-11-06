@@ -120,6 +120,7 @@ test("edges on, then the scene grows past 5M: edges go off with a notice", () =>
   tools.refresh();
   expect(tools.displayMode).toBe("solid");
   expect(host.notice).toHaveBeenCalledOnce();
+  expect(host.notice).toHaveBeenCalledWith(expect.stringContaining("엣지 표시를 껐습니다"), "warning");
   expect(stage.content).toBeDefined();
 });
 

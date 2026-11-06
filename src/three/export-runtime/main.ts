@@ -116,8 +116,9 @@ class ExportedViewer {
       displayUnit: () => state.unit,
       displayFrame: () => state.display,
       selected: (id) => this.panel.setSelected(id),
-      notice: (message) => {
-        const warning = root.querySelector(".va-runtime-warning") ?? el("div", "va3d-banner va-runtime-warning");
+      notice: (message, kind) => {
+        const warning = root.querySelector<HTMLElement>(".va-runtime-warning") ?? el("div", "va-banner va3d-banner va-runtime-warning");
+        warning.dataset.kind = kind ?? "info";
         warning.setAttribute("role", "status");
         warning.textContent = message;
         root.append(warning);

@@ -1,6 +1,7 @@
 // "보기" tools of the 3D stage: display mode and section planes (controls the caller puts in the
 // 보기 menu of the menubar), click selection with a display-frame bounding box, dimensions and the cursor coordinate
 // readout. No Tauri: shared with the exported-HTML runtime.
+import type { BannerKind } from "./banner";
 import { Box3, Box3Helper, Color, Vector2, Vector3, type Camera, type Intersection, type Material, type Matrix4, type Object3D } from "three";
 import { AXES, AXIS_NAMES, Clipper } from "./clipping";
 import { canShowEdges, DISPLAY_MODE_LABELS, DISPLAY_MODES, DisplayModes, type DisplayMode } from "./display-modes";
@@ -42,8 +43,8 @@ export interface ToolHost {
   edgeProgress?(done: number, total: number): void;
   /** The selection changed (the panel follows). */
   selected(nodeId: string | null): void;
-  /** A one-off notice for the user (e.g. edges turned off). */
-  notice(message: string): void;
+  /** A one-off notice for the user (e.g. edges turned off); the host shows "info" when no kind is given. */
+  notice(message: string, kind?: BannerKind): void;
 }
 
 const SLIDER_STEPS = 1000;
@@ -98,6 +99,7 @@ export class ViewTools {
           error instanceof JobTooLargeError
             ? "백그라운드 작업자를 쓸 수 없어 큰 메시의 엣지 표시와 커서 좌표를 껐습니다."
             : "일부 메시의 엣지 표시나 커서 좌표를 만들지 못했습니다.",
+          "warning",
         );
       },
     });
@@ -269,7 +271,7 @@ export class ViewTools {
     edgeInput.disabled = !edgesOk;
     this.edgeNote.hidden = edgesOk;
     if (this.mode === "edges" && !edgesOk) {
-      this.host.notice("삼각형이 500만 개를 넘어 엣지 표시를 껐습니다.");
+      this.host.notice("삼각형이 500만 개를 넘어 엣지 표시를 껐습니다.", "warning");
       this.mode = "solid";
       this.modeInputs.get("solid")!.checked = true;
     }
