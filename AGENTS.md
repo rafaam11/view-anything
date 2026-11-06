@@ -32,7 +32,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 ## 3D 모듈 구조 (`src/three/`)
 - `formats.ts`: 확장자 판별, 바이너리 STL 판별. three를 import하지 않는다(진입 청크에서 쓴다).
 - `viewer.ts`: 앱 3D 뷰어(레지스트리가 lazy import). 파일 큐, 드롭·append, 패널, 메뉴바, 진행률·배너. Tauri(`platform.ts`)를 쓰는 앱 전용 코드다.
-- `cloud/`: PCD/점 PLY의 앱 전용 지연 로딩 UI. Rust 세션의 25,000점 청크로 표시하며 GPU ID로 원본점을 조회한다. 미리보기/적용/20회 undo·redo/다른 이름 저장과 HTML 내보내기 잠금, 화면 갱신 실패 복구를 관리한다.
+- `cloud/`: PCD/점 PLY의 앱 전용 지연 로딩 UI. Rust 세션의 25,000점 청크로 표시하며(GPU 업로드는 12ms 시간 예산마다 양보, 숨긴 창은 타이머로 양보) GPU ID로 원본점을 조회한다. 미리보기/적용/20회 undo·redo/다른 이름 저장과 HTML 내보내기 잠금, 화면 갱신 실패 복구를 관리한다.
 - `src-tauri/src/cloud/`: 원본 점 레코드와 f64 좌표, ID 이력을 보관한다. 파싱/선택/필터/저장은 `spawn_blocking`, 이웃 검색은 kiddo + 4스레드 rayon. 계산은 앱 전체 하나씩, 세션은 창 소유. 원본 파일은 덮어쓰지 않는다.
 - `src-tauri/src/cloud/registration.rs`: 현재 장면 좌표로 점 대 점 강체 ICP를 계산한다. 소스·기준 점군을 각각 최대 1만·5만·10만 점으로 표본화하고 미리보기 후 명시적으로 적용한다. 정합과 필터의 undo/redo 순서는 프런트에서 통합하고 원본 ID 이력은 Rust에서 보관한다. 정합 저장은 좌표만 변환해 별도 파일에 쓴다. LAS/LAZ 파형·COPC와 정밀도 보존 불가 좌표, 정수 XYZ PCD/PLY 및 기본값이 아닌 PCD VIEWPOINT의 정합 저장은 거부한다.
 - `load.ts`, `io/source.ts`: 파일 읽기(asset 프로토콜 병렬 Range 요청, 실패 시 `read_file_raw`). glTF는 UI 스레드의 GLTFLoader, 나머지는 파싱 워커.
