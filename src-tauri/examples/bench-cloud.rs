@@ -1,3 +1,4 @@
+#![allow(dead_code)] // the example includes the cloud modules by path and exercises only part of them
 //! Synthetic data only, written to the OS temporary directory. Never uses private user files.
 #[path = "../src/cloud/codec.rs"]
 mod codec;

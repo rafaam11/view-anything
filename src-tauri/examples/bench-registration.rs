@@ -1,3 +1,4 @@
+#![allow(dead_code)] // the example includes the cloud modules by path and exercises only part of them
 //! Synthetic ICP benchmark; never reads user data.
 mod codec {
     pub type Result<T> = std::result::Result<T, String>;
