@@ -3,7 +3,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
 const titles: string[] = [];
-const png = vi.hoisted(() => ({ saveDialog: vi.fn(async (_o: unknown): Promise<string | null> => null), writeFileRaw: vi.fn(async (_p: string, _d: Uint8Array) => {}) }));
+const png = vi.hoisted(() => ({ saveDialog: vi.fn(async (_o: unknown): Promise<string | null> => null), writeFileRaw: vi.fn(async (_p: string, _d: Uint8Array) => {}), alert: vi.fn(async (_t: string) => {}) }));
 vi.mock("../src/platform", () => ({
   platform: {
     assetUrl: (p: string) => "asset://" + p,
@@ -11,6 +11,7 @@ vi.mock("../src/platform", () => ({
     setWindowTitle: async (t: string) => void titles.push(t),
     saveDialog: png.saveDialog,
     writeFileRaw: png.writeFileRaw,
+    alert: png.alert,
   },
 }));
 
@@ -20,6 +21,9 @@ vi.mock("../src/three/load", () => ({
   loadMeshFile: (path: string, _f: string, _p: unknown, signal?: AbortSignal) => loadImpl(path, signal),
   loadGltfFile: (path: string, _p: unknown, signal?: AbortSignal) => loadImpl(path, signal),
 }));
+
+const exported = vi.hoisted(() => ({ exportHtml: vi.fn(async (_o: unknown): Promise<string | null> => "D:/out/scene.html") }));
+vi.mock("../src/three/export/export-html", () => exported);
 
 // Geometry jobs run inline (no worker in happy-dom).
 vi.mock("../src/three/geometry-worker", () => ({ workerRunner: () => undefined }));
@@ -373,6 +377,19 @@ test("export refuses while files load, and with nothing visible; Ctrl+Shift+E ru
   expect(root.querySelector(".va3d-banner")!.textContent).toContain("내보낼 표시 중인 모델이 없습니다");
 });
 
+test("a finished HTML export says so in a toast; a cancelled one says nothing", async () => {
+  document.querySelector(".va-toast")?.remove(); // an earlier test may still show one
+  const v = make();
+  await v.load(P("a.stl"));
+  await settle();
+  exported.exportHtml.mockResolvedValueOnce(null);
+  await v.exportHtml();
+  expect(document.querySelector(".va-toast:not([hidden])")).toBeNull();
+  await v.exportHtml();
+  expect(exported.exportHtml).toHaveBeenCalledTimes(2);
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("HTML로 내보냈습니다");
+});
+
 /**
  * Disposal check (no WebGL in node, so no renderer.info.memory): every geometry, material and
  * texture a file brings, plus its edge lines and BVHs, is disposed when the file is removed,
@@ -454,5 +471,10 @@ test("파일 > 화면을 PNG로 저장 writes the snapshot where the user chose,
   open(); await settle();
   expect(stage.snapshot).toHaveBeenCalledOnce();
   expect(png.writeFileRaw).toHaveBeenCalledWith("D:\\out\\view.png", new Uint8Array([1, 2, 3]));
-  expect(root.textContent).toContain("PNG로 저장했습니다");
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("PNG로 저장했습니다");
+  expect(root.querySelector<HTMLElement>(".va3d-banner")!.hidden).toBe(true);
+  png.saveDialog.mockResolvedValueOnce("D:/out/locked.png");
+  png.writeFileRaw.mockRejectedValueOnce(new Error("denied"));
+  open(); await settle();
+  expect(png.alert).toHaveBeenCalledWith(expect.stringContaining("PNG로 저장하지 못했습니다"));
 });

@@ -1,0 +1,20 @@
+/* Above the update chip (90), under the title bar (100). */
+.va-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  z-index: 95;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 10px 16px;
+  color: var(--fg);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+  font: var(--font-size-ui)/1.4 var(--font-ui);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.va-toast[hidden] { display: none; }

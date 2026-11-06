@@ -14,6 +14,8 @@ import { saveCopy } from "../data/save-copy";
 import type { Editor } from "./editor";
 import { documentBar } from "../ui/chrome";
 import { menuButton, textButton } from "../ui/icons";
+import { toast } from "../ui/toast";
+import { COPY_SAVED, SAVED } from "../ui/strings";
 import { applyPreferences, DEFAULTS, preferences } from "../settings/preferences";
 import { addCodeCopyButtons, imagesReady } from "./decorate";
 import { watchFile } from "./file-watch";
@@ -383,6 +385,7 @@ return {
       original = plan.text;
       baseline = edited;
       refreshDirty(); // typing may have continued while the dialog or write was pending
+      toast(SAVED);
     };
 
     const requestSave = () => {
@@ -395,7 +398,7 @@ return {
       const plan = planSave(original, baseline, editor.getMarkdown());
       if (plan.kind === "rewrite" && !(await platform.confirmDanger(`${REWRITE_MESSAGE}\n\n사유: ${plan.reason}`, "전체 다시 쓰기"))) return;
       const text = plan.kind === "unchanged" ? original : plan.text;
-      if (await saveCopy(path, encodeText(text, meta))) await platform.notice("복사본을 저장했습니다. 원본 편집 내용은 그대로 유지합니다.");
+      if (await saveCopy(path, encodeText(text, meta))) toast(COPY_SAVED);
     }));
     // Decided when it runs: a queued toggle acts on the mode and read-only state at that time.
     const toggleMode = () => {

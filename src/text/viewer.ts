@@ -13,6 +13,8 @@ import { revealSelection } from "./selection";
 import { highlightHtml, languageFor, LIVE_HIGHLIGHT_CHARS, withinHighlightLimit } from "./highlight";
 import "../ui/chrome.css";
 import { textButton } from "../ui/icons";
+import { toast } from "../ui/toast";
+import { COPY_SAVED, SAVED } from "../ui/strings";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const viewer: Viewer = {
@@ -107,7 +109,7 @@ const viewer: Viewer = {
     const doCopy = async () => exclusive(async () => {
       if (!editing || !meta) return;
       const bytes = dirty() ? await encodeText(meta, editor.value) : doc.bytes;
-      if (await saveCopy(path, bytes)) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지";
+      if (await saveCopy(path, bytes)) toast(COPY_SAVED);
     });
     const reload = async () => exclusive(async () => {
       if (!await discard()) return; doc.reset(await read()); await render();
@@ -163,7 +165,7 @@ const viewer: Viewer = {
       doc.edit(await encodeText(meta, editor.value));
       const result = await doc.save();
       if (result === "conflict") { status.textContent = "파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽으세요."; }
-      else { meta = await decodeText(doc.bytes, cp949); status.textContent = "저장됨"; void paint(); }
+      else { meta = await decodeText(doc.bytes, cp949); status.textContent = ""; toast(SAVED); void paint(); }
     });
     editor.oninput = () => {
       cancelSearch(); status.textContent = ""; refresh();

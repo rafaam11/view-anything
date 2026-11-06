@@ -10,6 +10,8 @@ import { restoreLineEndings } from "./line-endings";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
 import { menuButton, textButton } from "../ui/icons";
+import { toast } from "../ui/toast";
+import { COPY_SAVED, SAVED } from "../ui/strings";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_NODES = 20_000;
@@ -108,7 +110,7 @@ const viewer: Viewer = {
       try {
         const result = await doc.save();
         if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
-        else if (result === "saved") status.textContent = "저장됨";
+        else if (result === "saved") { status.textContent = ""; toast(SAVED); }
         refresh();
       } catch (error) { reload.hidden = false; throw error; }
       finally { busy = false; save.disabled = false; }
@@ -116,7 +118,7 @@ const viewer: Viewer = {
     save.onclick = () => { void doSave().catch(report); };
     copy.onclick = () => { void (async () => {
       if (!editing || busy || invalid) return; busy = true;
-      try { if (await saveCopy(path, doc.bytes)) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
+      try { if (await saveCopy(path, doc.bytes)) toast(COPY_SAVED); }
       finally { busy = false; }
     })().catch(report); };
     reload.onclick = () => { void (async () => {

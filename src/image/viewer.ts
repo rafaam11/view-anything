@@ -5,6 +5,7 @@ import type { Viewer } from "../registry";
 import { equalBytes } from "../data/document";
 import { documentBar } from "../ui/chrome";
 import { iconButton, menuButton, textButton } from "../ui/icons";
+import { toast } from "../ui/toast";
 import { isFullscreen, toggleFullscreen } from "../fullscreen";
 import { dragRect, fitRect, hitTest, toImagePoint, type CropDrag, type Handle, type Point, type Rect } from "./crop";
 import { ImageHistory, transformImage, type ImageState } from "./history";
@@ -67,7 +68,7 @@ const viewer: Viewer = {
     ] });
     root.append(bar, coords, area, thumbs, footer); el.replaceChildren(root);
     const report = (e: unknown) => { void platform.alert(String(e)).catch(() => {}); };
-    const copyPath = () => { void platform.copyText(path).then(() => { status.textContent = "파일 경로를 복사했습니다."; }).catch(report); };
+    const copyPath = () => { void platform.copyText(path).then(() => { toast("파일 경로를 복사했습니다"); }).catch(report); };
     // The number inputs are the single source of the crop rectangle; drags write into them.
     let cropDrag: { kind:CropDrag; start:Point; rect:Rect; x:number; y:number; moved:boolean } | null = null;
     const cropSize = () => ({ width: history?.state.width ?? 1, height: history?.state.height ?? 1 });
@@ -215,7 +216,7 @@ const viewer: Viewer = {
         const snapshot = document.createElement("canvas"); snapshot.width = edited ? canvas.width : original.naturalWidth; snapshot.height = edited ? canvas.height : original.naturalHeight;
         snapshot.getContext("2d")!.drawImage(edited ? canvas : original, 0, 0);
         const blob = await new Promise<Blob>((resolve,reject) => snapshot.toBlob(b => b ? resolve(b) : reject(Error("이미지 복사 실패")), "image/png"));
-        await platform.copyImage(new Uint8Array(await blob.arrayBuffer())); status.textContent = "이미지를 복사했습니다.";
+        await platform.copyImage(new Uint8Array(await blob.arrayBuffer())); toast("이미지를 복사했습니다");
       } finally { busy = false; refresh(); }
     })().catch(report); };
     // Capture: Esc and Enter also work from the number inputs, and an open menu keeps its own Esc.
@@ -253,7 +254,7 @@ const viewer: Viewer = {
         if (!target) return;
         const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png"));
         await platform.writeImageCopy(target, path, new Uint8Array(await blob.arrayBuffer()));
-        history!.markSaved(); dirty = false; refresh(); await platform.notice("편집 이미지를 저장했습니다.");
+        history!.markSaved(); dirty = false; refresh(); toast("편집 이미지를 저장했습니다");
         await refreshFolder().catch(() => { status.textContent = "이미지는 저장했지만 폴더 목록을 갱신할 수 없습니다."; });
       } finally { busy = false; refresh(); }
     })().catch(report); };

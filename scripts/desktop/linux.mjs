@@ -40,7 +40,7 @@ try{
   for(const [format,binary] of [['deb',installed],['appimage',appimage]]){
     if(format==='appimage')fs.chmodSync(binary,0o755);await start(binary,files.txt);await wait('document.querySelector(".text-source")?.value.includes("원문 보존")');
     await click('편집');await wait('document.querySelector(".text-source")?.readOnly === false');
-    await js('const e=document.querySelector(".text-source");e.value="Linux edited\\nsecond line\\n";e.dispatchEvent(new Event("input",{bubbles:true}));');await key('s',{ctrlKey:true});await wait('document.querySelector("[role=status]")?.textContent==="저장됨"');
+    await js('const e=document.querySelector(".text-source");e.value="Linux edited\\nsecond line\\n";e.dispatchEvent(new Event("input",{bubbles:true}));');await key('s',{ctrlKey:true});await wait('document.querySelector(".va-toast:not([hidden])")?.textContent==="저장했습니다"');
     assert.deepEqual(fs.readFileSync(files.txt),Buffer.from('\ufeffLinux edited\r\nsecond line\r\n'));fs.writeFileSync(files.txt,original);
     await key(',',{ctrlKey:true});await wait('document.querySelector(".va-settings[open]") != null');assert.deepEqual(await js('return [...document.querySelectorAll(".va-settings legend")].map(e=>e.textContent)'),['일반','텍스트','현재 파일']);await screenshot(`${format}-text-settings`);await click('닫기');await collect();await stop();results.push(`${format}: actual WebKit text editing, safe BOM/CRLF save and contextual settings`);
     await start(binary,files.png);await wait('document.querySelector(".image-area img")?.naturalWidth > 0');const width=await js('return document.querySelector(".image-area img").naturalWidth'),height=await js('return document.querySelector(".image-area img").naturalHeight');

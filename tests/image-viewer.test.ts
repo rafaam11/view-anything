@@ -41,10 +41,11 @@ const openCrop = async () => {
 test("Ctrl Shift C copies only the file path and Ctrl C only the image",async()=>{
   window.dispatchEvent(new KeyboardEvent("keydown",{key:"C",ctrlKey:true,shiftKey:true,cancelable:true}));await settle();
   expect(state.copyText).toHaveBeenCalledWith("a.png");expect(state.copy).not.toHaveBeenCalled();
-  expect(document.querySelector("[role=status]")!.textContent).toContain("경로");
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("파일 경로를 복사했습니다");
   state.copyText.mockClear();
   window.dispatchEvent(new KeyboardEvent("keydown",{key:"c",ctrlKey:true}));await settle();
   expect(state.copy).toHaveBeenCalledTimes(1);expect(state.copyText).not.toHaveBeenCalled();
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("이미지를 복사했습니다");
 });
 test("the file menu copies the path of the image currently shown",async()=>{
   button("다음 이미지").click();await settle();
@@ -54,7 +55,7 @@ test("the file menu copies the path of the image currently shown",async()=>{
 test("a failed path copy reports the error without a success message",async()=>{
   state.copyText.mockRejectedValueOnce(Error("clipboard busy"));
   window.dispatchEvent(new KeyboardEvent("keydown",{key:"c",ctrlKey:true,shiftKey:true}));await settle();
-  expect(state.alert).toHaveBeenCalled();expect(document.querySelector("[role=status]")!.textContent).toBe("");
+  expect(state.alert).toHaveBeenCalled();expect(document.querySelector(".va-toast:not([hidden])")).toBeNull();
 });
 test("left rotation and vertical flip are edit-only and undoable",async()=>{
   expect(button("왼쪽으로 회전").hidden).toBe(true);expect(button("상하 반전").hidden).toBe(true);

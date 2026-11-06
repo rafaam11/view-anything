@@ -26,6 +26,7 @@ test("JSON tree treats content as text and refuses to save invalid edits", async
   expect(state.writes).toBe(0); expect(root.textContent).toContain("구문 오류");
   input.value = '{"key": 2}\r\n'; input.dispatchEvent(new Event("input")); buttons[1].click(); await settle();
   expect(state.disk).toEqual(encode('{"key": 2}\n'));
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("저장했습니다");
 });
 
 test("YAML comments remain in the source when edited", async () => {

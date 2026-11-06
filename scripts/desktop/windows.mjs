@@ -53,7 +53,7 @@ try {
   await first.keyboard.press('Control+s');
   await text.keyboard.press('Control+s');await delay(200);assert.deepEqual(fs.readFileSync(files.txt),original);
   await text.evaluate(()=>window.dispatchEvent(new CustomEvent('va:open')));await dialog.getByRole('button',{name:'취소',exact:true}).click();await text.waitForFunction(()=>!document.getElementById('app').hasAttribute('inert'));
-  assert.equal(await text.getByLabel('텍스트 내용').inputValue(),'unsaved update test\n');await text.keyboard.press('Control+s');await text.getByText('저장됨',{exact:true}).waitFor();const saved=fs.readFileSync(files.txt);assert.deepEqual(saved,Buffer.from('\ufeffunsaved update test\r\n'));
+  assert.equal(await text.getByLabel('텍스트 내용').inputValue(),'unsaved update test\n');await text.keyboard.press('Control+s');await text.getByText('저장했습니다',{exact:true}).waitFor();const saved=fs.readFileSync(files.txt);assert.deepEqual(saved,Buffer.from('\ufeffunsaved update test\r\n'));
   results.push('multiwindow dirty warning, Ctrl+S/custom open blocked while frozen, cancel restores edits and saving');
   ps('change-associations');
   await first.screenshot({path:path.join(evidence,'before-update.png')});

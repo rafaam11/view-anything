@@ -9,6 +9,8 @@ import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
 import { menuButton, textButton } from "../ui/icons";
+import { toast } from "../ui/toast";
+import { COPY_SAVED, SAVED } from "../ui/strings";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 /** A 10 MiB, 1,000,000-cell file parses in about 0.1-0.2 s; the page shows 100 rows × 10 columns at a time. */
@@ -134,7 +136,7 @@ const viewer: Viewer = {
         const result = await doc.save();
         if (result === "conflict") { reload.hidden = false; await platform.alert("파일이 외부에서 변경되었거나 삭제되었습니다. 편집 내용을 유지합니다. 다른 이름으로 저장하거나 다시 읽을 수 있습니다."); }
         else if (result === "saved" || result === "unchanged") {
-          status.textContent = "저장됨";
+          status.textContent = ""; toast(SAVED);
           if (editRevision === revision) await render();
           else doc.edit(await editBytes());
         }
@@ -145,7 +147,7 @@ const viewer: Viewer = {
     save.onclick = () => { void doSave().catch(report); };
     copy.onclick = () => { void (async () => {
       if (!editing || busy || invalid) return; busy = true;
-      try { if (await saveCopy(path, await editBytes())) status.textContent = "복사본 저장됨 · 원본 편집 내용 유지"; }
+      try { if (await saveCopy(path, await editBytes())) toast(COPY_SAVED); }
       finally { busy = false; }
     })().catch(report); };
     reload.onclick = () => { void (async () => {

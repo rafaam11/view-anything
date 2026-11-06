@@ -21,6 +21,7 @@ import { updateBadge, confirmRestart } from "../update/badge";
 import { createFind } from "../md/find";
 import { buildToolbar } from "../three/core/view-menu";
 import { initializeDialogInput, showDialog } from "../ui/dialog";
+import { toast } from "../ui/toast";
 
 const params = new URLSearchParams(location.search);
 const view3d = params.get("view") === "3d";
@@ -156,6 +157,7 @@ if (view3d) {
 // Modal scenes on top of the page.
 const scene = params.get("scene");
 initializeDialogInput();
+if (scene === "toast") toast("복사본을 저장했습니다. 이 창에서는 원본을 계속 편집합니다.", { timeout: 600_000 });
 if (scene === "settings") void import("../settings/dialog").then((m) => m.openSettings());
 if (scene === "dialog-discard") void showDialog({ message: "저장하지 않은 변경 내용을 버리고 닫을까요?", kind: "warning", buttons: [{ label: "닫기", value: "ok", variant: "danger" }, { label: "취소", value: "cancel" }], defaultValue: "cancel", cancelValue: "cancel" });
 if (scene === "dialog-error") void showDialog({ message: "파일을 저장할 수 없습니다.", detail: "C:/Users/me/Documents/아주 긴 폴더 이름/그리고 더 긴 하위 폴더/report-final-v3.md: 액세스가 거부되었습니다. (os error 5)", kind: "error", buttons: [{ label: "확인", value: "ok", variant: "primary" }], defaultValue: "ok", cancelValue: "ok" });

@@ -52,6 +52,7 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
   cells[2].value = "beta"; cells[2].dispatchEvent(new Event("input"));
   buttons[1].click(); await settle();
   expect(state.disk).toEqual(encode('\ufeff"name",value\r\nbeta,1\n'));
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("저장했습니다");
   const edited = root.querySelectorAll("textarea")[2];
   edited.value = "local"; edited.dispatchEvent(new Event("input"));
   state.disk = encode("external\n");
@@ -60,6 +61,7 @@ test("CSV edits preserve untouched bytes and external conflicts retain local cha
   expect(edited.value).toBe("local");
   expect(state.alerts).toHaveLength(1);
   buttons[2].click(); await settle();
+  expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("복사본을 저장했습니다. 이 창에서는 원본을 계속 편집합니다.");
   expect(state.copy).toEqual(encode('\ufeff"name",value\r\nlocal,1\n'));
   expect(state.disk).toEqual(encode("external\n"));
   expect(await state.close()).toBe(false);

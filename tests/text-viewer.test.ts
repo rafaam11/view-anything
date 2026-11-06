@@ -47,7 +47,7 @@ test("safe save preserves CRLF and clears dirty state", async () => {
   button("편집").click(); await settle(); edit("changed\n");
   button("저장").click(); await settle();
   expect(new TextDecoder().decode(disk)).toBe("changed\r\n");
-  expect(await close()).toBe(true); expect(status()).toBe("저장됨");
+  expect(await close()).toBe(true); expect(status()).toBe(""); expect(document.querySelector(".va-toast:not([hidden])")?.textContent).toBe("저장했습니다");
 });
 test("external write is not replaced and recovery copy retains edits", async () => {
   button("편집").click(); await settle(); edit("mine\n"); disk = new TextEncoder().encode("external");

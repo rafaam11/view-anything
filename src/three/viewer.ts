@@ -22,6 +22,7 @@ import type { CloudController } from "./cloud/controller";
 import { pointCount } from "./core/info";
 import { recentMenuBlock } from "../ui/recent-menu";
 import { iconButton, textButton } from "../ui/icons";
+import { toast } from "../ui/toast";
 
 /** Where 파일 > 화면을 PNG로 저장 suggests the image: next to the first model, else scene.png. */
 export function screenshotPath(first: string | undefined): string {
@@ -338,8 +339,8 @@ export class ThreeViewer {
       if (!target) return;
       const blob = await this.stage.snapshot();
       await platform.writeFileRaw(target, new Uint8Array(await blob.arrayBuffer()));
-      this.banner.show("PNG로 저장했습니다");
-    } catch (e) { this.banner.show(`PNG로 저장하지 못했습니다: ${String(e)}`); }
+      toast("PNG로 저장했습니다");
+    } catch (e) { await platform.alert(`PNG로 저장하지 못했습니다: ${String(e)}`).catch(() => {}); }
   }
 
   async exportHtml(): Promise<void> {
@@ -364,7 +365,7 @@ export class ThreeViewer {
         if (!await platform.confirm("HTML에는 현재 표시 중인 점·색상·크기를 담습니다. 사용자 정의 점 속성과 편집·PCD/PLY 저장 기능은 포함되지 않는 보기 전용 파일입니다. 계속할까요?")) return;
       }
       const { exportHtml } = await import("./export/export-html");
-      await exportHtml({
+      const saved = await exportHtml({
         files,
         stage: this.stage,
         display: this.display,
@@ -377,6 +378,7 @@ export class ThreeViewer {
           else this.progress.show("HTML로 내보내기", "export", 0, 0, note);
         },
       });
+      if (saved) toast("HTML로 내보냈습니다");
     } catch (e) {
       this.banner.show(`HTML로 내보내지 못했습니다. (${e instanceof Error ? e.message : String(e)})`);
     } finally {

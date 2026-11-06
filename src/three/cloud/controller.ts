@@ -3,6 +3,8 @@ import { Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, type PointsMateria
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { platform } from "../../platform";
 import { textButton } from "../../ui/icons";
+import { toast } from "../../ui/toast";
+import { SAVED } from "../../ui/strings";
 import { registerUpdateGuard } from "../../update/guard";
 import type { Stage } from "../core/stage";
 import type { ViewTools } from "../core/view-tools";
@@ -220,7 +222,8 @@ export class CloudController {
       this.committed = true;
       if (action.type === "apply") this.recordHistory(e, { kind: "filter" });
       if (action.type !== "save") await this.rebuild(id, e); else e.savedAlignment.copy(e.alignment);
-      this.status.textContent = action.type === "save" ? "저장 완료" : "완료";
+      this.status.textContent = action.type === "save" ? "" : "완료";
+      if (action.type === "save") toast(SAVED);
     } catch (error) { this.status.textContent = String(error); this.host.notice(String(error)); }
     finally { this.busy = false; this.committed = false; this.buildAbort = null; this.sync(); }
   }
