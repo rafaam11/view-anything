@@ -45,6 +45,8 @@ export function showDialog<T extends string>(o: DialogOptions<T>): Promise<T> {
     dialog.className = "va-dialog va-message" + (o.className ? ` ${o.className}` : "");
     dialog.dataset.kind = kind;
     dialog.setAttribute("role", kind === "info" ? "dialog" : "alertdialog");
+    // A click on the text then focuses the dialog, not the page, so its keys keep working.
+    dialog.tabIndex = -1;
 
     const body = document.createElement("div"); body.className = "va-dialog-body";
     const head = document.createElement("div"); head.className = "va-message-head";
@@ -97,12 +99,14 @@ export function showDialog<T extends string>(o: DialogOptions<T>): Promise<T> {
 }
 
 const DIALOG_KEYS = ["Tab", "Enter", " ", "Escape", "ArrowLeft", "ArrowRight"];
+/** Copying a path or message out of a dialog is fine. */
+const isCopyKey = (e: KeyboardEvent) => (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && ["c", "a"].includes(e.key.toLowerCase());
 
 /**
  * An in-app modal does not stop the window's key listeners the way an OS dialog does, so this
  * capture listener (install it right after the update guard, before any shortcut) keeps every
  * app shortcut away while a message dialog is open. Inside the top dialog only Tab, Enter, Space,
- * Esc and ←/→ act; held Enter/Space never repeat an answer.
+ * Esc, ←/→ and copying (Ctrl+C, Ctrl+A) act; held Enter/Space never repeat an answer.
  */
 export function initializeDialogInput(): () => void {
   const onKey = (e: KeyboardEvent) => {
@@ -111,6 +115,7 @@ export function initializeDialogInput(): () => void {
     if (!top) return;
     e.stopImmediatePropagation();
     const inside = e.target instanceof Node && top.contains(e.target);
+    if (inside && isCopyKey(e)) return;
     const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
     if (!inside || !plain || !DIALOG_KEYS.includes(e.key) || (e.repeat && (e.key === "Enter" || e.key === " "))) {
       e.preventDefault();

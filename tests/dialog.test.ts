@@ -129,3 +129,26 @@ test("the app installs the dialog key guard before any shortcut listener", async
   expect(guard).toBeLessThan(main.indexOf("mountTitlebar();"));
   expect(guard).toBeLessThan(main.indexOf('addEventListener("keydown"'));
 });
+
+test("after a click on its text the dialog keeps the keyboard: Esc, Tab, Enter and copying work", async () => {
+  stop = initializeDialogInput();
+  const answer = discard({ detail: "C:/Users/me/report.md" });
+  const d = open();
+  // A click on plain text focuses the nearest focusable ancestor: the dialog itself.
+  expect(d.tabIndex).toBe(-1);
+  d.focus();
+  const send = (init: KeyboardEventInit, target: EventTarget) => {
+    const e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(e);
+    return e;
+  };
+  const detail = d.querySelector(".va-dialog-detail")!;
+  expect(send({ key: "c", ctrlKey: true }, detail).defaultPrevented).toBe(false);
+  expect(send({ key: "a", ctrlKey: true }, d).defaultPrevented).toBe(false);
+  expect(send({ key: "Tab" }, d).defaultPrevented).toBe(false);
+  expect(send({ key: "Escape" }, d).defaultPrevented).toBe(false);
+  expect(send({ key: "s", ctrlKey: true }, d).defaultPrevented).toBe(true);
+  expect(send({ key: "c", ctrlKey: true }, document.body).defaultPrevented).toBe(true);
+  button("취소").click();
+  await answer;
+});

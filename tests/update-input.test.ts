@@ -40,3 +40,17 @@ test("during the update lock any app message dialog can still be answered", () =
     expect(e.defaultPrevented, key).toBe(false);
   }
 });
+test("during the update lock text in a message dialog can still be copied", () => {
+  document.body.innerHTML = '<main id="app"></main><dialog class="va-dialog va-message" open><p>C:/a.md</p><button>cancel</button></dialog>';
+  stop = initializeUpdateInput();
+  lockUpdateInput(true);
+  const text = document.querySelector(".va-message p")!;
+  for (const key of ["c", "a"]) {
+    const e = new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true, cancelable: true });
+    text.dispatchEvent(e);
+    expect(e.defaultPrevented, key).toBe(false);
+  }
+  const save = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true });
+  text.dispatchEvent(save);
+  expect(save.defaultPrevented).toBe(true);
+});

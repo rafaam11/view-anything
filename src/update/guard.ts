@@ -22,7 +22,8 @@ export function initializeUpdateInput(): () => void {
     // Any app message dialog stays usable: the restart question, and a close confirmation raised meanwhile.
     const dialog = (event.target as Element | null)?.closest?.(".va-message");
     const key = event as KeyboardEvent;
-    const dialogKey = ["Tab", "Enter", " ", "Escape", "ArrowLeft", "ArrowRight"].includes(key.key) && !key.ctrlKey && !key.altKey && !key.metaKey;
+    const copyKey = (key.ctrlKey || key.metaKey) && !key.altKey && !key.shiftKey && ["c", "a"].includes(key.key?.toLowerCase());
+    const dialogKey = copyKey || (["Tab", "Enter", " ", "Escape", "ArrowLeft", "ArrowRight"].includes(key.key) && !key.ctrlKey && !key.altKey && !key.metaKey);
     if (locked && (!dialog || (event.type === "keydown" && !dialogKey))) {
       event.preventDefault(); event.stopImmediatePropagation();
     }
