@@ -80,6 +80,14 @@ VS Code로 md를 보면 무겁고, 미리보기를 따로 켜야 하고, 렌더�
 
 > 2026-10-27 조정: STEP/IGES를 v0.2.0으로 당기고(원래 v0.3.0), 포인트클라우드를 v0.3.0, 나머지 형식을 v0.4.0으로 옮겼다. 자동 업데이트는 v0.2.0에 넣는다.
 
+### Office 문서(docx·pptx·xlsx) 구현 결정
+
+- 목적은 Office가 없는 PC에서 보는 것이다. 읽기 전용이며 편집·저장은 하지 않는다. 구형 바이너리(.doc/.ppt/.xls)와 ODF는 범위 밖이다.
+- 레이아웃 재현을 우선한다. docx는 `docx-preview`, pptx는 `@aiden0z/pptx-renderer`(슬라이드 모드, `externalMedia: 'block'`, `pdfjs: false`, ZIP 권장 상한)를 쓴다. xlsx는 SheetJS npm 판의 알려진 취약점 때문에 jszip과 DOMParser로 만든 작은 리더(`src/office/xlsx/read.ts`)와 `ssf` 서식을 쓴다. 수식은 저장된 결과만 표시한다.
+- 세 뷰어는 각자 lazy 청크이며 진입·md 청크에 들어가지 않는다(`check-bundle`). 100 MiB 상한, 압축 해제 전 중앙 디렉터리 검사(항목 2만, 해제 합계 1 GiB), CFB(암호·구형) 거부를 공통으로 적용한다.
+- 문서 링크는 창을 이동시키지 않는다. http(s)·mailto만 외부로 열고 `#책갈피`는 문서 안에서 이동하며 나머지는 무시한다. docx altChunk(원시 HTML)는 렌더링하지 않는다.
+- 설치 프로그램은 Office 확장자를 OpenWithProgids에만 등록하고 기본 연결은 바꾸지 않는다(`file-associations.nsh`의 클래스별 `!if`).
+
 ### v0.3 포인트클라우드 구현 결정
 
 - PCD ASCII/binary/LZF binary_compressed를 읽고 binary로 저장한다. PLY ASCII/LE/BE의 점 scalar/list 속성을 읽고 LE로 저장한다. face PLY는 기존 메시 경로, 지원하지 않는 비점 요소가 있으면 읽기 전용이다.

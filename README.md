@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/github/v/release/rafaam11/view-anything?label=version&color=8b5cf6" alt="latest release">
 </p>
 
-**view-anything**은 탐색기에서 **더블클릭하면 메모장처럼 바로 열리는** 가벼운 범용 뷰어입니다(Tauri 2). Markdown · 텍스트/코드 · JSON/YAML/CSV · 이미지 · PDF · **3D 모델** · **포인트클라우드**를 한 앱으로 읽고, 필요한 만큼만 고칩니다.
+**view-anything**은 탐색기에서 **더블클릭하면 메모장처럼 바로 열리는** 가벼운 범용 뷰어입니다(Tauri 2). Markdown · 텍스트/코드 · JSON/YAML/CSV · 이미지 · PDF · **Office 문서(Word · PowerPoint · Excel)** · **3D 모델** · **포인트클라우드**를 한 앱으로 읽고, 필요한 만큼만 고칩니다.
 
 - **빠른 시작** — 확장자에 맞는 뷰어만 그때 불러옵니다. Markdown을 열 때 3D 엔진·PDF.js를 싣지 않습니다.
 - **읽기와 편집 분리** — 읽기 모드에서는 내용이 바뀌지 않습니다. Markdown은 `Ctrl+E`로 Typora식 WYSIWYG 편집을 엽니다.
@@ -55,6 +55,7 @@ https://github.com/user-attachments/assets/a1ab8e74-6d9b-43c4-acfb-16e3d72ae6b8
 | 데이터 | `.json` `.yaml` `.yml` `.csv` | 트리 · 원문 편집, CSV 표 · 셀 편집 |
 | 이미지 | `.png` `.jpg` `.jpeg` `.webp` `.bmp` `.gif` `.svg` | 확대 · 이동 · 넘기기 · 복사, 회전 · 반전 · 자르기 → 새 PNG |
 | PDF | `.pdf` | 읽기 전용 · 목차 · 검색 강조 · 텍스트 선택 · 암호 문서 |
+| Office 문서 | `.docx` `.pptx` `.xlsx` | 읽기 전용 · Office 없이 페이지 · 슬라이드 · 시트 보기 · 확대 |
 | 3D | `.step` `.stp` `.iges` `.igs` `.stl` `.obj` `.ply` `.gltf` `.glb` | 장면에 추가 · 표시 모드 · 단면 · 치수 · HTML로 내보내기 |
 | 포인트클라우드 | `.pcd` `.ply` `.las` `.laz` | 색 · 점 조회 · 선택 · Voxel/SOR/반경 필터 · ICP 정합 · 다른 이름 저장 |
 
@@ -110,6 +111,16 @@ PNG/JPEG/WebP/BMP/GIF/SVG를 아이콘 중심 화면으로 봅니다.
 
 읽기 전용 페이지 이동 · 확대, 텍스트 선택 · 복사, 검색 결과 강조와 목차를 지원합니다. 100 MiB까지 열며 현재 페이지만 렌더링합니다. 암호화된 PDF는 암호 입력 후 열 수 있고, 암호는 입력하는 동안만 보관하며 저장하거나 로그에 남기지 않습니다.
 
+### Office 문서
+
+Office가 설치되지 않은 PC에서도 Word(`.docx`) · PowerPoint(`.pptx`) · Excel(`.xlsx`)을 읽기 전용으로 엽니다. 렌더러는 그 형식을 열 때만 불러오고 100 MiB까지 엽니다. 압축을 풀기 전에 항목 수와 해제 크기를 검사합니다.
+
+- **Word** — 페이지 모양 그대로(글꼴 · 표 · 이미지 · 머리글/바닥글 · 각주) 표시합니다. 웹 · 메일 링크는 기본 브라우저로 열고 문서 안 책갈피로 이동하며, 그 밖의 링크는 열지 않습니다.
+- **PowerPoint** — 슬라이드 한 장씩 창에 맞춰 보여 주고 도형 · 표 · 차트 · 이미지를 그립니다. 외부 링크 그림 · 미디어는 불러오지 않습니다.
+- **Excel** — 시트 탭, 숫자 · 날짜 서식, 글꼴 · 채우기 · 테두리 · 정렬, 열 너비 · 행 높이, 병합 셀과 틀 고정을 재현합니다. 수식은 파일에 저장된 결과를 보여 주며 다시 계산하지 않습니다. 200행 × 50열 단위로 넘기며 시트당 100만 셀까지 표시합니다.
+
+암호로 보호된 문서와 구형 바이너리 형식(`.doc` `.ppt` `.xls`)은 열지 않습니다. 설치 프로그램은 이 확장자들을 **연결 프로그램** 목록에만 올리고 기본 앱은 바꾸지 않습니다.
+
 ### 3D
 
 STEP · IGES · STL · OBJ · PLY · glTF · GLB를 엽니다. 파싱 · 엣지 · BVH는 워커에서 계산하고, STEP/IGES 변환기(occt wasm)는 그 형식을 열 때만 불러옵니다.
@@ -146,6 +157,8 @@ PCD/PLY/LAS/LAZ. 원본 RGB · 높이 · intensity · 분류(ASPRS 범례) 표�
 | 이미지 | `Ctrl+휠` · `Ctrl+0` · `←` `→` · `F5` | 확대 · 맞춤 · 이전/다음 · 목록 새로고침 |
 | 이미지 | `Ctrl+C` · `Ctrl+Shift+C` · `Ctrl+Z` · `Ctrl+Y` | 원본 해상도 복사 · 파일 경로 복사 · 실행 취소 · 다시 실행 |
 | PDF | `Ctrl+F` | 찾기 |
+| Office 문서 | `Ctrl+휠` · `Ctrl+=` · `Ctrl+-` · `Ctrl+0` | 확대 · 크게 · 작게 · 맞춤 |
+| PowerPoint · Excel | `PgUp` `PgDn` · `Home` `End` · `Ctrl+PgUp` `Ctrl+PgDn` | 이전/다음 · 처음/마지막 슬라이드 · 이전/다음 시트 |
 | 3D | `1`~`7` · `F` · `Ctrl+Shift+E` | 표준 방향 · 전체 맞춤 · HTML로 내보내기 |
 
 ## 설정 · 테마

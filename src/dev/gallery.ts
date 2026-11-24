@@ -14,6 +14,9 @@ import "../text/viewer.css";
 import "../data/data.css";
 import "../pdf/viewer.css";
 import "../image/viewer.css";
+import "../office/office.css";
+import { renderSheet } from "../office/xlsx/viewer";
+import type { Cell, CellStyle, Sheet } from "../office/xlsx/read";
 import { documentBar } from "../ui/chrome";
 import { iconButton, menuButton, textButton, type ButtonVariant } from "../ui/icons";
 import { mountTitlebar } from "../titlebar";
@@ -153,6 +156,26 @@ if (view3d) {
     for (const el of document.querySelectorAll(".va-update")) if (!before.has(el)) holder.append(el);
   }
   section("업데이트 배지", holder);
+}
+
+{
+  // Same DOM as src/office/xlsx/viewer.ts: a sheet on white paper with headers, a frozen row, a merge and tabs.
+  const styles: CellStyle[] = [{}, { bold: true, color: "#ffffff", fill: "#4472c4", horizontal: "center" }, { bold: true, size: 14, color: "#1f4e79" }];
+  const rows = new Map<number, Map<number, Cell>>();
+  const put = (r: number, c: number, text: string, style = 0, number = false) => { if (!rows.has(r)) rows.set(r, new Map()); rows.get(r)!.set(c, { text, style, number }); };
+  put(0, 0, "분기별 매출 — 제목은 빈 옆 칸으로 넘칩니다", 2);
+  ["지역", "1분기", "2분기", "합계"].forEach((t, c) => put(1, c, t, 1));
+  [["서울", "1,235", "1,556", "2,791"], ["부산", "2,469", "2,790", "5,259"]].forEach((row, r) => row.forEach((t, c) => put(r + 2, c, t, 0, c > 0)));
+  const sheet: Sheet = { name: "매출", rows, rowCount: 5, columnCount: 5, columnWidths: new Map([[0, 110]]), rowHeights: new Map([[0, 28]]),
+    defaultColumnWidth: 64, defaultRowHeight: 20, hiddenRows: new Set(), hiddenColumns: new Set(), merges: [{ r1: 4, c1: 0, r2: 4, c2: 2 }],
+    frozenRows: 2, frozenColumns: 1, gridLines: true, truncated: false };
+  put(4, 0, "병합된 셀", 0);
+  const scroll = document.createElement("div"); scroll.className = "xlsx-scroll"; scroll.style.height = "180px";
+  scroll.append(renderSheet(sheet, styles, 0, 0));
+  const tabs = document.createElement("nav"); tabs.className = "xlsx-tabs";
+  for (const [i, name] of ["매출", "긴 목록"].entries()) { const b = button(name, { variant: "ghost" }); b.classList.add("xlsx-tab"); b.setAttribute("aria-current", i === 0 ? "page" : "false"); tabs.append(b); }
+  const root = document.createElement("div"); root.className = "office-root xlsx-root va-viewer"; root.style.height = "auto"; root.append(scroll, tabs);
+  section("Excel 시트(읽기 전용)", root);
 }
 
 // Modal scenes on top of the page.
