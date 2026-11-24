@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { THREE_D_EXTENSIONS } from "../src/three/formats";
+import { OFFICE_EXTENSIONS } from "../src/office/formats";
 
 const conf = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
 const sec = conf.app.security;
@@ -42,4 +43,17 @@ test("file association classes are unique to the app and have human descriptions
     expect(a.name.startsWith(conf.identifier+".")).toBe(true);expect(a.description.length).toBeGreaterThan(0);return a.name;
   });
   expect(new Set(names).size).toBe(names.length);
+});
+
+test("office files are associated as one viewer class that the installer only offers under Open With", () => {
+  const office = conf.bundle.fileAssociations.find((a: { ext: string[] }) => a.ext.includes("docx"));
+  expect([...office.ext].sort()).toEqual([...OFFICE_EXTENSIONS].sort());
+  expect(office.role).toBe("Viewer");
+  const hook = readFileSync(new URL("../src-tauri/windows/file-associations.nsh", import.meta.url), "utf8");
+  // The default-taking block is compiled out for exactly this class; Open With stays for every class.
+  expect(hook).toContain(`!if "\${FILECLASS}" != "${office.name}"`);
+  const guarded = hook.slice(hook.indexOf("!if"), hook.indexOf("!endif"));
+  const nsis = (name: string) => `$${"{"}${name}}`;
+  expect(guarded).toContain(String.raw`WriteRegStr SHELL_CONTEXT "Software\Classes\.` + `${nsis("EXT")}" "" "${nsis("FILECLASS")}"`);
+  expect(guarded).not.toContain("OpenWithProgids");
 });

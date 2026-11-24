@@ -37,16 +37,16 @@ try {
   mode='bad-signature';await first.keyboard.press('Control+Shift+u');await until(()=>downloads>0,'signed payload download');await state(first,'error');results.push('HTTP failure and invalid update signature rejected');
   mode='valid';await first.keyboard.press('Control+Shift+u');await state(first,'downloaded');
   const pages={};
-  for(const ext of ['txt','png','pdf','pcd']){
+  for(const ext of ['txt','png','pdf','pcd','docx']){
     const a=config.bundle.fileAssociations.find(a=>a.ext.includes(ext));const opened=context.waitForEvent('page');ps('open',['-File',files[ext],'-Class',a.name]);const p=watch(await opened);pages[ext]=p;
-    await p.locator(({txt:'.text-source',png:'.image-area img',pdf:'.pdf-root canvas',pcd:'.va3d canvas'})[ext]).waitFor();
+    await p.locator(({txt:'.text-source',png:'.image-area img',pdf:'.pdf-root canvas',pcd:'.va3d canvas',docx:'.docx-pages section.docx'})[ext]).waitFor();
     if(ext==='txt')assert.equal(await p.getByLabel('텍스트 내용').inputValue(),'원문 보존\nsecond line\n');
     if(ext==='png')await p.waitForFunction(()=>document.querySelector('.image-area img')?.naturalWidth===160);
-    if(ext==='pdf')await p.getByText('needle desktop test',{exact:true}).waitFor();
+    if(ext==='pdf'||ext==='docx')await p.getByText('needle desktop test',{exact:true}).waitFor();
     if(ext==='pcd')await p.waitForFunction(()=>document.querySelector('.va3d-status')?.textContent.includes('점 8'));
     await p.screenshot({path:path.join(evidence,`installed-${ext}.png`)});
   }
-  results.push('ShellExecuteEx registered Open With for spaced/Korean TXT, PNG, PDF and PCD');
+  results.push('ShellExecuteEx registered Open With for spaced/Korean TXT, PNG, PDF, PCD and DOCX');
   const text=pages.txt;await text.getByRole('button',{name:'편집',exact:true}).click();await text.getByLabel('텍스트 내용').fill('unsaved update test\n');
   await first.getByRole('button',{name:'재시작',exact:true}).click();const dialog=first.locator('.va-update-dialog');await dialog.waitFor();await dialog.getByText('저장하지 않은 변경과 진행 중인 작업은 사라집니다. 저장하려면 취소하세요.',{exact:true}).waitFor();
   assert.equal(await text.locator('#app').getAttribute('inert'),'');

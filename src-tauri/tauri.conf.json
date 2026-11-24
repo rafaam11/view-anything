@@ -86,6 +86,12 @@
         "role": "Viewer"
       },
       {
+        "ext": ["docx", "pptx", "xlsx"],
+        "name": "com.rafaam11.viewanything.office",
+        "description": "Office Document",
+        "role": "Viewer"
+      },
+      {
         "ext": ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"],
         "name": "com.rafaam11.viewanything.image",
         "description": "Image",

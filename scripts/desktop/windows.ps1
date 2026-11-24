@@ -18,6 +18,9 @@ $expectedPath = Join-Path $testRoot 'registry-expected.json'
 $otherClass = 'com.rafaam11.viewanything.desktop-smoke.other'
 $previousClass = 'com.rafaam11.viewanything.desktop-smoke.previous'
 $legacyClass = 'com.rafaam11.viewanything.desktop-smoke.legacy'
+# Office files are only offered under Open With; the handler seeded here must keep .docx.
+$officeClass = 'com.rafaam11.viewanything.office'
+$officeOwner = 'com.rafaam11.viewanything.desktop-smoke.office-owner'
 function RegistryDefault([string]$Key) {
   $item = Get-Item -LiteralPath $Key -ErrorAction SilentlyContinue
   if ($item) { return [string]$item.GetValue('','') }
@@ -41,6 +44,9 @@ switch ($Action) {
     New-Item -Path 'HKCU:\Software\Classes\.txt' -Force | Out-Null
     Set-Item -LiteralPath 'HKCU:\Software\Classes\.txt' -Value $previousClass
     $state.txt = $previousClass
+    New-Item -Path 'HKCU:\Software\Classes\.docx' -Force | Out-Null
+    Set-Item -LiteralPath 'HKCU:\Software\Classes\.docx' -Value $officeOwner
+    $state.docx = $officeOwner
     $state | ConvertTo-Json | Set-Content -LiteralPath $expectedPath -Encoding UTF8
   }
   'change-associations' {
@@ -62,15 +68,18 @@ switch ($Action) {
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $exe)) { throw "Installation failed: $($process.ExitCode)" }
   }
   'associations' {
+    $expected = Get-Content -LiteralPath $expectedPath -Raw | ConvertFrom-Json
     foreach ($a in $config.bundle.fileAssociations) {
       $command = RegistryDefault "HKCU:\Software\Classes\$($a.name)\shell\open\command"
       if ($command -ne "`"$exe`" `"%1`"") { throw "Unexpected association command for $($a.name): $command" }
       foreach ($ext in $a.ext) {
-        $wanted = if ($ext -eq 'log' -and (Test-Path -LiteralPath (Join-Path $testRoot 'associations-changed'))) { $otherClass } else { $a.name }
+        $openWith = Get-Item -LiteralPath "HKCU:\Software\Classes\.$ext\OpenWithProgids" -ErrorAction SilentlyContinue
+        if (!$openWith -or $openWith.GetValueNames() -notcontains $a.name) { throw "Open With is missing $($a.name) for .$ext" }
+        $wanted = if ($a.name -eq $officeClass) { [string]$expected.$ext } elseif ($ext -eq 'log' -and (Test-Path -LiteralPath (Join-Path $testRoot 'associations-changed'))) { $otherClass } else { $a.name }
         if ((RegistryDefault "HKCU:\Software\Classes\.$ext") -ne $wanted) { throw "Unexpected .$ext registration" }
       }
     }
-    Write-Output 'PASS registry extension classes and quoted file-open commands'
+    Write-Output 'PASS registry extension classes, Open With entries, untouched Office defaults and quoted file-open commands'
   }
   'open' {
     if (!$File.StartsWith($testRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Only synthetic test files may be opened.' }
@@ -118,7 +127,7 @@ public class ShellOpen {
       if (Test-Path -LiteralPath "HKCU:\Software\Classes\$($a.name)") { throw "Class remains after uninstall: $($a.name)" }
     }
     $before = Get-Content -LiteralPath (Join-Path $testRoot 'registry-before.json') -Raw | ConvertFrom-Json
-    foreach ($ext in @('txt','log')) {
+    foreach ($ext in @('txt','log','docx')) {
       if ([string]$before.$ext) { Set-Item -LiteralPath "HKCU:\Software\Classes\.$ext" -Value ([string]$before.$ext) }
       else { Remove-ItemProperty -LiteralPath "HKCU:\Software\Classes\.$ext" -Name '(default)' -ErrorAction SilentlyContinue }
     }

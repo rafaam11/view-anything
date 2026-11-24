@@ -30,11 +30,12 @@ export async function until(fn, label, timeout = 60000) {
 }
 export function fixtures(root) {
   const dir = path.join(root, 'files with spaces'); fs.mkdirSync(dir, { recursive: true });
-  const files = { txt: path.join(dir, '한글 text.txt'), png: path.join(dir, 'sample image.png'), pdf: path.join(dir, 'sample.pdf'), pcd: path.join(dir, 'grid.pcd'), stl: path.join(dir, 'cube.stl') };
+  const files = { txt: path.join(dir, '한글 text.txt'), png: path.join(dir, 'sample image.png'), pdf: path.join(dir, 'sample.pdf'), pcd: path.join(dir, 'grid.pcd'), stl: path.join(dir, 'cube.stl'), docx: path.join(dir, 'sample document.docx') };
   fs.writeFileSync(files.txt, '\ufeff원문 보존\r\nsecond line\r\n');
   fs.copyFileSync(path.join(repo, 'tests/fixtures/그림 1.png'), files.png);
   fs.copyFileSync(path.join(repo, 'tests/fixtures/3d/grid.pcd'), files.pcd);
   fs.copyFileSync(path.join(repo, 'tests/fixtures/3d/cube-ascii.stl'), files.stl);
+  fs.copyFileSync(path.join(repo, 'tests/fixtures/office/sample.docx'), files.docx);
   const stream = 'BT /F1 18 Tf 40 100 Td (needle desktop test) Tj ET';
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`];
   let pdf = '%PDF-1.4\n', offsets = [0];

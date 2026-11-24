@@ -5,6 +5,8 @@
   Push $R0
   Push $R1
   Push $R2
+  ; Office files are only offered under Open With: the installer never takes them from Office.
+  !if "${FILECLASS}" != "com.rafaam11.viewanything.office"
   ReadRegStr $R0 SHELL_CONTEXT "Software\Classes\.${EXT}" ""
   ${If} $R0 != "${FILECLASS}"
     ReadRegStr $R1 SHELL_CONTEXT "Software\Classes\$R0\shell\open\command" ""
@@ -23,6 +25,7 @@
       WriteRegStr SHELL_CONTEXT "Software\Classes\.${EXT}" "" "${FILECLASS}"
     ${EndIf}
   ${EndIf}
+  !endif
   ; Keep Open With available even if another app became the default meanwhile.
   WriteRegStr SHELL_CONTEXT "Software\Classes\.${EXT}\OpenWithProgids" "${FILECLASS}" ""
   WriteRegStr SHELL_CONTEXT "Software\Classes\${FILECLASS}" "" `${DESCRIPTION}`
