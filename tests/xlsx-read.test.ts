@@ -21,7 +21,7 @@ test("values are shown as Excel formats them", async () => {
   const bytes = await makeXlsx([{ name: "데이터", xml: `<sheetData>
     <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="inlineStr"><is><t>인라인</t></is></c></row>
     <row r="2"><c r="A2" s="1"><v>0.256</v></c><c r="B2" s="2"><v>45658</v></c><c r="C2" t="b"><v>1</v></c><c r="D2" t="e"><v>#DIV/0!</v></c></row>
-    <row r="3"><c r="A3" s="4"><f>SUM(1,2)</f><v>1234.5</v></c><c r="B3" t="str"><f>"a"&amp;"b"</f><v>ab</v></c><c r="C3"><v>12</v></c><c s="3"><v>1</v></c></row>
+    <row r="3"><c r="A3" s="4"><f>SUM(1,2)</f><v>1234.5</v></c><c r="B3" t="str"><f>"a"&amp;"b"</f><v>ab</v></c><c r="C3"><v>12</v></c><c s="3"><v>1</v></c><c r="E3"><f>SUM(A1)</f><v></v></c></row>
   </sheetData>` }], {
     styles: STYLES,
     shared: `<si><t>&lt;script&gt;alert(1)&lt;/script&gt;</t></si><si><r><t>굵</t></r><r><t xml:space="preserve">게 </t></r><rPh><t>ふりがな</t></rPh></si>`,
@@ -42,6 +42,7 @@ test("values are shown as Excel formats them", async () => {
   expect(text(2, 2)).toBe("12");
   expect(sheet.rows.get(2)?.get(2)?.number).toBe(true);
   expect(text(2, 3)).toBe("1/1/00"); // no `r`: the next column; serial 1 is 1900-01-01
+  expect(sheet.rows.get(2)?.has(4)).toBe(false);
   expect(sheet.rowCount).toBe(3); expect(sheet.columnCount).toBe(4);
   const style = book.styles[1];
   expect(style).toMatchObject({ bold: true, italic: true, size: 14, color: "#ff0000", font: "맑은 고딕", fill: "#ffff00" });

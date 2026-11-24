@@ -144,7 +144,8 @@ function cellText(c: Element, { shared, formats, date1904 }: Context, style: num
   const type = c.getAttribute("t") ?? "n";
   if (type === "inlineStr") { const is = first(c, "is"); return is ? richText(is) : ""; }
   const v = first(c, "v")?.textContent ?? null;
-  if (v === null) return null;
+  // A formula saved without its result (`<v/>`, written by some generators) shows as empty, not 0.
+  if (v === null || v === "") return null;
   switch (type) {
     case "s": return shared[Math.trunc(Number(v))] ?? "";
     case "b": return v === "1" || v === "true" ? "TRUE" : "FALSE";

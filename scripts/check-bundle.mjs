@@ -15,7 +15,7 @@ const FORBIDDEN = /three|occt|pdfjs|plugin-updater|plugin-process|jszip|\/ssf\/|
 // jszip's own error text, which the Office viewers' zip reader always carries.
 const CODE_MARKERS = /__THREE__|occt-import-js\.wasm|pdfjsLib|pdfjsWorker|plugin:updater\||plugin:process\||Corrupted zip/;
 /** The other lazy viewers may load PDF.js or the updater (the PDF viewer must), but never the 3D stack. */
-const OTHER_VIEWERS = ["src/pdf/viewer.ts", "src/image/viewer.ts", "src/text/viewer.ts", "src/data/csv-viewer.ts", "src/data/structured-viewer.ts", "src/office/xlsx/viewer.ts"];
+const OTHER_VIEWERS = ["src/pdf/viewer.ts", "src/image/viewer.ts", "src/text/viewer.ts", "src/data/csv-viewer.ts", "src/data/structured-viewer.ts", "src/office/docx-viewer.ts", "src/office/xlsx/viewer.ts"];
 const FORBIDDEN_3D = /three|occt/i;
 const CODE_MARKERS_3D = /__THREE__|occt-import-js\.wasm/;
 /**
