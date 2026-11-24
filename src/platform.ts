@@ -4,6 +4,7 @@ import { open, save, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { THREE_D_EXTENSIONS } from "./three/formats";
 import { TEXT_EXTENSIONS } from "./text/formats";
+import { OFFICE_EXTENSIONS } from "./office/formats";
 import { showDialog, type DialogKind } from "./ui/dialog";
 import { DISCARD_CLOSE } from "./ui/strings";
 
@@ -74,7 +75,7 @@ export const platform = {
       directory: false,
       filters: opts.text ? [{ name: "텍스트로 열기", extensions: ["*"] }] : opts.only3d
         ? [models]
-        : [{ name: "텍스트·코드", extensions: TEXT_EXTENSIONS }, { name: "Markdown", extensions: ["md", "markdown"] }, { name: "PDF", extensions: ["pdf"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
+        : [{ name: "텍스트·코드", extensions: TEXT_EXTENSIONS }, { name: "Markdown", extensions: ["md", "markdown"] }, { name: "PDF", extensions: ["pdf"] }, { name: "데이터", extensions: ["csv", "json", "yaml", "yml"] }, { name: "Office 문서", extensions: OFFICE_EXTENSIONS }, { name: "이미지", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"] }, models, { name: "모든 파일", extensions: ["*"] }],
     });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];

@@ -8,7 +8,8 @@ import { registerTextSettings } from "../settings/document";
 import { FileDocument } from "./document";
 import { saveCopy } from "./save-copy";
 import { documentBar } from "../ui/chrome";
-import { iconButton, menuButton, textButton } from "../ui/icons";
+import { menuButton, textButton } from "../ui/icons";
+import { tablePager } from "./table-pages";
 import { toast } from "../ui/toast";
 import { CONFLICT_RELOAD, COPY_SAVED, DISCARD, DISCARD_CLOSE, DISCARD_RELOAD, SAVED, errorMessage } from "../ui/strings";
 
@@ -34,20 +35,11 @@ const viewer: Viewer = {
     const status = document.createElement("span"); status.setAttribute("role", "status");
     documentBar(bar, { toggle: edit, files: [save, copy, reload] });
     const body = document.createElement("div"); body.className = "data-table-wrap";
-    const pages = document.createElement("nav"); pages.className = "data-pages"; pages.setAttribute("aria-label", "CSV 페이지");
-    const previous = iconButton("이전 페이지", "previous");
-    const next = iconButton("다음 페이지", "next");
-    const pageLabel = document.createElement("span");
-    const previousColumns = iconButton("이전 열", "previous");
-    const nextColumns = iconButton("다음 열", "next");
-    const columnLabel = document.createElement("span");
-    const separator = document.createElement("span"); separator.className = "data-pages-sep"; separator.textContent = "·"; separator.setAttribute("aria-hidden", "true");
-    const columnsName = document.createElement("span"); columnsName.textContent = "열";
-    pages.append(previous, pageLabel, next, separator, columnsName, previousColumns, columnLabel, nextColumns);
-    status.className = "va-status"; root.append(bar, status, pages, body); el.replaceChildren(root);
+    const pages = tablePager("CSV 페이지", { rows: PAGE_ROWS, columns: PAGE_COLUMNS }, () => showPage());
+    status.className = "va-status"; root.append(bar, status, pages.element, body); el.replaceChildren(root);
     let editing = false, approved = false, busy = false, invalid = false, cp949 = false, decodeFailed = false;
     let source = "", meta: TextMeta | null = null, changes = new Map<CsvCell, string>();
-    let rows: CsvRows = [], page = 0, columnPage = 0, columnCount = 0, editRevision = 0;
+    let rows: CsvRows = [], columnCount = 0, editRevision = 0;
     const dirty = () => doc.dirty || changes.size > 0 || invalid;
     const refresh = () => {
       title.textContent = (dirty() ? "● " : "") + name;
@@ -58,6 +50,8 @@ const viewer: Viewer = {
       return encodeRaw(meta, updateCsv(source, ",", [...changes].map(([cell, value]) => ({ cell, value }))));
     };
     const showPage = () => {
+      pages.update(rows.length, columnCount);
+      const page = pages.row, columnPage = pages.column;
       const table = document.createElement("table"); table.className = "data-table";
       for (const row of rows.slice(page * PAGE_ROWS, (page + 1) * PAGE_ROWS)) {
         const tr = document.createElement("tr");
@@ -77,24 +71,17 @@ const viewer: Viewer = {
         table.append(tr);
       }
       body.replaceChildren(table); refresh();
-      const count = Math.max(1, Math.ceil(rows.length / PAGE_ROWS));
-      pageLabel.textContent = `${page + 1} / ${count}`;
-      previous.disabled = page === 0; next.disabled = page + 1 >= count;
-      const columns = Math.max(1, Math.ceil(columnCount / PAGE_COLUMNS));
-      columnLabel.textContent = `${columnPage + 1} / ${columns}`;
-      previousColumns.disabled = columnPage === 0; nextColumns.disabled = columnPage + 1 >= columns;
-      pages.hidden = count === 1 && columns === 1;
     };
     let mounted = false;
     /** Nothing editable can be shown: keep the window, drop to read mode with no stale cells, and say why. */
     const unreadable = (message: string) => {
       meta = null; source = ""; rows = []; columnCount = 0; decodeFailed = true;
       editing = false; edit.textContent = "편집"; edit.disabled = true; save.hidden = copy.hidden = true; reload.hidden = false;
-      body.replaceChildren(); pages.hidden = true; status.textContent = message; refresh();
+      body.replaceChildren(); pages.element.hidden = true; status.textContent = message; refresh();
     };
     /** Decode with the chosen encoding and parse; the table only changes once both succeeded. */
     const render = async () => {
-      changes = new Map(); invalid = false; page = columnPage = 0;
+      changes = new Map(); invalid = false; pages.row = pages.column = 0;
       let decoded: TextMeta;
       try { decoded = await decodeText(doc.bytes, cp949); }
       catch (e) { unreadable(decodeHint(e)); return; }
@@ -110,10 +97,6 @@ const viewer: Viewer = {
       meta = decoded; source = decoded.text; rows = parsed;
       columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0); showPage();
     };
-    previous.onclick = () => { if (page > 0) { page--; showPage(); } };
-    next.onclick = () => { if ((page + 1) * PAGE_ROWS < rows.length) { page++; showPage(); } };
-    previousColumns.onclick = () => { if (columnPage > 0) { columnPage--; showPage(); } };
-    nextColumns.onclick = () => { if ((columnPage + 1) * PAGE_COLUMNS < columnCount) { columnPage++; showPage(); } };
     const report = (error: unknown) => { void platform.alert(errorMessage(error)).catch(() => {}); };
     const confirmLeave = async (text = DISCARD, label = "버리기") => {
       if (approved || !dirty()) return true;

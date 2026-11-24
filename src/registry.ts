@@ -21,6 +21,7 @@ viewers["csv"] = () => import("./data/csv-viewer").then((m) => m.default);
 viewers["pdf"] = () => import("./pdf/viewer").then((m) => m.default);
 const loadStructured = () => import("./data/structured-viewer").then((m) => m.default);
 for (const ext of ["json", "yaml", "yml"]) viewers[ext] = loadStructured;
+viewers["xlsx"] = () => import("./office/xlsx/viewer").then((m) => m.default);
 const loadImage = () => import("./image/viewer").then((m) => m.default);
 for (const ext of ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"]) viewers[ext] = loadImage;
 // three.js stays out of the entry chunk: the 3D viewer is only reached through this import.

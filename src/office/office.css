@@ -1,0 +1,22 @@
+/* Office documents are drawn on white paper in both themes, as Office itself does (like PDF pages). */
+.office-zoom { min-width: 3.5em; text-align: center; font-variant-numeric: tabular-nums; }
+.office-root { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.office-root > .va-banner { margin: 6px 12px 0; }
+
+/* xlsx */
+.xlsx-scroll { flex: 1; min-height: 0; overflow: auto; background: white; color: black; outline: none; }
+.xlsx-grid { table-layout: fixed; border-collapse: collapse; font: 11pt/1.2 Calibri, "Malgun Gothic", var(--font-ui); color: black; }
+.xlsx-grid td { overflow: hidden; white-space: pre; padding: 0 2px; border: 1px solid #e1e1e1; vertical-align: bottom; }
+.xlsx-no-grid td { border-color: transparent; }
+.xlsx-grid td.xlsx-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.xlsx-grid td.xlsx-spill { overflow: visible; }
+.xlsx-grid th { position: sticky; z-index: 1; font: 11px var(--font-ui); font-weight: normal; color: #444; background: #f3f3f3; border: 1px solid #d0d0d0; padding: 0 4px; overflow: hidden; white-space: nowrap; }
+.xlsx-grid thead th { top: 0; height: 20px; z-index: 3; }
+.xlsx-grid tbody th { left: 0; text-align: right; }
+.xlsx-grid thead th.xlsx-corner { left: 0; z-index: 4; }
+.xlsx-grid .xlsx-frozen-row > td, .xlsx-grid td.xlsx-frozen-col { position: sticky; z-index: 2; background-color: white; }
+.xlsx-grid .xlsx-frozen-row > th { z-index: 3; }
+.xlsx-grid .xlsx-frozen-row > td.xlsx-frozen-col { z-index: 3; }
+.xlsx-tabs { flex: none; display: flex; gap: 2px; overflow-x: auto; padding: 2px 8px; border-top: 1px solid var(--border); }
+.xlsx-tab { flex: none; max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xlsx-tab[aria-current="page"] { font-weight: 600; box-shadow: inset 0 -2px var(--accent); }

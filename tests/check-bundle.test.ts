@@ -132,6 +132,19 @@ test("other viewers may reach pdfjs but not three", () => {
 });
 
 
+test("office libraries stay out of the entry and md chunks but may load in their viewer", () => {
+  const m = manifest({
+    "src/office/xlsx/viewer.ts": { file: "assets/viewer-LLL.js", src: "src/office/xlsx/viewer.ts", isDynamicEntry: true, imports: ["_jszip.min-MMM.js"] },
+    "_jszip.min-MMM.js": { file: "assets/jszip.min-MMM.js", name: "jszip.min" },
+  });
+  expect(checkManifest(m, () => "export{}")).toEqual([]);
+  const polluted = manifest({ "_jszip.min-MMM.js": { file: "assets/jszip.min-MMM.js", name: "jszip.min" } }, ["_jszip.min-MMM.js"]);
+  expect(checkManifest(polluted, () => "export{}").join("\n")).toMatch(/index\.html statically reaches _jszip/);
+  const inlined = (f: string) => (f === "assets/viewer-CCC.js" ? 'throw new Error("Corrupted zip : CRC32 mismatch")' : "export{}");
+  expect(checkManifest(manifest(), inlined).join("\n")).toMatch(/src\/md\/viewer\.ts.*Corrupted zip/);
+});
+
+
 test("the text viewer chunk loads highlight.js lazily, never inlined", () => {
   const m = manifest({ "src/text/viewer.ts": { file: "assets/text-LLL.js", src: "src/text/viewer.ts", isDynamicEntry: true, imports: [] } });
   const inlined = checkManifest(m, (f: string) => (f === "assets/text-LLL.js" ? "e.highlightAuto=function(){}" : "export{}"));

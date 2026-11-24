@@ -1,6 +1,6 @@
 // Usage: node scripts/check-bundle.mjs   (after `npm run build`)
 // Exits 1 if three.js or occt is statically reachable from the entry chunk, the md viewer or the
-// other lazy viewers (PDF, image, text, CSV, JSON/YAML), if the entry or md viewer chunk is over
+// other lazy viewers (PDF, image, text, CSV, JSON/YAML, Office), if the entry or md viewer chunk is over
 // its size budget, and if the exported-HTML runtime (build/runtime/va-runtime.js) is missing or
 // references Tauri. Reads the Vite 8 (rolldown) manifest at dist/.vite/manifest.json. The manifest
 // lists chunks, not the modules inlined into them, so each reached chunk's code is also scanned for
@@ -10,11 +10,12 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MD_VIEWER = "src/md/viewer.ts";
-const FORBIDDEN = /three|occt|pdfjs|plugin-updater|plugin-process/i;
+const FORBIDDEN = /three|occt|pdfjs|plugin-updater|plugin-process|jszip|\/ssf\/|docx-preview|pptx|echarts/i;
 // `window.__THREE__ = REVISION` (three.core.js) and emscripten's default wasm file name.
-const CODE_MARKERS = /__THREE__|occt-import-js\.wasm|pdfjsLib|pdfjsWorker|plugin:updater\||plugin:process\|/;
+// jszip's own error text, which the Office viewers' zip reader always carries.
+const CODE_MARKERS = /__THREE__|occt-import-js\.wasm|pdfjsLib|pdfjsWorker|plugin:updater\||plugin:process\||Corrupted zip/;
 /** The other lazy viewers may load PDF.js or the updater (the PDF viewer must), but never the 3D stack. */
-const OTHER_VIEWERS = ["src/pdf/viewer.ts", "src/image/viewer.ts", "src/text/viewer.ts", "src/data/csv-viewer.ts", "src/data/structured-viewer.ts"];
+const OTHER_VIEWERS = ["src/pdf/viewer.ts", "src/image/viewer.ts", "src/text/viewer.ts", "src/data/csv-viewer.ts", "src/data/structured-viewer.ts", "src/office/xlsx/viewer.ts"];
 const FORBIDDEN_3D = /three|occt/i;
 const CODE_MARKERS_3D = /__THREE__|occt-import-js\.wasm/;
 /**
