@@ -22,6 +22,7 @@ viewers["pdf"] = () => import("./pdf/viewer").then((m) => m.default);
 const loadStructured = () => import("./data/structured-viewer").then((m) => m.default);
 for (const ext of ["json", "yaml", "yml"]) viewers[ext] = loadStructured;
 viewers["docx"] = () => import("./office/docx-viewer").then((m) => m.default);
+viewers["pptx"] = () => import("./office/pptx-viewer").then((m) => m.default);
 viewers["xlsx"] = () => import("./office/xlsx/viewer").then((m) => m.default);
 const loadImage = () => import("./image/viewer").then((m) => m.default);
 for (const ext of ["png", "jpg", "jpeg", "webp", "bmp", "gif", "svg"]) viewers[ext] = loadImage;

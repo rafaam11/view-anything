@@ -15,6 +15,7 @@
     "lint": "biome lint src tests scripts"
   },
   "dependencies": {
+    "@aiden0z/pptx-renderer": "^1.4.0",
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
@@ -60,5 +61,10 @@
     "typescript": "~6.0.3",
     "vite": "^8.0.16",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "@aiden0z/pptx-renderer": {
+      "pdfjs-dist": "$pdfjs-dist"
+    }
   }
 }

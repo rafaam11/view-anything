@@ -27,3 +27,8 @@
 .docx-pages > .docx-wrapper { background: transparent; padding: 24px 24px 0; }
 .docx-pages > .docx-wrapper > section.docx { margin-bottom: 24px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); }
 .docx-pages a[href] { cursor: pointer; }
+
+/* pptx: one slide, centred on the inset background; scrolls when zoomed past the window. */
+.pptx-stage { flex: 1; min-height: 0; overflow: auto; display: flex; justify-content: safe center; align-items: safe center; padding: 24px; box-sizing: border-box; background: var(--bg-inset); outline: none; }
+.pptx-slide { flex: none; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); background: white; }
+.pptx-root .va-viewer-controls input[type=number] { width: 4.5em; }
