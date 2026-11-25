@@ -1,5 +1,6 @@
 import type { Heading } from "./render";
 import { textButton } from "../ui/icons";
+import { requestReveal } from "./fold";
 
 const KEY = "va.toc.collapsed";
 
@@ -40,7 +41,9 @@ export function buildToc(headings: Heading[], article: HTMLElement, scroller?: H
     a.textContent = h.text;
     a.onclick = (e) => {
       e.preventDefault();
-      document.getElementById(h.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const target = document.getElementById(h.id);
+      if (target) requestReveal(target);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     links.set(h.id, a);
     li.append(a);

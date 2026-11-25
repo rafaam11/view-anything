@@ -26,8 +26,8 @@ test("Markdown display edits and reset preserve the separate text settings",()=>
 test("the body width is a Markdown option that the Markdown reset restores",()=>{
   configureSettings("a.md");openSettings();
   const width=field("Markdown").querySelector<HTMLSelectElement>('select[aria-label="본문 폭"]')!;
-  expect(width.value).toBe("normal");change(width,"wide");expect(preferences().mdWidth).toBe("wide");
-  field("Markdown").querySelector("button")!.click();expect(preferences().mdWidth).toBe("normal");expect(width.value).toBe("normal");
+  expect(width.value).toBe("full");change(width,"wide");expect(preferences().mdWidth).toBe("wide");
+  field("Markdown").querySelector("button")!.click();expect(preferences().mdWidth).toBe("full");expect(width.value).toBe("full");
   document.querySelector("dialog")!.close();configureSettings("a.txt");openSettings();
   expect(document.querySelector('select[aria-label="본문 폭"]')).toBeNull();
 });

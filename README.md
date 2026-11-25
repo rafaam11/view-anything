@@ -50,7 +50,7 @@ https://github.com/user-attachments/assets/a1ab8e74-6d9b-43c4-acfb-16e3d72ae6b8
 
 | 형식 | 확장자 | 할 수 있는 일 |
 |---|---|---|
-| Markdown | `.md` `.markdown` | 읽기(Mermaid · KaTeX · 목차 · 찾기 · 변경 시 바로 갱신) · WYSIWYG 편집 · 고친 블록만 저장 |
+| Markdown | `.md` `.markdown` | 읽기(Mermaid · KaTeX · 목차 · 섹션 접기 · 찾기 · 변경 시 바로 갱신) · WYSIWYG 편집 · 고친 블록만 저장 |
 | 텍스트 · 코드 | `.txt` `.log` `.ini` `.toml` · C/C++ · Python · Rust · JS/TS 등 | 읽기 · 편집 · 검색, UTF-8/UTF-16 BOM 보존 · CP949 선택 |
 | 데이터 | `.json` `.yaml` `.yml` `.csv` | 트리 · 원문 편집, CSV 표 · 셀 편집 |
 | 이미지 | `.png` `.jpg` `.jpeg` `.webp` `.bmp` `.gif` `.svg` | 확대 · 이동 · 넘기기 · 복사, 회전 · 반전 · 자르기 → 새 PNG |

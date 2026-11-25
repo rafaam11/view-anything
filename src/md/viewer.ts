@@ -18,6 +18,7 @@ import { toast } from "../ui/toast";
 import { CONFLICT_READ_MODE, COPY_SAVED, DISCARD, DISCARD_CLOSE, SAVED, errorMessage } from "../ui/strings";
 import { applyPreferences, DEFAULTS, preferences } from "../settings/preferences";
 import { addCodeCopyButtons, imagesReady } from "./decorate";
+import { addSectionFolds, foldAll, REVEAL, requestReveal, reveal } from "./fold";
 import { watchFile } from "./file-watch";
 import { createFind } from "./find";
 import { createWheelStepper, sizeShortcut, stepMdSize } from "./font-size";
@@ -40,7 +41,9 @@ function scrollToId(raw: string) {
     id = decodeURIComponent(id);
   } catch {}
   // Sanitized raw-HTML ids/names and footnotes carry the "user-content-" prefix (see render.ts).
-  if (id) (document.getElementById(id) ?? document.getElementById("user-content-" + id))?.scrollIntoView({ block: "start" });
+  const target = id ? document.getElementById(id) ?? document.getElementById("user-content-" + id) : null;
+  if (target) requestReveal(target);
+  target?.scrollIntoView({ block: "start" });
 }
 
 function openInThisWindow(absPath: string, hash: string) {
@@ -154,6 +157,8 @@ return {
     const menus = documentBar(bar, { toggle, files: [saveButton, copy], view: [
       { label: "목차", checked: () => !root.querySelector(".toc")?.classList.contains("collapsed"), run: () => root.querySelector<HTMLButtonElement>(".toc-toggle")?.click() },
       { label: "찾기…", shortcut: "Ctrl+F", disabled: () => mode !== "read", run: () => find.open() },
+      { label: "모든 섹션 접기", disabled: () => mode !== "read", run: () => foldAll(article, folded, true) },
+      { label: "모든 섹션 펼치기", disabled: () => mode !== "read", run: () => foldAll(article, folded, false) },
       { separator: true },
       { label: "글자 크게", shortcut: "Ctrl+=", run: () => changeSize(1) },
       { label: "글자 작게", shortcut: "Ctrl+-", run: () => changeSize(-1) },
@@ -189,11 +194,17 @@ return {
     /** One mode switch, save or reload at a time; user actions arriving meanwhile are queued. */
     const tasks = createRunner((e) => platform.alert(errorMessage(e)));
 
-    const decorate = (target: ParentNode) => addCodeCopyButtons(
-      target,
-      (text) => platform.copyText(text),
-      (e) => { void platform.alert(errorMessage(e)).catch(() => {}); },
-    );
+    /** Folded section headings by id: kept across reloads of changed content, read mode only. */
+    const folded = new Set<string>();
+    article.addEventListener(REVEAL, (e) => reveal(article, folded, e.target as Element));
+    const decorate = (target: HTMLElement) => {
+      addCodeCopyButtons(
+        target,
+        (text) => platform.copyText(text),
+        (e) => { void platform.alert(errorMessage(e)).catch(() => {}); },
+      );
+      addSectionFolds(target, folded);
+    };
     let disposeToc = () => {};
     /** Needs the article in the document: the toc looks its headings up by id. */
     const showToc = (headings: Heading[]) => {

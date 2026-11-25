@@ -1,7 +1,12 @@
 export type FontPreset = "system" | "serif" | "mono";
 export type MdWidth = "narrow" | "normal" | "wide" | "full";
 export interface Preferences { mdFont: FontPreset; mdSize: number; mdWidth: MdWidth; textFont: FontPreset; textSize: number; textWrap: boolean; textHighlight: boolean }
-export const DEFAULTS: Preferences = { mdFont: "system", mdSize: 16, mdWidth: "normal", textFont: "mono", textSize: 14, textWrap: true, textHighlight: true };
+export const DEFAULTS: Preferences = { mdFont: "system", mdSize: 16, mdWidth: "full", textFont: "mono", textSize: 14, textWrap: true, textHighlight: true };
+/**
+ * Stored with the settings. Before version 2 every save wrote the then-default "normal" width, so a
+ * stored "normal" without it is the old default, not a choice: it reads as the new default.
+ */
+const VERSION = 2;
 export const MD_WIDTHS: Record<MdWidth, string> = { narrow: "680px", normal: "780px", wide: "960px", full: "100%" };
 export const KEY = "va.preferences.v1";
 export const FONTS: Record<FontPreset, string> = {
@@ -15,7 +20,7 @@ export function parsePreferences(raw: string | null): Preferences {
     return {
       mdFont: p?.mdFont === "serif" || p?.mdFont === "mono" ? p.mdFont : "system",
       mdSize: Number.isInteger(p?.mdSize) && p.mdSize >= 12 && p.mdSize <= 24 ? p.mdSize : 16,
-      mdWidth: p?.mdWidth === "narrow" || p?.mdWidth === "wide" || p?.mdWidth === "full" ? p.mdWidth : "normal",
+      mdWidth: p?.mdWidth === "narrow" || p?.mdWidth === "wide" || (p?.mdWidth === "normal" && p?.v === VERSION) ? p.mdWidth : "full",
       textFont: p?.textFont === "system" || p?.textFont === "serif" ? p.textFont : "mono",
       textSize: Number.isInteger(p?.textSize) && p.textSize >= 12 && p.textSize <= 24 ? p.textSize : 14,
       textWrap: typeof p?.textWrap === "boolean" ? p.textWrap : true,
@@ -26,14 +31,14 @@ export function parsePreferences(raw: string | null): Preferences {
 let current: Preferences = { ...DEFAULTS };
 export const preferences = () => ({ ...current });
 export function applyPreferences(p: Partial<Preferences>, persist = true): boolean {
-  current = parsePreferences(JSON.stringify({ ...current, ...p }));
+  current = parsePreferences(JSON.stringify({ ...current, ...p, v: VERSION }));
   document.documentElement.style.setProperty("--va-md-font", FONTS[current.mdFont]);
   document.documentElement.style.setProperty("--va-md-size", `${current.mdSize}px`);
   document.documentElement.style.setProperty("--va-md-width", MD_WIDTHS[current.mdWidth]);
   document.documentElement.style.setProperty("--va-text-font", FONTS[current.textFont]);
   document.documentElement.style.setProperty("--va-text-size", `${current.textSize}px`);
   let saved = true;
-  if (persist) { try { localStorage.setItem(KEY, JSON.stringify(current)); } catch { saved = false; } }
+  if (persist) { try { localStorage.setItem(KEY, JSON.stringify({ ...current, v: VERSION })); } catch { saved = false; } }
   window.dispatchEvent(new Event("va:preferences"));
   return saved;
 }

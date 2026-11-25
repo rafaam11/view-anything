@@ -1,9 +1,10 @@
 import { findBar } from "../ui/find-bar";
 import { matchRanges } from "../ui/match";
+import { requestReveal } from "./fold";
 
 const HIT = "md-find-hit", CURRENT = "md-find-current";
 /** Rendered diagrams and math keep their text in markup the reader does not see as text. */
-const SKIP = ".mermaid, .katex, .md-code-copy, script, style, svg";
+const SKIP = ".mermaid, .katex, .md-code-copy, .md-fold, script, style, svg";
 const BLOCKS = new Set(["ARTICLE", "ASIDE", "BLOCKQUOTE", "CAPTION", "DD", "DETAILS", "DIV", "DL", "DT", "FIGCAPTION", "FIGURE", "FOOTER", "H1", "H2", "H3", "H4", "H5", "H6", "HEADER", "HR", "LI", "OL", "P", "PRE", "SECTION", "SUMMARY", "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL"]);
 /** Between blocks, so a query never matches across two paragraphs. A query cannot contain it. */
 const BOUNDARY = "\0";
@@ -99,6 +100,7 @@ export function createFinder(root: Element) {
     marks.forEach((mark) => mark.classList.add(CURRENT));
     if (!reveal) return;
     for (let d = marks[0].closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
+    requestReveal(marks[0]); // a match in a folded section opens it first
     marks[0].scrollIntoView({ block: "center" });
   };
   /** Starting from what is on screen keeps a search from throwing the reader back to the top. */

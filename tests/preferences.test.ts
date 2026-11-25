@@ -24,7 +24,7 @@ test("old preferences migrate without losing Markdown choices; text options vali
 test("partial edits keep the other viewer settings and storage synchronization resets missing fields", () => {
   applyPreferences({...DEFAULTS,mdFont:"serif",mdSize:20},false);
   applyPreferences({textFont:"system",textSize:18,textWrap:false});
-  expect(preferences()).toEqual({mdFont:"serif",mdSize:20,mdWidth:"normal",textFont:"system",textSize:18,textWrap:false,textHighlight:true});
+  expect(preferences()).toEqual({mdFont:"serif",mdSize:20,mdWidth:"full",textFont:"system",textSize:18,textWrap:false,textHighlight:true});
   const stop=initializePreferences();
   expect(document.documentElement.style.getPropertyValue("--va-text-size")).toBe("18px");
   window.dispatchEvent(new StorageEvent("storage",{key:KEY,newValue:null})); expect(preferences()).toEqual(DEFAULTS); stop();
@@ -37,8 +37,20 @@ test("the Markdown width persists as a preset, and anything else falls back to t
   applyPreferences({ mdWidth: "full" }, false);
   expect(document.documentElement.style.getPropertyValue("--va-md-width")).toBe("100%");
   // The value goes into a CSS variable, so a stored string must never pass through as it is.
-  expect(parsePreferences('{"mdWidth":"url(x)"}').mdWidth).toBe("normal");
+  expect(parsePreferences('{"mdWidth":"url(x)"}').mdWidth).toBe("full");
   applyPreferences(DEFAULTS, false); stop2();
+});
+test("the window-wide default replaces the old default, but a chosen 보통 stays", () => {
+  expect(DEFAULTS.mdWidth).toBe("full");
+  // Saved before version 2: every save wrote the then-default "normal".
+  expect(parsePreferences('{"mdFont":"serif","mdWidth":"normal"}')).toEqual({ ...DEFAULTS, mdFont: "serif" });
+  expect(parsePreferences('{"mdWidth":"wide"}').mdWidth).toBe("wide");
+  localStorage.clear(); const stop = initializePreferences();
+  applyPreferences({ mdWidth: "normal" });
+  expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ mdWidth: "normal", v: 2 });
+  stop(); const again = initializePreferences(); expect(preferences().mdWidth).toBe("normal");
+  applyPreferences({ mdSize: 18 }); expect(preferences().mdWidth).toBe("normal");
+  applyPreferences(DEFAULTS, false); again();
 });
 test("storage failure retains usable in-memory preference", () => {
   const spy = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw Error("full"); });
