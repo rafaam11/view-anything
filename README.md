@@ -197,7 +197,8 @@ Windows 설치 · 서명 업데이트 · 제거와 Linux deb/AppImage의 실제 
 
 ## 릴리스 노트
 
-- [v0.16.0](docs/release/v0.16.0.md) — 최신
+- [v0.17.0](docs/release/v0.17.0.md) — 최신
+- [v0.16.0](docs/release/v0.16.0.md)
 - [v0.15.0](docs/release/v0.15.0.md)
 - [v0.14.0](docs/release/v0.14.0.md)
 - [v0.13.1](docs/release/v0.13.1.md)
