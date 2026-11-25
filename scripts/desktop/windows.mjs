@@ -27,6 +27,7 @@ const state=(p,name)=>p.waitForFunction(name=>document.querySelector('.va-update
 try {
   await new Promise(resolve=>server.listen(18761,'127.0.0.1',resolve));
   ps('snapshot');ps('install',['-Installer',pkg('0.0.1')]);ps('associations');results.push('silent NSIS install and registry associations');
+  ps('executables');ps('run-script');results.push('install repairs 0.16 script associations, offers scripts only as a right-click verb, and a double-clicked .bat runs');
   assert(binaryMatches('0.0.1'));
   spawn(exe,[],{env,windowsHide:true,stdio:'ignore'});
   browser=await until(()=>chromium.connectOverCDP('http://127.0.0.1:9239',{timeout:3000}),'WebView CDP');
@@ -68,7 +69,7 @@ try {
     const b=await chromium.connectOverCDP('http://127.0.0.1:9239',{timeout:2000});
     try{const p=b.contexts()[0].pages()[0];const v=await p.evaluate(()=>window.__TAURI__.app.getVersion());if(v!=='0.0.2'){await b.close();return false;}browser=b;return true;}catch(e){await b.close();throw e;}
   },'updated app relaunches as 0.0.2',120000);
-  const updated=watch(browser.contexts()[0].pages()[0]);await updated.screenshot({path:path.join(evidence,'after-update.png')});assert.deepEqual(fs.readFileSync(files.txt),saved);ps('associations');
+  const updated=watch(browser.contexts()[0].pages()[0]);await updated.screenshot({path:path.join(evidence,'after-update.png')});assert.deepEqual(fs.readFileSync(files.txt),saved);ps('associations');ps('executables');ps('run-script');
   results.push('real signed NSIS update, installed binary hash, automatic startup, instrumented relaunch version; saved source and associations retained');
   await browser.close();browser=null;ps('uninstall');results.push('uninstall restores seeded previous handler, preserves subsequently chosen handler, migrates legacy backup and removes binary/classes/backups');
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(evidence,'results.json'),JSON.stringify({ok:true,results,errors,limits:['Open With class invocation is tested; Windows UserChoice default-app UI is not changed.']},null,2));console.log(results.join('\nPASS '));

@@ -62,7 +62,7 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["txt", "log", "ini", "cfg", "conf", "toml", "xml", "html", "htm", "css", "scss", "c", "h", "cc", "cpp", "cxx", "hpp", "py", "rs", "js", "jsx", "ts", "tsx", "sh", "bash", "ps1", "bat", "cmd", "sql", "java", "cs", "go", "rb", "lua"],
+        "ext": ["txt", "log", "ini", "cfg", "conf", "toml", "xml", "html", "htm", "css", "scss", "c", "h", "cc", "cpp", "cxx", "hpp", "rs", "jsx", "ts", "tsx", "sql", "java", "cs", "go", "rb", "lua"],
         "name": "com.rafaam11.viewanything.text",
         "description": "Text and Code",
         "role": "Editor"

@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory)][ValidateSet('install','snapshot','change-associations','associations','open','uninstall','stop','probe')][string]$Action,
+  [Parameter(Mandatory)][ValidateSet('install','snapshot','change-associations','associations','executables','run-script','open','uninstall','stop','probe')][string]$Action,
   [Parameter(Mandatory)][string]$Root,
   [string]$Installer,
   [string]$File,
@@ -21,6 +21,26 @@ $legacyClass = 'com.rafaam11.viewanything.desktop-smoke.legacy'
 # Office files are only offered under Open With; the handler seeded here must keep .docx.
 $officeClass = 'com.rafaam11.viewanything.office'
 $officeOwner = 'com.rafaam11.viewanything.desktop-smoke.office-owner'
+# What the shell runs: never associated, repaired from what versions up to 0.16 wrote (file-associations.nsh).
+$scripts = @('bat','cmd','ps1','js','py','sh','bash')
+$executables = $scripts + @('vbs','vbe','jse','wsf','wsh','hta','reg','exe','com','msi','lnk','scr','pif','cpl')
+$prefix = 'com.rafaam11.viewanything.'
+$oldText = 'com.rafaam11.viewanything.text'
+$fileExts = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts'
+$verb = 'com.rafaam11.viewanything.view'
+$executablesPath = Join-Path $testRoot 'executables-expected.json'
+function Ours([string]$Value) { return $Value.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -and $Value -notlike '*desktop-smoke*' }
+function OurValues([string]$Key) {
+  $item = Get-Item -LiteralPath $Key -ErrorAction SilentlyContinue
+  if (!$item) { return @() }
+  return @($item.GetValueNames() | Where-Object { Ours $_ })
+}
+function ExecutableState {
+  $result = @{}
+  foreach ($ext in $executables) { $result[$ext] = RegistryDefault "HKCU:\Software\Classes\.$ext" }
+  $result['*'] = RegistryDefault 'HKCU:\Software\Classes\*'
+  return $result
+}
 function RegistryDefault([string]$Key) {
   $item = Get-Item -LiteralPath $Key -ErrorAction SilentlyContinue
   if ($item) { return [string]$item.GetValue('','') }
@@ -48,6 +68,25 @@ switch ($Action) {
     Set-Item -LiteralPath 'HKCU:\Software\Classes\.docx' -Value $officeOwner
     $state.docx = $officeOwner
     $state | ConvertTo-Json | Set-Content -LiteralPath $expectedPath -Encoding UTF8
+    # What 0.16 left on PCs: script defaults taken (with an empty or a real backup), Open With entries
+    # in Classes and in Explorer's FileExts, and a value on "*". Install and update must undo all of it.
+    $before = ExecutableState
+    $before | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $testRoot 'executables-before.json') -Encoding UTF8
+    $wanted = ExecutableState
+    foreach ($ext in @('bat','cmd','ps1')) {
+      New-Item -Path "HKCU:\Software\Classes\.$ext\OpenWithProgids" -Force | Out-Null
+      Set-Item -LiteralPath "HKCU:\Software\Classes\.$ext" -Value $oldText
+      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\.$ext\OpenWithProgids" -Name $oldText -Value '' -PropertyType String -Force | Out-Null
+      New-Item -Path "$fileExts\.$ext\OpenWithProgids" -Force | Out-Null
+      New-ItemProperty -LiteralPath "$fileExts\.$ext\OpenWithProgids" -Name $oldText -Value ([byte[]]@()) -PropertyType None -Force | Out-Null
+    }
+    New-ItemProperty -LiteralPath 'HKCU:\Software\Classes\.bat' -Name ($oldText + '_backup') -Value '' -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Software\Classes\.ps1' -Name ($oldText + '_backup') -Value 'Microsoft.PowerShellScript.1' -PropertyType String -Force | Out-Null
+    $wanted.ps1 = 'Microsoft.PowerShellScript.1'
+    # .NET, not New-Item: a registry path of "*" must not be read as a wildcard.
+    $all = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Classes\*')
+    $all.SetValue('', $oldText); $all.Close()
+    $wanted | ConvertTo-Json | Set-Content -LiteralPath $executablesPath -Encoding UTF8
   }
   'change-associations' {
     $expected = Get-Content -LiteralPath $expectedPath -Raw | ConvertFrom-Json
@@ -75,11 +114,63 @@ switch ($Action) {
       foreach ($ext in $a.ext) {
         $openWith = Get-Item -LiteralPath "HKCU:\Software\Classes\.$ext\OpenWithProgids" -ErrorAction SilentlyContinue
         if (!$openWith -or $openWith.GetValueNames() -notcontains $a.name) { throw "Open With is missing $($a.name) for .$ext" }
-        $wanted = if ($a.name -eq $officeClass) { [string]$expected.$ext } elseif ($ext -eq 'log' -and (Test-Path -LiteralPath (Join-Path $testRoot 'associations-changed'))) { $otherClass } else { $a.name }
+        # Open With only: every default stays as it was, except the two seeded update scenarios.
+        $changed = Test-Path -LiteralPath (Join-Path $testRoot 'associations-changed')
+        $wanted = if ($changed -and $ext -eq 'log') { $otherClass } elseif ($changed -and $ext -eq 'md') { $a.name } else { [string]$expected.$ext }
         if ((RegistryDefault "HKCU:\Software\Classes\.$ext") -ne $wanted) { throw "Unexpected .$ext registration" }
       }
     }
-    Write-Output 'PASS registry extension classes, Open With entries, untouched Office defaults and quoted file-open commands'
+    Write-Output 'PASS registry extension classes, Open With entries, untouched defaults and quoted file-open commands'
+  }
+  'executables' {
+    $wanted = Get-Content -LiteralPath $executablesPath -Raw | ConvertFrom-Json
+    foreach ($ext in $executables) {
+      $actual = RegistryDefault "HKCU:\Software\Classes\.$ext"
+      if ($actual -ne [string]$wanted.$ext) { throw ".$ext default not repaired. Expected '$($wanted.$ext)', got '$actual'." }
+      foreach ($key in @("HKCU:\Software\Classes\.$ext", "HKCU:\Software\Classes\.$ext\OpenWithProgids", "$fileExts\.$ext\OpenWithProgids")) {
+        $left = OurValues $key
+        if ($left.Count) { throw "Our values remain in $($key): $($left -join ', ')" }
+      }
+    }
+    if ((RegistryDefault 'HKCU:\Software\Classes\*') -ne [string]$wanted.'*') { throw 'The value on * was not cleared.' }
+    foreach ($ext in $scripts) {
+      $key = "HKCU:\Software\Classes\SystemFileAssociations\.$ext\shell\$verb"
+      $command = RegistryDefault "$key\command"
+      if ($command -ne "`"$exe`" `"%1`"") { throw "Unexpected verb command for .$($ext): $command" }
+      if ((Get-ItemProperty -LiteralPath $key -Name MUIVerb).MUIVerb -notlike 'View Anything*') { throw "Unexpected verb name for .$ext" }
+    }
+    Write-Output 'PASS script and executable types repaired (defaults, backups, Open With in Classes and FileExts, *) and offered only as a right-click verb'
+  }
+  'run-script' {
+    # A double-click: ShellExecuteEx "open" with no class, as Explorer does. The script must run.
+    $bat = Join-Path $testRoot 'files with spaces\run me.bat'
+    $marker = Join-Path $testRoot 'files with spaces\ran.txt'
+    Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+    Set-Content -LiteralPath $bat -Value '@echo ran> "%~dp0ran.txt"' -Encoding ASCII
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class ShellRun {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+  public struct Info {
+    public int cbSize; public uint mask; public IntPtr hwnd;
+    public string verb, file, parameters, directory; public int show;
+    public IntPtr instance, idList; public string cls; public IntPtr key;
+    public uint hotkey; public IntPtr icon, process;
+  }
+  [DllImport("shell32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  public static extern bool ShellExecuteEx(ref Info info);
+}
+'@
+    $info = New-Object ShellRun+Info
+    $info.cbSize = [Runtime.InteropServices.Marshal]::SizeOf($info)
+    $info.mask = 0x400; $info.verb = 'open'; $info.file = $bat; $info.show = 0
+    if (![ShellRun]::ShellExecuteEx([ref]$info)) { throw "ShellExecuteEx failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
+    $end = (Get-Date).AddSeconds(30)
+    while (!(Test-Path -LiteralPath $marker) -and (Get-Date) -lt $end) { Start-Sleep -Milliseconds 250 }
+    if (!(Test-Path -LiteralPath $marker)) { throw 'Opening the .bat did not run it (an app picker or another app took it).' }
+    Remove-Item -LiteralPath $marker, $bat -Force
+    Write-Output 'PASS a .bat opened like a double-click runs in cmd'
   }
   'open' {
     if (!$File.StartsWith($testRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Only synthetic test files may be opened.' }
@@ -126,12 +217,39 @@ public class ShellOpen {
       }
       if (Test-Path -LiteralPath "HKCU:\Software\Classes\$($a.name)") { throw "Class remains after uninstall: $($a.name)" }
     }
+    $wanted = Get-Content -LiteralPath $executablesPath -Raw | ConvertFrom-Json
+    foreach ($ext in $executables) {
+      $actual = RegistryDefault "HKCU:\Software\Classes\.$ext"
+      if ($actual -ne [string]$wanted.$ext) { throw ".$ext default changed by uninstall. Expected '$($wanted.$ext)', got '$actual'." }
+    }
+    foreach ($ext in $scripts) {
+      if (Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.$ext\shell\$verb") { throw "Verb remains after uninstall: .$ext" }
+    }
+    # Nothing of ours anywhere in the user's classes or Explorer's per-type records (test-only names aside).
+    $traces = @()
+    foreach ($root in @('HKCU:\Software\Classes', $fileExts)) {
+      # "Local Settings" is Windows' own cache (MuiCache keeps names of every app that ran).
+      foreach ($key in @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike '*\Local Settings*' })) {
+        if ((Ours $key.PSChildName)) { $traces += $key.Name; continue }
+        foreach ($name in $key.GetValueNames()) {
+          $data = [string]$key.GetValue($name, '', 'DoNotExpandEnvironmentNames')
+          if ((Ours $name) -or (Ours $data) -or ($data -like "*$installPath*")) { $traces += "$($key.Name) [$name]" }
+        }
+      }
+    }
+    if ($traces.Count) { throw "Traces remain after uninstall: $(($traces | Select-Object -First 20) -join '; ')" }
+    $executablesBefore = Get-Content -LiteralPath (Join-Path $testRoot 'executables-before.json') -Raw | ConvertFrom-Json
+    foreach ($ext in @('bat','cmd','ps1','*')) {
+      $key = if ($ext -eq '*') { 'HKCU:\Software\Classes\*' } else { "HKCU:\Software\Classes\.$ext" }
+      if ([string]$executablesBefore.$ext) { Set-Item -LiteralPath $key -Value ([string]$executablesBefore.$ext) }
+      else { Remove-ItemProperty -LiteralPath $key -Name '(default)' -ErrorAction SilentlyContinue }
+    }
     $before = Get-Content -LiteralPath (Join-Path $testRoot 'registry-before.json') -Raw | ConvertFrom-Json
     foreach ($ext in @('txt','log','docx')) {
       if ([string]$before.$ext) { Set-Item -LiteralPath "HKCU:\Software\Classes\.$ext" -Value ([string]$before.$ext) }
       else { Remove-ItemProperty -LiteralPath "HKCU:\Software\Classes\.$ext" -Name '(default)' -ErrorAction SilentlyContinue }
     }
     Remove-Item -LiteralPath "HKCU:\Software\Classes\$legacyClass" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Output 'PASS uninstall removes binary/classes and restores previous extension registration'
+    Write-Output 'PASS uninstall removes binary/classes/verbs, leaves no traces and restores previous extension registration'
   }
 }
