@@ -38,7 +38,8 @@ test("the document renders read-only, without raw-HTML chunks, with data: resour
   const root = document.createElement("div"); document.body.append(root);
   await viewer.mount(root, "a.docx");
   expect(root.querySelector(".docx-pages section.docx")!.textContent).toBe("본문");
-  expect(root.querySelector("[role=status]")!.textContent).toBe("읽기 전용");
+  expect(root.querySelector(".office-status-info")!.textContent).toBe("1페이지 중 1페이지   단어 1개   읽기 전용");
+  expect(root.querySelector<HTMLElement>(".docx-nav")!.hidden).toBe(true); // no headings: the pane stays shut
   expect(state.options).toMatchObject({ renderAltChunks: false, useBase64URL: true, renderComments: false, renderChanges: false });
   expect(root.querySelector(".office-zoom")!.textContent).toBe("100%");
 });
@@ -59,4 +60,39 @@ test("links: web and mail open outside, bookmarks scroll, anything else does not
   for (const id of ["w", "m", "j", "f", "b"]) expect(click(id), id).toBe(true);
   await vi.waitFor(() => expect(state.opened).toEqual(["https://example.com/a%20b", "mailto:x@example.com"]));
   expect(scrolled).toHaveBeenCalledOnce();
+});
+
+test("headings fill the navigation pane in document order and take the reader there; Ctrl+F finds", async () => {
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const z = new JSZip();
+  z.file("_rels/.rels", `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="${REL}/officeDocument" Target="word/document.xml"/></Relationships>`);
+  z.file("word/_rels/document.xml.rels", `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r2" Type="${REL}/styles" Target="styles.xml"/></Relationships>`);
+  z.file("word/document.xml", `<w:document ${W}/>`);
+  // Korean Word names heading styles "1", "2" by id; their style names stay "heading N". "Sub" inherits an outline level.
+  z.file("word/styles.xml", `<w:styles ${W}>
+    <w:style w:type="paragraph" w:styleId="1"><w:name w:val="heading 1"/></w:style>
+    <w:style w:type="paragraph" w:styleId="Outline"><w:name w:val="My Outline"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style>
+    <w:style w:type="paragraph" w:styleId="Sub"><w:name w:val="Sub"/><w:basedOn w:val="Outline"/></w:style>
+    <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+    <w:style w:type="character" w:styleId="2"><w:name w:val="heading 2"/></w:style>
+  </w:styles>`);
+  state.bytes = await z.generateAsync({ type: "uint8array" });
+  state.html = '<article><p class="docx_1">서론</p><p class="docx_normal">본문 needle</p><p class="docx_sub">세부 항목</p><p class="docx_1"> </p></article>';
+  const root = document.createElement("div"); document.body.append(root);
+  await viewer.mount(root, "headings.docx");
+  const nav = root.querySelector<HTMLElement>(".docx-nav")!;
+  expect(nav.hidden).toBe(false);
+  const items = [...nav.querySelectorAll<HTMLButtonElement>(".docx-nav-item")];
+  expect(items.map(b => [b.textContent, b.style.paddingInlineStart])).toEqual([["서론", "8px"], ["세부 항목", "22px"]]);
+  const target = root.querySelector<HTMLElement>(".docx_sub")!;
+  target.scrollIntoView = vi.fn();
+  items[1].click();
+  expect(target.scrollIntoView).toHaveBeenCalled();
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, cancelable: true }));
+  const find = root.querySelector<HTMLElement>(".va-find")!;
+  expect(find.hidden).toBe(false);
+  const input = find.querySelector("input")!;
+  input.value = "needle"; input.dispatchEvent(new Event("input", { bubbles: true }));
+  await vi.waitFor(() => expect(root.querySelectorAll(".docx-pages mark")).toHaveLength(1));
 });

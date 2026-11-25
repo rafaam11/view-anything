@@ -86,6 +86,7 @@ VS Code로 md를 보면 무겁고, 미리보기를 따로 켜야 하고, 렌더�
 - 레이아웃 재현을 우선한다. docx는 `docx-preview`, pptx는 `@aiden0z/pptx-renderer`(슬라이드 모드, `externalMedia: 'block'`, `pdfjs: false`, ZIP 권장 상한)를 쓴다. xlsx는 SheetJS npm 판의 알려진 취약점 때문에 jszip과 DOMParser로 만든 작은 리더(`src/office/xlsx/read.ts`)와 `ssf` 서식을 쓴다. 수식은 저장된 결과만 표시한다.
 - 세 뷰어는 각자 lazy 청크이며 진입·md 청크에 들어가지 않는다(`check-bundle`). 100 MiB 상한, 압축 해제 전 중앙 디렉터리 검사(항목 2만, 해제 합계 1 GiB), CFB(암호·구형) 거부를 공통으로 적용한다.
 - 문서 링크는 창을 이동시키지 않는다. http(s)·mailto만 외부로 열고 `#책갈피`는 문서 안에서 이동하며 나머지는 무시한다. docx altChunk(원시 HTML)는 렌더링하지 않는다.
+- 화면은 Office 365의 배치·동작을 따르되 리본은 두지 않고 앱 메뉴바·토큰을 유지한다. 형식별 강조색만 더한다. Word 탐색 창·찾기, Excel 이름 상자·수식줄·셀/범위 선택·상태줄 통계·TSV 복사, PowerPoint 썸네일·노트·F5 슬라이드 쇼, 공통 상태줄 확대 슬라이더. 바이너리 역공학 없이 공개적으로 관찰 가능한 UX 관례만 참고하고 Microsoft 자산은 쓰지 않는다.
 - 설치 프로그램은 Office 확장자를 OpenWithProgids에만 등록하고 기본 연결은 바꾸지 않는다(`file-associations.nsh`의 클래스별 `!if`).
 
 ### v0.3 포인트클라우드 구현 결정

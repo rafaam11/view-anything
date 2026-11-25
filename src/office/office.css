@@ -1,34 +1,85 @@
-/* Office documents are drawn on white paper in both themes, as Office itself does (like PDF pages). */
-.office-zoom { min-width: 3.5em; text-align: center; font-variant-numeric: tabular-nums; }
-.office-root { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+/*
+ * Office viewers, laid out as Office 365 is: panes on the left, the document in the middle, a
+ * status bar with zoom at the bottom. The document itself is white paper in both themes, as in
+ * Office (like PDF pages); the chrome follows the app theme with the format's accent colour.
+ */
+.office-root { height: 100%; display: flex; flex-direction: column; min-height: 0; --office-accent: var(--accent); }
+.office-root[data-office="word"] { --office-accent: var(--office-word); }
+.office-root[data-office="excel"] { --office-accent: var(--office-excel); }
+.office-root[data-office="powerpoint"] { --office-accent: var(--office-powerpoint); }
 .office-root > .va-banner { margin: 6px 12px 0; }
+.office-body { flex: 1; min-height: 0; display: flex; }
+.office-pane { flex: 0 0 240px; min-width: 0; overflow: auto; box-sizing: border-box; border-right: 1px solid var(--border); background: var(--bg); }
+.office-pane-title { margin: 0; padding: 10px 12px 6px; font-size: var(--font-size-ui); font-weight: 600; color: var(--fg); }
+.office-pane-empty { margin: 4px 12px; font-size: var(--font-size-small); color: var(--muted); }
 
-/* xlsx */
+/* Status bar: information on the left, zoom on the right. */
+.office-statusbar { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 28px; padding: 0 6px 0 12px; box-sizing: border-box; font-size: var(--font-size-small); color: var(--muted); background: var(--bg-inset); border-top: 1px solid var(--border); }
+.office-status-info { white-space: pre; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.office-zoom-group { display: flex; align-items: center; gap: 2px; flex: none; }
+.office-zoom-group .va-icon-button { width: 24px; height: 24px; }
+.office-zoom-slider { width: 110px; accent-color: var(--office-accent); }
+.office-zoom { min-width: 3.5em; justify-content: center; font-variant-numeric: tabular-nums; }
+/* The update chip sits at the bottom right; above the status bar it does not hide the zoom. */
+:root:has(.office-statusbar) .va-update { bottom: 34px; }
+
+/* Excel: formula bar, the grid on white, sheet tabs at the bottom. */
+.xlsx-formula-bar { flex: none; display: flex; align-items: stretch; gap: 0; min-height: 28px; border-bottom: 1px solid var(--border); font-size: var(--font-size-ui); background: var(--bg); }
+.xlsx-name-box { flex: 0 0 96px; display: flex; align-items: center; padding: 0 8px; border-right: 1px solid var(--border); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.xlsx-fx { flex: none; display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-style: italic; border-right: 1px solid var(--border); }
+.xlsx-formula { flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 8px; white-space: pre; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-ui); user-select: text; }
 .xlsx-scroll { flex: 1; min-height: 0; overflow: auto; background: white; color: black; outline: none; }
-.xlsx-grid { table-layout: fixed; border-collapse: collapse; font: 11pt/1.2 Calibri, "Malgun Gothic", var(--font-ui); color: black; }
+.xlsx-grid { table-layout: fixed; border-collapse: collapse; font: 11pt/1.2 Calibri, "Malgun Gothic", var(--font-ui); color: black; user-select: none; cursor: cell; }
 .xlsx-grid td { overflow: hidden; white-space: pre; padding: 0 2px; border: 1px solid #e1e1e1; vertical-align: bottom; }
 .xlsx-no-grid td { border-color: transparent; }
 .xlsx-grid td.xlsx-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .xlsx-grid td.xlsx-spill { overflow: visible; }
-.xlsx-grid th { position: sticky; z-index: 1; font: 11px var(--font-ui); font-weight: normal; color: #444; background: #f3f3f3; border: 1px solid #d0d0d0; padding: 0 4px; overflow: hidden; white-space: nowrap; }
-.xlsx-grid thead th { top: 0; height: 20px; z-index: 3; }
+.xlsx-grid th { position: sticky; z-index: 1; font: 11px var(--font-ui); font-weight: normal; color: #444; background: #f3f3f3; border: 1px solid #d0d0d0; padding: 0 4px; overflow: hidden; white-space: nowrap; cursor: default; }
+.xlsx-grid thead th { top: 0; height: 20px; z-index: 3; text-align: center; }
 .xlsx-grid tbody th { left: 0; text-align: right; }
 .xlsx-grid thead th.xlsx-corner { left: 0; z-index: 4; }
 .xlsx-grid .xlsx-frozen-row > td, .xlsx-grid td.xlsx-frozen-col { position: sticky; z-index: 2; background-color: white; }
 .xlsx-grid .xlsx-frozen-row > th { z-index: 3; }
 .xlsx-grid .xlsx-frozen-row > td.xlsx-frozen-col { z-index: 3; }
-.xlsx-tabs { flex: none; display: flex; gap: 2px; overflow-x: auto; padding: 2px 8px; border-top: 1px solid var(--border); }
+/* Selection: a tint over the cell's own fill, the active cell outlined, its headers marked. */
+.xlsx-grid td.xlsx-sel { background-image: linear-gradient(color-mix(in srgb, var(--office-excel) 14%, transparent), color-mix(in srgb, var(--office-excel) 14%, transparent)); }
+.xlsx-grid td.xlsx-active { background-image: none; outline: 2px solid var(--office-excel); outline-offset: -2px; }
+.xlsx-grid th.xlsx-sel-head { color: var(--office-excel); background: #e1e1e1; font-weight: 600; }
+.xlsx-grid thead th.xlsx-sel-head { box-shadow: inset 0 -2px var(--office-excel); }
+.xlsx-grid tbody th.xlsx-sel-head { box-shadow: inset -2px 0 var(--office-excel); }
+.xlsx-tabs { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; padding: 0 8px; background: var(--bg); border-top: 1px solid var(--border); }
+.xlsx-tab-list { display: flex; gap: 2px; min-width: 0; overflow-x: auto; }
+.xlsx-tabs .data-pages { border-bottom: 0; padding: 0; flex: none; }
 .xlsx-tab { flex: none; max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.xlsx-tab[aria-current="page"] { font-weight: 600; box-shadow: inset 0 -2px var(--accent); }
+.xlsx-tab[aria-current="page"] { font-weight: 600; color: var(--office-accent); box-shadow: inset 0 -2px var(--office-accent); }
 
-/* docx: the renderer's pages on the window's inset background instead of its grey wrapper. */
-.docx-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--bg-inset); }
+/* Word: navigation pane, pages on the inset background instead of the renderer's grey wrapper. */
+.docx-nav-list { display: flex; flex-direction: column; padding: 0 4px 8px; }
+.docx-nav-item { justify-content: flex-start; width: 100%; min-height: 28px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.docx-nav-item[aria-current="true"] { color: var(--office-accent); font-weight: 600; background: color-mix(in srgb, var(--office-accent) 14%, transparent); }
+.docx-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--bg-inset); }
 .docx-pages { width: max-content; min-width: 100%; }
 .docx-pages > .docx-wrapper { background: transparent; padding: 24px 24px 0; }
 .docx-pages > .docx-wrapper > section.docx { margin-bottom: 24px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); }
 .docx-pages a[href] { cursor: pointer; }
+/* A heading reached from the pane keeps a little room above it. */
+.docx-pages section.docx p { scroll-margin-top: 16px; }
+.docx-pages mark.md-find-hit { background: #ffdc4d; color: inherit; }
+.docx-pages mark.md-find-current { background: #ff9333; }
 
-/* pptx: one slide, centred on the inset background; scrolls when zoomed past the window. */
+/* PowerPoint: thumbnail rail, the slide, notes under it; the show leaves only the slide on black. */
+.pptx-rail { flex-basis: 200px; display: flex; flex-direction: column; gap: 4px; padding: 8px 8px 8px 4px; background: var(--bg-inset); }
+.pptx-thumb { flex: none; display: flex; align-items: flex-start; gap: 6px; width: 100%; height: auto; padding: 4px; }
+.pptx-thumb-number { flex: 0 0 18px; text-align: right; font-size: var(--font-size-small); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pptx-thumb-box { display: block; flex: 1; min-width: 0; overflow: hidden; background: white; outline: 1px solid var(--border); }
+.pptx-thumb[aria-current="true"] .pptx-thumb-box { outline: 2px solid var(--office-accent); }
+.pptx-thumb[aria-current="true"] .pptx-thumb-number { color: var(--office-accent); font-weight: 600; }
+.pptx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .pptx-stage { flex: 1; min-height: 0; overflow: auto; display: flex; justify-content: safe center; align-items: safe center; padding: 24px; box-sizing: border-box; background: var(--bg-inset); outline: none; }
 .pptx-slide { flex: none; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); background: white; }
-.pptx-root .va-viewer-controls input[type=number] { width: 4.5em; }
+.pptx-notes { flex: 0 0 auto; max-height: 30%; min-height: 56px; overflow: auto; box-sizing: border-box; padding: 8px 16px; white-space: pre-wrap; font-size: var(--font-size-ui); color: var(--fg); background: var(--bg); border-top: 1px solid var(--border); user-select: text; }
+.pptx-notes.pptx-notes-empty { color: var(--muted); }
+.pptx-root[data-show] > header, .pptx-root[data-show] .pptx-rail, .pptx-root[data-show] .pptx-notes, .pptx-root[data-show] .office-statusbar { display: none; }
+.pptx-root[data-show] .pptx-stage { padding: 0; background: black; cursor: none; }
+.pptx-root[data-show] .pptx-slide { box-shadow: none; }
+:root:has(.pptx-root[data-show]) .va-update { display: none; }

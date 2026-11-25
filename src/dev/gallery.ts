@@ -16,6 +16,7 @@ import "../pdf/viewer.css";
 import "../image/viewer.css";
 import "../office/office.css";
 import { renderSheet } from "../office/xlsx/viewer";
+import { officeStatusBar } from "../office/zoom";
 import type { Cell, CellStyle, Sheet } from "../office/xlsx/read";
 import { documentBar } from "../ui/chrome";
 import { iconButton, menuButton, textButton, type ButtonVariant } from "../ui/icons";
@@ -171,10 +172,21 @@ if (view3d) {
     frozenRows: 2, frozenColumns: 1, gridLines: true, truncated: false };
   put(4, 0, "병합된 셀", 0);
   const scroll = document.createElement("div"); scroll.className = "xlsx-scroll"; scroll.style.height = "180px";
-  scroll.append(renderSheet(sheet, styles, 0, 0));
+  const table = renderSheet(sheet, styles, 0, 0);
+  // A selection B3:C4 with B3 active, as the viewer paints it.
+  for (const td of table.querySelectorAll<HTMLElement>("td[data-r]")) { const r = Number(td.dataset.r), c = Number(td.dataset.c); td.classList.toggle("xlsx-sel", r >= 2 && r <= 3 && c >= 1 && c <= 2); td.classList.toggle("xlsx-active", r === 2 && c === 1); }
+  for (const th of table.querySelectorAll<HTMLElement>("thead th[data-c=\"1\"], thead th[data-c=\"2\"], tbody th[data-r=\"2\"], tbody th[data-r=\"3\"]")) th.classList.add("xlsx-sel-head");
+  scroll.append(table);
+  const formulaBar = document.createElement("div"); formulaBar.className = "xlsx-formula-bar";
+  const nameBox = document.createElement("output"); nameBox.className = "xlsx-name-box"; nameBox.textContent = "B3";
+  const fx = document.createElement("span"); fx.className = "xlsx-fx"; fx.textContent = "fx";
+  const formula = document.createElement("output"); formula.className = "xlsx-formula"; formula.textContent = "=SUM(B1:B2)";
+  formulaBar.append(nameBox, fx, formula);
+  const status = officeStatusBar(scroll, () => {}); status.info(["읽기 전용", "평균: 2,247   개수: 4   합계: 8,989"]); status.zoom.set(1);
   const tabs = document.createElement("nav"); tabs.className = "xlsx-tabs";
-  for (const [i, name] of ["매출", "긴 목록"].entries()) { const b = button(name, { variant: "ghost" }); b.classList.add("xlsx-tab"); b.setAttribute("aria-current", i === 0 ? "page" : "false"); tabs.append(b); }
-  const root = document.createElement("div"); root.className = "office-root xlsx-root va-viewer"; root.style.height = "auto"; root.append(scroll, tabs);
+  const tabList = document.createElement("div"); tabList.className = "xlsx-tab-list"; tabs.append(tabList);
+  for (const [i, name] of ["매출", "긴 목록"].entries()) { const b = button(name, { variant: "ghost" }); b.classList.add("xlsx-tab"); b.setAttribute("aria-current", i === 0 ? "page" : "false"); tabList.append(b); }
+  const root = document.createElement("div"); root.className = "office-root xlsx-root va-viewer"; root.dataset.office = "excel"; root.style.height = "auto"; root.append(formulaBar, scroll, tabs, status.element);
   section("Excel 시트(읽기 전용)", root);
 }
 

@@ -2,11 +2,13 @@
 import { expect, test, vi } from "vitest";
 import { makeXlsx, STYLES } from "./xlsx-fixture";
 
-const state = vi.hoisted(() => ({ bytes: new Uint8Array(), size: -1 }));
+const state = vi.hoisted(() => ({ bytes: new Uint8Array(), size: -1, copied: [] as string[] }));
 vi.mock("../src/platform", () => ({ platform: {
   fileSize: async () => state.size >= 0 ? state.size : state.bytes.length,
   readFileRaw: async () => state.bytes.slice().buffer,
   setWindowTitle: async () => {},
+  copyText: async (text: string) => { state.copied.push(text); },
+  alert: async () => {},
 } }));
 import viewer from "../src/office/xlsx/viewer";
 
@@ -44,7 +46,8 @@ test("a sheet shows formatted values, styles, merges and headers; text is never 
   // Text spills over an empty neighbour; a number does not.
   expect(root.querySelectorAll(".xlsx-grid tbody tr")[1].querySelector("td")!.classList.contains("xlsx-spill")).toBe(true);
   expect(number.classList.contains("xlsx-spill")).toBe(false);
-  expect(root.querySelector(".xlsx-tabs")!.hasAttribute("hidden")).toBe(true);
+  // As in Excel the tab of a one-sheet workbook still shows.
+  expect([...root.querySelectorAll(".xlsx-tab")].map(t => t.textContent)).toEqual(["첫 시트"]);
   expect(root.querySelector("[role=status]")!.textContent).toBe("읽기 전용");
 });
 
@@ -86,4 +89,69 @@ test("frozen rows and columns stick on the first page", async () => {
   expect(second.classList.contains("xlsx-frozen-row")).toBe(false);
   expect(second.querySelector("td")!.classList.contains("xlsx-frozen-col")).toBe(true);
   expect(second.querySelector("td")!.style.left).toBe("44px");
+});
+
+const td = (root: HTMLElement, r: number, c: number) => root.querySelector<HTMLElement>(`td[data-r="${r}"][data-c="${c}"]`)!;
+const press = (key: string, init: KeyboardEventInit = {}) => window.dispatchEvent(new KeyboardEvent("keydown", { key, cancelable: true, ...init }));
+const down = (el: Element, init: PointerEventInit = {}) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, ...init }));
+
+const BOOK = () => makeXlsx([{ name: "계산", xml: `<sheetData>
+  <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1" t="inlineStr"><is><t>글자</t></is></c></row>
+  <row r="2"><c r="A2"><v>3</v></c><c r="B2"><f t="shared" ref="B2:B3" si="0">A2*2</f><v>6</v></c></row>
+  <row r="3"><c r="A3"><v>5</v></c><c r="B3"><f t="shared" si="0"/><v>10</v></c></row>
+  <row r="5"><c r="A5"><v>9</v></c></row>
+</sheetData>` }]);
+
+test("the name box and formula bar follow the active cell, shared formulas shifted", async () => {
+  const root = await mount(await BOOK());
+  const name = root.querySelector(".xlsx-name-box")!, formula = root.querySelector(".xlsx-formula")!;
+  expect(name.textContent).toBe("A1"); expect(formula.textContent).toBe("1");
+  expect(td(root, 0, 0).classList.contains("xlsx-active")).toBe(true);
+  down(td(root, 2, 1));
+  window.dispatchEvent(new PointerEvent("pointerup"));
+  expect(name.textContent).toBe("B3"); expect(formula.textContent).toBe("=A3*2");
+  down(td(root, 1, 1));
+  expect(formula.textContent).toBe("=A2*2");
+  expect(root.querySelector("thead th[data-c='1']")!.classList.contains("xlsx-sel-head")).toBe(true);
+});
+
+test("arrows, Shift and Ctrl move and extend like Excel; the status bar sums the selection", async () => {
+  const root = await mount(await BOOK());
+  const scroll = root.querySelector<HTMLElement>(".xlsx-scroll")!;
+  const key = (k: string, init: KeyboardEventInit = {}) => scroll.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
+  const name = root.querySelector(".xlsx-name-box")!;
+  key("ArrowDown"); key("ArrowRight");
+  expect(name.textContent).toBe("B2");
+  key("ArrowUp", { shiftKey: true }); key("ArrowLeft", { shiftKey: true });
+  expect(name.textContent).toBe("B2"); // Shift extends from the active cell, which stays
+  expect(td(root, 1, 1).classList.contains("xlsx-sel")).toBe(true);
+  expect(root.querySelector("[role=status]")!.textContent).toBe("읽기 전용   평균: 3   개수: 4   합계: 12");
+  key("Home", { ctrlKey: true });
+  key("ArrowDown", { ctrlKey: true }); // A1..A3 is one block: to its end
+  expect(name.textContent).toBe("A3");
+  key("ArrowDown", { ctrlKey: true }); // then to the next filled cell
+  expect(name.textContent).toBe("A5");
+  key("Home", { ctrlKey: true });
+  expect(name.textContent).toBe("A1");
+  key("Tab"); key("Tab");
+  expect(name.textContent).toBe("C1");
+  key("a", { ctrlKey: true });
+  expect(root.querySelector("[role=status]")!.textContent).toBe("읽기 전용   평균: 5.1428571429   개수: 8   합계: 36");
+  key("c", { ctrlKey: true });
+  const tsv = [["1", "2", "글자"], ["3", "6", ""], ["5", "10", ""], ["", "", ""], ["9", "", ""]].map(row => row.join("\t"));
+  await vi.waitFor(() => expect(state.copied.at(-1)).toBe(`${tsv.join("\r\n")}\r\n`));
+});
+
+test("header clicks select whole columns and rows; cell keys leave the toolbar alone", async () => {
+  const root = await mount(await BOOK());
+  down(root.querySelector("thead th[data-c='1']")!);
+  expect(root.querySelector("[role=status]")!.textContent).toBe("읽기 전용   평균: 6   개수: 3   합계: 18");
+  down(root.querySelector("tbody th[data-r='0']")!);
+  expect(root.querySelector("[role=status]")!.textContent).toBe("읽기 전용   평균: 1.5   개수: 3   합계: 3");
+  const name = root.querySelector(".xlsx-name-box")!;
+  const before = name.textContent;
+  const button = root.querySelector<HTMLButtonElement>(".xlsx-tab")!;
+  button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+  expect(name.textContent).toBe(before);
+  void press;
 });

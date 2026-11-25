@@ -11,7 +11,7 @@ Markdown(읽기 + Typora식 WYSIWYG 편집), 3D(STEP/IGES/STL/OBJ/PLY/glTF/GLB, 
 - Tauri 2 (Rust, `src-tauri/`) + Vite + TypeScript vanilla 프런트엔드 (`src/`)
 - 뷰어는 확장자 → 모듈 레지스트리로 연결하고 lazy import한다. md를 열 때 three.js를 로드하지 않는다.
 - PDF 뷰어(`src/pdf/`)는 읽기 전용이며 PDF.js와 워커를 파일을 열 때만 로드한다. 100MiB 제한, 현재 페이지만 렌더링하며 텍스트 선택·검색 강조·목차를 제공한다. 암호는 입력 중에만 보관하고 저장하거나 로그에 남기지 않는다.
-- Office 뷰어(`src/office/`)는 읽기 전용이다. docx는 `docx-preview`, pptx는 `@aiden0z/pptx-renderer`(슬라이드 모드, 외부 미디어 차단, `pdfjs: false`), xlsx는 jszip+DOMParser 자체 리더(`xlsx/read.ts`)와 `ssf`를 쓴다. 각자 lazy 청크이고 `zip-guard.ts`가 압축 해제 전 항목 수·해제 크기와 CFB(암호·구형)를 검사한다. 링크는 `links.ts`가 http(s)·mailto만 외부로 연다. aiden0z의 선택적 peer `pdfjs-dist`는 package.json `overrides`로 프로젝트 판에 맞춘다. 설치 프로그램은 Office 확장자를 연결 프로그램 목록에만 올리고 기본 앱은 바꾸지 않는다(`file-associations.nsh`의 `!if`).
+- Office 뷰어(`src/office/`)는 읽기 전용이며 화면은 Office 365 배치를 따른다: 왼쪽 창(Word 탐색 창 `docx-outline.ts`, PowerPoint 썸네일), 아래 상태줄(`zoom.ts`의 `officeStatusBar`: 정보 + 확대 슬라이더 10~400%), Excel 이름 상자·수식줄·셀 선택(활성 셀은 선택 시작 셀), PowerPoint 노트(`pptx-notes.ts`가 notesSlide를 직접 읽음)와 F5 슬라이드 쇼. 강조색은 tokens.css의 `--office-word/excel/powerpoint`. Microsoft 아이콘·로고는 쓰지 않는다. docx는 `docx-preview`, pptx는 `@aiden0z/pptx-renderer`(슬라이드 모드, 외부 미디어 차단, `pdfjs: false`), xlsx는 jszip+DOMParser 자체 리더(`xlsx/read.ts`)와 `ssf`를 쓴다. 각자 lazy 청크이고 `zip-guard.ts`가 압축 해제 전 항목 수·해제 크기와 CFB(암호·구형)를 검사한다. 링크는 `links.ts`가 http(s)·mailto만 외부로 연다. aiden0z의 선택적 peer `pdfjs-dist`는 package.json `overrides`로 프로젝트 판에 맞춘다. 설치 프로그램은 Office 확장자를 연결 프로그램 목록에만 올리고 기본 앱은 바꾸지 않는다(`file-associations.nsh`의 `!if`).
 - 대상 OS: Windows(NSIS), Linux(deb, AppImage). macOS는 비목표.
 
 ## 창과 테마

@@ -87,3 +87,20 @@ test("a package without worksheets is refused", async () => {
   const bytes = await makeXlsx([{ name: "x", state: "veryHidden", xml: "<sheetData/>" }]);
   await expect(readWorkbook(bytes)).rejects.toThrow(/워크시트/);
 });
+
+test("shared formulas move relative references the way filling does", async () => {
+  const { shiftFormula } = await import("../src/office/xlsx/read");
+  expect(shiftFormula("A2*2", 1, 0)).toBe("A3*2");
+  expect(shiftFormula("SUM($A$1:B2)+$C1+D$1", 2, 1)).toBe("SUM($A$1:C4)+$C3+E$1");
+  expect(shiftFormula('LOG10(A1)&"B2"&Sheet2!C3', 1, 1)).toBe('LOG10(B2)&"B2"&Sheet2!D4');
+  expect(shiftFormula("'My Sheet'!A1+A1", 1, 0)).toBe("'My Sheet'!A2+A2");
+  expect(shiftFormula("A1", -1, 0)).toBe("#REF!");
+  const bytes = await makeXlsx([{ name: "f", xml: `<sheetData>
+    <row r="1"><c r="A1"><f t="shared" ref="A1:A2" si="3">B1+1</f><v>1</v></c><c r="B1"><f t="array" ref="B1">SUM(C1:C2*D1:D2)</f><v>2</v></c></row>
+    <row r="2"><c r="A2"><f t="shared" si="3"/><v>2</v></c><c r="B2"><v>7</v></c></row></sheetData>` }]);
+  const sheet = await (await readWorkbook(bytes)).sheets[0].load();
+  expect(sheet.rows.get(1)?.get(0)?.formula).toBe("=B2+1");
+  expect(sheet.rows.get(0)?.get(1)?.formula).toBe("{=SUM(C1:C2*D1:D2)}");
+  expect(sheet.rows.get(1)?.get(1)?.value).toBe(7);
+  expect(sheet.rows.get(1)?.get(1)?.formula).toBeUndefined();
+});

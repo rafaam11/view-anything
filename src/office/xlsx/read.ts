@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { all, children, first, local, num, officeDocumentPath, relationshipId, relationships, truthy, xml, type Rels } from "../ooxml";
 import { format as formatNumber, get_table } from "ssf";
 
 /**
@@ -14,7 +15,8 @@ export type CellStyle = {
   horizontal?: string; vertical?: string; wrap?: boolean; indent?: number;
   top?: Border; right?: Border; bottom?: Border; left?: Border;
 };
-export type Cell = { text: string; style: number; number: boolean };
+/** `value`: the stored number, for the status bar's sum and average. `formula`: as Excel's formula bar shows it, with "=". */
+export type Cell = { text: string; style: number; number: boolean; value?: number; formula?: string };
 export type Merge = { r1: number; c1: number; r2: number; c2: number };
 export type Sheet = {
   name: string;
@@ -34,8 +36,6 @@ export type Sheet = {
 export type SheetEntry = { name: string; load(): Promise<Sheet> };
 export type Workbook = { sheets: SheetEntry[]; styles: CellStyle[]; hiddenSheets: number };
 
-const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-const STRICT_REL = "http://purl.oclc.org/ooxml/officeDocument/relationships";
 /** Default Calibri 11 maximum digit width in px, used by Excel's column-width formula. */
 const DIGIT = 7;
 
@@ -54,7 +54,7 @@ export async function readWorkbook(bytes: Uint8Array, maxCells = 1_000_000): Pro
   for (const node of all(workbook, "sheet")) {
     const state = node.getAttribute("state");
     if (state === "hidden" || state === "veryHidden") { hiddenSheets++; continue; }
-    const id = [...node.attributes].find(a => a.namespaceURI === REL || a.namespaceURI === STRICT_REL ? a.localName === "id" : /^[^:]+:id$/.test(a.name))?.value;
+    const id = relationshipId(node);
     const target = id ? rels.get(id) : undefined;
     if (!target || !/\/worksheet$/.test(target.type)) continue; // chart sheets and dialog sheets have no cells
     const name = node.getAttribute("name") ?? `Sheet${sheets.length + 1}`;
@@ -103,6 +103,7 @@ export function readSheet(doc: Document, name: string, context: Context): Sheet 
     }
   }
   let cells = 0, rowIndex = -1;
+  const sharedFormulas = new Map<string, { formula: string; row: number; column: number }>();
   for (const row of all(doc, "row")) {
     rowIndex = (num(row.getAttribute("r")) ?? rowIndex + 2) - 1;
     if (rowIndex < 0 || rowIndex >= 1_048_576) continue;
@@ -123,7 +124,12 @@ export function readSheet(doc: Document, name: string, context: Context): Sheet 
       if (cells >= context.maxCells) { sheet.truncated = true; break; }
       cells++;
       if (!target) { target = new Map(); sheet.rows.set(rowIndex, target); }
-      target.set(column, { text: text ?? "", style, number: (c.getAttribute("t") ?? "n") === "n" && text !== null });
+      const isNumber = (c.getAttribute("t") ?? "n") === "n" && text !== null;
+      const cell: Cell = { text: text ?? "", style, number: isNumber };
+      if (isNumber) cell.value = Number(first(c, "v")?.textContent);
+      const formula = formulaOf(c, rowIndex, column, sharedFormulas);
+      if (formula) cell.formula = formula;
+      target.set(column, cell);
       sheet.columnCount = Math.max(sheet.columnCount, column + 1);
     }
     if (target || sheet.rowHeights.has(rowIndex)) sheet.rowCount = Math.max(sheet.rowCount, rowIndex + 1);
@@ -138,6 +144,40 @@ export function readSheet(doc: Document, name: string, context: Context): Sheet 
     sheet.rowCount = Math.max(sheet.rowCount, m.r2 + 1); sheet.columnCount = Math.max(sheet.columnCount, m.c2 + 1);
   }
   return sheet;
+}
+
+/** The formula as Excel's formula bar shows it. A shared formula's followers move its relative references. */
+function formulaOf(c: Element, row: number, column: number, shared: Map<string, { formula: string; row: number; column: number }>): string | undefined {
+  const f = first(c, "f");
+  if (!f) return undefined;
+  const text = f.textContent ?? "";
+  const type = f.getAttribute("t");
+  if (type === "shared") {
+    const id = f.getAttribute("si") ?? "";
+    if (text) { shared.set(id, { formula: text, row, column }); return `=${text}`; }
+    const master = shared.get(id);
+    return master ? `=${shiftFormula(master.formula, row - master.row, column - master.column)}` : undefined;
+  }
+  if (!text) return undefined;
+  return type === "array" ? `{=${text}}` : `=${text}`;
+}
+
+/**
+ * Moves the relative parts of A1 references by rows and columns, as filling a formula does.
+ * Text in quotes, function names (LOG10() and `$`-anchored parts stay; out-of-range results become #REF!.
+ */
+export function shiftFormula(formula: string, rows: number, columns: number): string {
+  if (!rows && !columns) return formula;
+  return formula.split(/("(?:[^"]|"")*"|'(?:[^']|'')*'!)/).map((part, i) => i % 2 ? part : part.replace(
+    /(?<![A-Za-z0-9_.])(\$?)([A-Za-z]{1,3})(\$?)(\d{1,7})(?![A-Za-z0-9_(])/g,
+    (ref, colAnchor: string, letters: string, rowAnchor: string, digits: string) => {
+      const parsed = parseRef(`${letters}${digits}`);
+      if (!parsed) return ref;
+      const c = colAnchor ? parsed.column : parsed.column + columns;
+      const r = rowAnchor ? parsed.row : parsed.row + rows;
+      if (c < 0 || c >= 16384 || r < 0 || r >= 1_048_576) return "#REF!";
+      return `${colAnchor}${columnName(c)}${rowAnchor}${r + 1}`;
+    })).join("");
 }
 
 function cellText(c: Element, { shared, formats, date1904 }: Context, style: number): string | null {
@@ -332,77 +372,4 @@ function widthPx(chars: number): number {
 
 function ptPx(points: number): number {
   return Math.round((points * 96) / 72);
-}
-
-type Rels = Map<string, { type: string; path: string }>;
-
-async function officeDocumentPath(zip: JSZip): Promise<string> {
-  const root = await relationships(zip, "");
-  return [...root.values()].find(r => /\/officeDocument$/.test(r.type))?.path ?? "xl/workbook.xml";
-}
-
-async function relationships(zip: JSZip, part: string): Promise<Rels> {
-  const dir = part.includes("/") ? part.slice(0, part.lastIndexOf("/") + 1) : "";
-  const file = part ? `${dir}_rels/${part.slice(dir.length)}.rels` : "_rels/.rels";
-  const doc = await xml(zip, file);
-  const out: Rels = new Map();
-  if (!doc) return out;
-  for (const r of all(doc, "Relationship")) {
-    const id = r.getAttribute("Id"), target = r.getAttribute("Target"), type = r.getAttribute("Type") ?? "";
-    if (!id || !target || r.getAttribute("TargetMode") === "External") continue;
-    out.set(id, { type, path: resolvePath(dir, target) });
-  }
-  return out;
-}
-
-function resolvePath(dir: string, target: string): string {
-  const parts = (target.startsWith("/") ? target.slice(1) : dir + target).split("/");
-  const out: string[] = [];
-  for (const p of parts) { if (p === "..") out.pop(); else if (p && p !== ".") out.push(p); }
-  return out.join("/");
-}
-
-async function xml(zip: JSZip, path: string): Promise<Document | null> {
-  const file = zip.file(path) ?? zip.file(new RegExp(`^${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"))[0];
-  if (!file) return null;
-  const doc = new DOMParser().parseFromString(await file.async("string"), "application/xml");
-  if (doc.getElementsByTagName("parsererror").length) throw new Error(`XML을 읽을 수 없습니다: ${path}`);
-  return doc;
-}
-
-/** Element name without its prefix (`x:row` → `row`); DOM implementations differ on namespaces. */
-function local(e: Element): string {
-  const name = e.localName;
-  const colon = name.indexOf(":");
-  return colon < 0 ? name : name.slice(colon + 1);
-}
-/** Descendants named `name`, in document order; stops at the first match when `one`. */
-function walk(node: Document | Element, name: string, one: boolean): Element[] {
-  const out: Element[] = [];
-  const start = "documentElement" in node ? node.documentElement : node;
-  if (!start) return out;
-  const stack: Element[] = "documentElement" in node ? [start] : [...start.children].reverse();
-  while (stack.length) {
-    const e = stack.pop() as Element;
-    if (local(e) === name) { out.push(e); if (one) break; }
-    for (let i = e.children.length - 1; i >= 0; i--) stack.push(e.children[i]);
-  }
-  return out;
-}
-function all(node: Document | Element, name: string): Element[] {
-  return walk(node, name, false);
-}
-function first(node: Document | Element, name: string): Element | null {
-  return walk(node, name, true)[0] ?? null;
-}
-function children(node: Element, name: string): Element[] {
-  return [...node.children].filter(c => local(c) === name);
-}
-function num(value: string | null | undefined): number | undefined {
-  if (value === null || value === undefined || value === "") return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-function truthy(value: string | null): boolean {
-  return value === "1" || value === "true";
 }
