@@ -33,7 +33,8 @@ export function watchFile(options: FileWatchOptions): { retry(): void; kick(): v
     options.changed();
   };
   const round = async () => {
-    if (!options.alive()) { document.removeEventListener("visibilitychange", onVisibility); return; }
+    // The page may already be gone (a closed window, a finished test run): end without touching it.
+    if (!options.alive()) { globalThis.document?.removeEventListener("visibilitychange", onVisibility); return; }
     if (!document.hidden) {
       running = true;
       // A file that cannot be stat'ed right now (deleted, locked) keeps what is on screen.
