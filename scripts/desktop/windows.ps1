@@ -230,6 +230,7 @@ public class ShellOpen {
     foreach ($root in @('HKCU:\Software\Classes', $fileExts)) {
       # "Local Settings" is Windows' own cache (MuiCache keeps names of every app that ran).
       foreach ($key in @(Get-Item -LiteralPath $root) + @(Get-ChildItem -LiteralPath $root -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike '*\Local Settings*' })) {
+        if ($key.Name -like '*desktop-smoke*') { continue } # this test's own classes, removed below
         if ((Ours $key.PSChildName)) { $traces += $key.Name; continue }
         foreach ($name in $key.GetValueNames()) {
           $data = [string]$key.GetValue($name, '', 'DoNotExpandEnvironmentNames')
